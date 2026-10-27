@@ -1,6 +1,6 @@
 # TAP-WAR — Sprint 1: base jugable en red
 
-Estado: propuesta lista para revisión del equipo. P3: PatoHacker458 y P4: John-Hdz confirmados por el propietario. P1: EMSiiU y P2: Rebobin0 son asignaciones provisionales. Fechas pendientes: cinco días de trabajo desde el inicio acordado. Capacidad asumida: 15–20 horas por persona; reservar aproximadamente 25 % para aprendizaje, revisión e integración.
+Estado: planificación actualizada con EMSiiU el 27-oct-2026. Roles confirmados: P1 EMSiiU, P2 Rebobin0, P3 PatoHacker458 y P4 John-Hdz. Sprint del 27-oct al 04-nov-2026: siete días hábiles, excluyendo sábados y domingos. Revisión el 04-nov. Sin cuota fija de horas; las cifras por tarea son estimaciones iniciales, no mínimos garantizados. Microservicios no obligatorios por ahora. Reglas principales confirmadas por EMSiiU; reingreso simple autorizado. Consultar decisiones-iniciales.md.
 
 ## Objetivo y demostración
 
@@ -12,22 +12,24 @@ Esta semana no incluye combate, cuentas reales, historial, ranking ni arte final
 
 | Rol | Responsabilidad | Revisor habitual |
 | --- | --- | --- |
-| P1 — EMSiiU (provisional) | Organización del repositorio, React, entrada y salida de sala | P4 para documentación; P2 para interfaz |
-| P2 — Rebobin0 (provisional) | Phaser, teclado, representación del estado y carga de recursos | P3 |
+| P1 — EMSiiU | Organización del repositorio, React, entrada y salida de sala | P4 para documentación; P2 para interfaz |
+| P2 — Rebobin0 | Phaser, teclado, representación del estado y carga de recursos | P3 |
 | P3 — PatoHacker458 | Colyseus, simulación, validación y despliegue con P4 | P2 |
 | P4 — John-Hdz | Boceto y recursos visuales; apoyo de despliegue a P3 | P2 para arte; P3 para infraestructura |
 
 P1 facilita las reuniones esta semana. El equipo decide prioridades y alcance; P4 no desarrolla autenticación ni base de datos esta semana.
 
-## Secuencia de cinco días
+## Secuencia de siete días hábiles
 
 | Día | Trabajo y punto de integración |
 | --- | --- |
-| 1 | Reunión de 45 min: confirmar capacidad, requisitos de materia y reglas. P1 prepara repo/Project. P2 y P3 acuerdan mensajes y coordenadas. P3 verifica Ubuntu; P4 dibuja mapa esquemático. |
-| 2 | P1 crea entrada a sala con nombre temporal. P2 conecta escena al servidor. P3 publica posiciones oficiales. P4 entrega PNG y geometría inicial. Al final: dos clientes locales se ven. |
-| 3 | Integrar movimiento autoritativo, límites y obstáculo; normalizar diagonales. Cargar sprite y mapa. P3/P4 preparan despliegue reproducible y conectividad. |
-| 4 | Desplegar y probar entre dos redes. Corregir conexión, desaparición al salir y configuración. Si falla el acceso exterior, resolver antes de añadir funciones. |
-| 5 | Repetir demostración desde una instalación documentada. Revisión de 30 min y retrospectiva de 15 min. Registrar evidencia y pendientes para sprint 2. |
+| 1 — mar 27-oct | Reunión de 45 min: confirmar capacidad, requisitos de materia y reglas. P1 prepara repo/Project. P2 y P3 acuerdan mensajes y coordenadas. P3 verifica Ubuntu; P4 dibuja mapa esquemático. |
+| 2 — mié 28-oct | P1 crea entrada a sala con nombre temporal. P2 conecta escena al servidor. P3 publica posiciones oficiales. P4 entrega PNG y geometría inicial. Al final: dos clientes locales se ven. |
+| 3 — jue 29-oct | Integrar movimiento autoritativo, límites y obstáculo; normalizar diagonales. Cargar sprite y mapa. P3/P4 preparan despliegue reproducible y conectividad. |
+| 4 — vie 30-oct | Desplegar y probar entre dos redes. Corregir conexión, desaparición al salir y configuración. Si falla el acceso exterior, resolver antes de añadir funciones. |
+| 5 — lun 02-nov | Resolver fallos de integración y conectividad; comprobar entradas inválidas, pérdida de foco y desconexión. |
+| 6 — mar 03-nov | Repetir prueba completa desde una instalación documentada. Preparar evidencia y resolver defectos esenciales. |
+| 7 — mié 04-nov | Demostración final. Revisión de 30 min y retrospectiva de 15 min. Registrar evidencia y pendientes para sprint 2. |
 
 Seguimiento diario: 10 min o mensaje con resultado obtenido, siguiente tarea y bloqueo. Avisar un bloqueo al detectarlo; no esperar a la reunión. Máximo una Issue principal en progreso por persona. Revisar PR diariamente.
 
@@ -53,7 +55,7 @@ Responsable: P1. Revisor: P4. Estimación: 3 h. Dependencias: elección de repos
 Aceptación: los cuatro acceden, cada Issue tiene responsable y sprint, y existe un primer PR revisado. La práctica existente permanece disponible.
 
 ### S1-03 — Acordar contrato cliente-servidor
-Responsable: P3 con P2. Revisor: P2. Estimación: 3 h. Dependencias: S1-01.
+Responsables: P2 (2 h, contrato y ejemplos) y P3 (1 h, validación servidor). Revisor: P1. Estimación total: 3 h-persona. Dependencias: S1-01.
 - [ ] Versionar mensajes de dirección y estado de jugadores: identificador, x, y.
 - [ ] Acordar unidades, origen, velocidad, forma de colisión y ritmo de simulación.
 - [ ] Cliente envía intención direccional; servidor valida formato y aplica velocidad.
@@ -69,14 +71,14 @@ Responsable: P2. Revisor: P1. Estimación: 6 h. Dependencias: S1-02; integració
 Aceptación: otro integrante inicia el cliente siguiendo instrucciones; entrar y salir dos veces no duplica la escena.
 
 ### S1-05 — Crear sala y sincronizar jugadores
-Responsable: P3. Revisor: P2. Estimación: 5 h. Dependencias: S1-02 y S1-03.
+Responsables: P3 (3 h, sala y estado) y P1 (2 h, ciclo de conexión y pruebas). Revisor: P2. Estimación total: 5 h-persona. Dependencias: S1-02 y S1-03.
 - [ ] Crear servidor Colyseus y sala de prueba con máximo cuatro jugadores.
 - [ ] Agregar jugador al entrar y quitarlo al detectar desconexión.
 - [ ] Sincronizar identificador y posiciones iniciales.
 Aceptación: dos clientes muestran los mismos participantes; un quinto cliente recibe rechazo comprensible. Sin reconexión automática en este sprint: salir y volver crea una participación nueva.
 
 ### S1-06 — Integrar movimiento y colisiones autoritativas
-Responsable: P2 y P3, P3 responsable de Issue. Revisión cruzada. Estimación: 6 h P3 + 4 h P2. Dependencias: S1-04 y S1-05.
+Responsable: P2 y P3, P3 responsable de Issue. Revisión cruzada. Estimación: 4 h P3 + 6 h P2. Dependencias: S1-04 y S1-05.
 - [ ] Capturar WASD y enviar dirección; detener movimiento al perder foco o dejar de recibir entradas según regla acordada.
 - [ ] Simular movimiento en servidor y normalizar diagonales.
 - [ ] Aplicar límites y al menos un obstáculo usando geometría compartida.
@@ -98,7 +100,7 @@ Responsable: P4. Revisor: P2. Estimación: 7 h P4 + 2 h P2. Dependencias: S1-01;
 Aceptación: PNG sin fondo accidental, escala legible, pies alineados y obstáculo visual coincidente con colisión. No se exige animación final.
 
 ### S1-09 — Verificar Ubuntu y acceso desde Internet
-Responsable: P3 con apoyo de P4. Revisor: P1. Estimación: 3 h. Dependencias: ninguna.
+Responsables: P3 (2 h, verificación en servidor) y P4 (1 h, inventario/documentación). Revisor: P1. Estimación total: 3 h-persona. Dependencias: ninguna.
 - [ ] Registrar versión Ubuntu, CPU, RAM, disco, servicios existentes y método SSH.
 - [ ] Verificar IP pública, posible CGNAT, control de router y dominio si existe.
 - [ ] Definir puertos, responsable de administración y mecanismo de publicación.
@@ -106,7 +108,7 @@ Responsable: P3 con apoyo de P4. Revisor: P1. Estimación: 3 h. Dependencias: ni
 Aceptación: ruta de acceso exterior comprobada o bloqueo identificado con acción concreta; no publicar claves, contraseñas ni archivos de entorno.
 
 ### S1-10 — Desplegar y demostrar desde dos redes
-Responsable: P3 con P4. Revisor: P1. Estimación: 4 h P3 + 4 h P4. Dependencias: S1-06, S1-07 y S1-09.
+Responsables: P4 (4 h, configuración y documentación), P1 (2 h, prueba/evidencias) y P3 (2 h, validación servidor). Revisor del cliente: P2. Estimación total: 8 h-persona. Dependencias: S1-06, S1-07 y S1-09.
 - [ ] Preparar configuración y arranque reproducible; incluir `.env.example` sin secretos.
 - [ ] Configurar URL del servidor fuera del código; conexión WebSocket compatible con HTTPS si se usa HTTPS.
 - [ ] Documentar inicio, parada y consulta de registros.
@@ -132,3 +134,7 @@ Aceptación: una animación de prueba se carga y reproduce con orden, tamaño y 
 - Sin secretos en archivos ni registros compartidos.
 - Si cambia cliente/servidor, ambos se prueban juntos; si cambia arte, se verifica dentro del juego.
 - La tarea de despliegue requiere prueba real en Ubuntu; el resto no necesita esperar para integrarse.
+
+## Distribución y campos del Project
+
+Consultar [planificación actualizada](planificacion-sprint-1.md). Esa tabla define horas-persona, tamaños, prioridades, fechas y reparto vigente.
