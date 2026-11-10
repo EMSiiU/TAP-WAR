@@ -10,7 +10,8 @@ Versión/commit: pendiente. Fecha: pendiente. URL: pendiente. Participantes y re
 | A y B abren desde redes diferentes | Ambos cargan cliente y conectan | Pendiente |
 | Entrar en la misma sala | Ambos ven dos jugadores | Pendiente |
 | A y B se mueven y se detienen | Ambos ven posiciones coherentes y la detención | Pendiente |
-| Moverse diagonalmente | No supera la velocidad acordada | Pendiente |
+| Moverse diagonalmente | Mantiene 220 unidades/s en espacio libre, igual que al moverse recto | Pendiente |
+| Apuntar con el cursor sin moverse | Ambos clientes ven cambiar la orientación sin cambiar la posición | Pendiente |
 | Intentar cruzar bordes y obstáculo | Servidor impide el cruce | Pendiente |
 | Cambiar foco de ventana | Movimiento no queda atascado | Pendiente |
 | Enviar mensaje inválido/posición inventada mediante prueba controlada | Servidor lo rechaza sin fallar ni cambiar posición arbitrariamente | Pendiente |
@@ -21,3 +22,7 @@ Versión/commit: pendiente. Fecha: pendiente. URL: pendiente. Participantes y re
 | Revisar sprite y mapa | Escala legible y colisión alineada | Pendiente |
 
 Adjuntar captura o video breve y registros relevantes sin credenciales. Anotar defectos como Issues con pasos de reproducción. No cerrar el sprint como objetivo logrado si falla la prueba entre redes distintas.
+
+### Parámetros de la primera prueba
+
+Usar la [configuración provisional del contrato](contrato-cliente-servidor.md): arena de 1024 × 768, radio 14, simulación a 30 Hz, entradas y actualizaciones a 20 Hz. Con la conexión abierta, dejar de enviar entradas válidas mientras el personaje se mueve: el servidor debe detenerlo al cumplirse 300 ms, en el siguiente paso de simulación. Enviar entradas inválidas durante esa pausa no debe prolongar el movimiento. Comprobar que se conserva la última orientación válida.

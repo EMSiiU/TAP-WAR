@@ -33,9 +33,9 @@ Sprint: Semana 1. Fechas por acordar.
 ## S1-03 — Acordar contrato cliente-servidor
 
 Responsable: PatoHacker458 con Rebobin0. Revisor: Rebobin0. Estimación: 3 h. Dependencias: S1-01.
-- [ ] Versionar mensajes de dirección y estado de jugadores: identificador, x, y.
+- [ ] Documentar entradas de movimiento y apuntado y estado de jugadores (id, x, y, aimAngle) en el [contrato cliente-servidor](contrato-cliente-servidor.md).
 - [ ] Acordar unidades, origen, velocidad, forma de colisión y ritmo de simulación.
-- [ ] Cliente envía intención direccional; servidor valida formato y aplica velocidad.
+- [ ] El cliente envía dirección y ángulo; el servidor valida la entrada y aplica la velocidad y las colisiones.
 - [ ] Definir nombre temporal, unión, sala llena, salida y errores.
 Aceptación: ejemplos de mensajes válidos e inválidos documentados; cliente no puede imponer posición ni velocidad. Ningún componente depende de contratos verbales.
 
@@ -65,7 +65,7 @@ Sprint: Semana 1. Fechas por acordar.
 ## S1-06 — Integrar movimiento y colisiones autoritativas
 
 Responsable: Rebobin0 y PatoHacker458, PatoHacker458 responsable de Issue. Revisión cruzada. Estimación: 6 h PatoHacker458 + 4 h Rebobin0. Dependencias: S1-04 y S1-05.
-- [ ] Capturar WASD y enviar dirección; detener movimiento al perder foco o dejar de recibir entradas según regla acordada.
+- [ ] Capturar WASD y apuntado hacia el cursor; enviar dirección y ángulo. Limpiar el movimiento al perder foco y aplicar el plazo sin entradas en el servidor.
 - [ ] Simular movimiento en servidor y normalizar diagonales.
 - [ ] Aplicar límites y al menos un obstáculo usando geometría compartida.
 - [ ] Mostrar posiciones oficiales en ambos clientes.

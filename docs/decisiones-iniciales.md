@@ -22,7 +22,7 @@ Todas las propuestas siguientes requieren revisión del equipo el día 1. Regist
 | --- | --- | --- |
 | Alcance sprint 1 | Dos clientes en redes distintas, movimiento y un obstáculo | Por aceptar |
 | Vista | 2D cenital, sin salto ni altura jugable | Confirmado |
-| Entradas | WASD; diagonal normalizada | Por aceptar |
+| Entradas | WASD con diagonal normalizada y apuntado hacia el cursor | Confirmado |
 | Autoridad | Servidor decide posiciones y colisiones | Confirmado  |
 | Colisión entre jugadores | No se bloquean entre sí en sprint 1 | Confirmado |
 | Acceso | Nombre temporal y sala de prueba de hasta 4 jugadores | Límite de 4 confirmado; nombre temporal propuesto |
@@ -86,7 +86,7 @@ Toda nueva duda debe llevar responsable y momento de decisión; no tratar una pr
 - Horas: sin compromiso semanal fijo. Estimación base por tareas: EMSiiU 15 h; Rebobin0 16 h; PatoHacker458 12 h; John-Hdz 12 h (+3 h opcionales). No incluye toda la participación en reuniones, revisiones y contingencias; no son mínimos garantizados.
 - Roles P1/P2: EMSiiU=P1 y Rebobin0=P2, confirmados por EMSiiU el 27-oct-2026.
 - Microservicios: no exigidos por ahora, informado por EMSiiU el 27-oct-2026. Otros requisitos no informados.
-- EMSiiU confirma: 2D, sin salto, sin bloqueo entre jugadores, máximo cuatro y servidor autoritativo. Autoriza elegir reingreso simple: nueva participación en punto válido sin recuperar posición anterior. WASD continúa como control inicial propuesto, no confirmado expresamente en la última respuesta.
+- EMSiiU confirma: 2D, sin salto, sin bloqueo entre jugadores, máximo cuatro y servidor autoritativo. Autoriza elegir reingreso simple: nueva participación en punto válido sin recuperar posición anterior. Se confirma WASD y apuntado hacia el cursor. Ver [contrato cliente-servidor](contrato-cliente-servidor.md).
 - Dudas que bloquean trabajo, responsable y plazo: pendiente.
 - Revisión de PatoHacker458: pendiente.
 

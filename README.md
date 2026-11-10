@@ -54,7 +54,7 @@ La materia no exige microservicios por ahora. La persistencia y sus herramientas
 ## Empezar
 
 1. Leer las [reglas y decisiones iniciales](docs/decisiones-iniciales.md).
-2. Consultar el [plan del sprint](docs/semana-1.md) y la [distribución vigente con estimaciones y fechas](docs/planificacion-sprint-1.md).
+2. Consultar el [contrato cliente-servidor](docs/contrato-cliente-servidor.md), el [plan del sprint](docs/semana-1.md) y la [distribución vigente con estimaciones y fechas](docs/planificacion-sprint-1.md).
 3. Revisar las dependencias y aceptación de la Issue en el Project antes de implementarla.
 4. Para aprender Phaser, seguir el [README de la práctica](prueba-phaser/README.md). Sus comandos arrancan únicamente el ejercicio local.
 

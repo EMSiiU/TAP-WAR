@@ -39,6 +39,6 @@ Total esencial: 55 h-persona. S1-12 añade 3 h opcionales para John-Hdz. Las rev
 
 ## Decisiones de juego confirmadas
 
-EMSiiU confirma 2D, sin salto, sin bloqueo entre jugadores, máximo cuatro y posiciones/colisiones decididas por servidor. Autoriza reingreso sencillo: al reconectar se crea una participación nueva en un punto válido, sin recuperar posición anterior. WASD permanece como control inicial propuesto.
+EMSiiU confirma 2D, sin salto, sin bloqueo entre jugadores, máximo cuatro y posiciones/colisiones decididas por servidor. Autoriza reingreso sencillo: al reconectar se crea una participación nueva en un punto válido, sin recuperar posición anterior. Se confirma WASD y apuntado hacia el cursor; ver [contrato cliente-servidor](contrato-cliente-servidor.md).
 
 No se requiere microservicios por ahora. No se cierran Issues ni se simula aceptación del revisor por completar campos de planificación.
