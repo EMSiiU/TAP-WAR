@@ -4,7 +4,7 @@ Videojuego multijugador para navegador desarrollado como proyecto de Tópicos Av
 
 ## Estado del proyecto
 
-En planificación y preparación del primer prototipo en red. La carpeta `prueba-phaser/` contiene un ejercicio local de aprendizaje; todavía no implementa el juego multijugador de TAP-WAR.
+El cliente React y Phaser ya se puede ejecutar en local con jugadores simulados. La conexión multijugador aún no está integrada. La carpeta `prueba-phaser/` contiene un ejercicio local de aprendizaje; todavía no implementa el juego multijugador de TAP-WAR.
 
 - [Repositorio](https://github.com/EMSiiU/TAP-WAR)
 - [Tablero de trabajo](https://github.com/users/EMSiiU/projects/1)
@@ -21,6 +21,7 @@ Reglas principales: vista 2D, sin salto, sin bloqueo entre jugadores y salas de 
 ```text
 TAP-WAR/
 ├── .github/          # Plantillas de Issues y pull requests
+├── apps/web/         # Cliente React y Phaser
 ├── docs/             # Reglas, planificación y criterios de aceptación
 ├── prueba-phaser/    # Ejercicio independiente de aprendizaje
 │   ├── README.md
@@ -29,23 +30,22 @@ TAP-WAR/
 └── README.md
 ```
 
-Cuando se implemente el prototipo, la estructura prevista es:
+Para las siguientes etapas se prevén estas carpetas:
 
 ```text
-apps/web/            # Interfaz React y juego Phaser
 apps/game-server/    # Servidor multijugador Colyseus
 packages/shared/     # Contratos y definiciones compartidas
 assets/source/       # Archivos editables del arte
 ```
 
-Estas carpetas de aplicación todavía no están creadas. Se mantendrá un único repositorio para facilitar cambios coordinados entre cliente, servidor, arte y documentación. Si se incorporan microservicios, podrán tener sus propias carpetas y despliegues dentro de este repositorio.
+Se mantendrá un único repositorio para facilitar cambios coordinados entre cliente, servidor, arte y documentación. Si se incorporan microservicios, podrán tener sus propias carpetas y despliegues dentro de este repositorio.
 
 ## Tecnologías previstas
 
 | Componente | Tecnología | Estado |
 | --- | --- | --- |
-| Interfaz web | React + TypeScript | Propuesta para el prototipo |
-| Juego 2D | Phaser | Práctica local disponible |
+| Interfaz web | React + TypeScript | Cliente local disponible |
+| Juego 2D | Phaser | Escena local con jugadores simulados |
 | Servidor multijugador | Colyseus + TypeScript | Previsto para el sprint 1 |
 | Alojamiento | Ubuntu Server de un integrante | Conectividad y recursos por verificar |
 
@@ -56,9 +56,10 @@ La materia no exige microservicios por ahora. La persistencia y sus herramientas
 1. Leer las [reglas y decisiones iniciales](docs/decisiones-iniciales.md).
 2. Consultar el [contrato cliente-servidor](docs/contrato-cliente-servidor.md), el [plan del sprint](docs/semana-1.md) y la [distribución vigente con estimaciones y fechas](docs/planificacion-sprint-1.md).
 3. Revisar las dependencias y aceptación de la Issue en el Project antes de implementarla.
-4. Para aprender Phaser, seguir el [README de la práctica](prueba-phaser/README.md). Sus comandos arrancan únicamente el ejercicio local.
+4. [Ejecutar el cliente React y Phaser en local](apps/web/README.md). La escena usa datos simulados y no requiere Colyseus ni Ubuntu.
+5. Para aprender Phaser, seguir el [README de la práctica](prueba-phaser/README.md). Sus comandos arrancan únicamente el ejercicio local.
 
-No hay todavía un comando de arranque del producto completo; se documentará cuando existan cliente y servidor.
+No hay todavía un comando de arranque del producto completo; se documentará al integrar el cliente con el servidor.
 
 ## Equipo
 
