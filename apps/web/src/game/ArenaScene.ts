@@ -1,7 +1,6 @@
-// Escena que dibuja dos jugadores de prueba
 import Phaser from 'phaser'
 
-type PlayerState = {
+export type PlayerState = {
     id: string
     x: number
     y: number
@@ -14,6 +13,7 @@ type PlayerView = {
 }
 
 export default class ArenaScene extends Phaser.Scene {
+    private players: PlayerState[] = []
     private playerViews = new Map<string, PlayerView>()
 
     constructor() {
@@ -22,32 +22,25 @@ export default class ArenaScene extends Phaser.Scene {
 
     create() {
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-        this.playerViews.clear()
+            this.playerViews.clear()
         })
 
-        // Primer estado simulado: dos jugadores entran a la sala
-        this.applyPlayers([
-        { id: 'p1', x: 240, y: 160, aimAngle: 0 },
-        { id: 'p2', x: 600, y: 420, aimAngle: Math.PI / 2 },
-        ])
+        this.applyPlayers(this.players)
+    }
 
-        // Un seg después simulamos otra actualización del servidor
-        this.time.delayedCall(1000, () => {
-        this.applyPlayers([
-            { id: 'p1', x: 380, y: 240, aimAngle: 0 },
-            { id: 'p2', x: 600, y: 420, aimAngle: -Math.PI / 2 },
-        ])
-        })
+    setPlayers(players: PlayerState[]) {
+        this.players = players
+        if (this.sys.isActive()) this.applyPlayers(players)
     }
 
     private applyPlayers(players: PlayerState[]) {
         const activeIds = new Set(players.map((player) => player.id))
 
         for (const [id, view] of this.playerViews) {
-        if (!activeIds.has(id)) {
-            view.root.destroy()
-            this.playerViews.delete(id)
-        }
+            if (!activeIds.has(id)) {
+                view.root.destroy()
+                this.playerViews.delete(id)
+            }
         }
 
         for (const player of players) {
@@ -64,8 +57,7 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private createPlayerView(id: string): PlayerView {
-        const color = id === 'p1' ? 0x38bdf8 : 0xfb7185
-        const body = this.add.circle(0, 0, 14, color)
+        const body = this.add.circle(0, 0, 14, 0x38bdf8)
         const label = this.add.text(0, -28, id).setOrigin(0.5)
 
         const aim = this.add.graphics()
