@@ -1,36 +1,44 @@
-// Este componente es el puente: React proporciona el contenedor y pheaser coloca ahí su canvas.
-
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import ArenaScene from './ArenaScene'
+import ArenaScene, { type PlayerState } from './ArenaScene'
 
-export default function PhaserView() {
-    const hostRef = useRef<HTMLDivElement>(null)
+export default function PhaserView({ players }: { players: PlayerState[] }) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<ArenaScene | null>(null)
 
-    useEffect(() => {
-        const parent = hostRef.current
-        if (!parent) return
+  useEffect(() => {
+    const parent = hostRef.current
+    if (!parent) return
 
-        let game: Phaser.Game | undefined
+    const scene = new ArenaScene()
+    sceneRef.current = scene
+    let game: Phaser.Game | undefined
 
-        // Permite cancelar el arranque si React desmonta antes del primer frame.
-        const frame = requestAnimationFrame(() => {
-        game = new Phaser.Game({
-            type: Phaser.AUTO,
-            parent,
-            width: 1024,
-            height: 768,
-            backgroundColor: '#101827',
-            scale: { mode: Phaser.Scale.FIT },
-            scene: [ArenaScene],
-        })
-        })
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
 
-        return () => {
-        cancelAnimationFrame(frame)
-        game?.destroy(true)
-        }
-    }, [])
+      game = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent,
+        width: 1024,
+        height: 768,
+        backgroundColor: '#101827',
+        scale: { mode: Phaser.Scale.FIT },
+        scene: [scene],
+      })
+    })
 
-    return <div ref={hostRef} style={{ width: '100%', aspectRatio: '4 / 3' }} />
+    return () => {
+      sceneRef.current = null
+      active = false
+      game?.destroy(true)
+    }
+  }, [])
+
+  useEffect(() => {
+    sceneRef.current?.setPlayers(players)
+  }, [players])
+
+  return <div ref={hostRef} style={{ width: '100%', aspectRatio: '4 / 3' }} />
 }

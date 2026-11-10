@@ -19,6 +19,12 @@ Estado de ejemplo: {"id":"p1","x":240,"y":160,"aimAngle":0}.
 - El servidor decide posición, velocidad y colisiones, normaliza el movimiento diagonal y publica la orientación recibida tras validarla. Apuntar no modifica la dirección de movimiento.
 - Al entrar se recibe el estado inicial de la sala. Después se sincronizan posiciones, orientación, entradas y salidas de participantes. Al reingresar tras desconexión, se crea un ID nuevo y se usa un punto de aparición válido.
 
+### Implementación local de S1-05
+
+- El servidor crea la sala de prueba al arrancar. Todos los clientes web entran por ID a la misma sala, que conserva cuatro plazas y permanece disponible cuando queda vacía.
+- El ID del jugador es el identificador de sesión asignado por Colyseus. El servidor asigna un punto de aparición libre y publica el estado inicial con un ángulo de 0 radianes.
+- Al salir o cerrar la pestaña se elimina al jugador tras detectar la desconexión. Volver a entrar crea una nueva sesión. El movimiento, el apuntado en tiempo real y las colisiones se incorporan en S1-06.
+
 ## Datos compartidos
 
 Origen arriba a la izquierda; x crece hacia la derecha e y hacia abajo. La posición representa el centro del cuerpo de colisión. Compartir dimensiones del mundo, geometría de obstáculos y puntos de aparición mediante un archivo de datos. Los jugadores no se bloquean entre sí.

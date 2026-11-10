@@ -72,10 +72,12 @@ Aceptación: otro integrante inicia el cliente siguiendo instrucciones; entrar y
 
 ### S1-05 — Crear sala y sincronizar jugadores
 Responsables: P3 (3 h, sala y estado) y P1 (2 h, ciclo de conexión y pruebas). Revisor: P2. Estimación total: 5 h-persona. Dependencias: S1-02 y S1-03.
-- [ ] Crear servidor Colyseus y sala de prueba con máximo cuatro jugadores.
-- [ ] Agregar jugador al entrar y quitarlo al detectar desconexión.
-- [ ] Sincronizar identificador y posiciones iniciales.
+- [x] Crear servidor Colyseus y sala de prueba con máximo cuatro jugadores.
+- [x] Agregar jugador al entrar y quitarlo al detectar desconexión.
+- [x] Sincronizar identificador y posiciones iniciales.
 Aceptación: dos clientes muestran los mismos participantes; un quinto cliente recibe rechazo comprensible. Sin reconexión automática en este sprint: salir y volver crea una participación nueva.
+
+Prueba local y pasos de reproducción en [Prueba de aceptación](prueba-sprint-1.md#prueba-local-de-s1-05).
 
 ### S1-06 — Integrar movimiento y colisiones autoritativas
 Responsable: P2 y P3, P3 responsable de Issue. Revisión cruzada. Estimación: 4 h P3 + 6 h P2. Dependencias: S1-04 y S1-05.

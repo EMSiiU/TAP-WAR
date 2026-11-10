@@ -26,3 +26,30 @@ Adjuntar captura o video breve y registros relevantes sin credenciales. Anotar d
 ### Parámetros de la primera prueba
 
 Usar la [configuración provisional del contrato](contrato-cliente-servidor.md): arena de 1024 × 768, radio 14, simulación a 30 Hz, entradas y actualizaciones a 20 Hz. Con la conexión abierta, dejar de enviar entradas válidas mientras el personaje se mueve: el servidor debe detenerlo al cumplirse 300 ms, en el siguiente paso de simulación. Enviar entradas inválidas durante esa pausa no debe prolongar el movimiento. Comprobar que se conserva la última orientación válida.
+
+## Prueba local de S1-05
+
+Usa dos terminales desde la raíz del repositorio. En la primera inicia Colyseus:
+
+```powershell
+Set-Location apps/game-server
+npm ci
+npm run dev
+```
+
+En la segunda inicia el cliente:
+
+```powershell
+Set-Location apps/web
+npm ci
+npm run dev
+```
+
+Comprueba que `http://127.0.0.1:2567/health` devuelve `{"ok":true}` y abre la URL que indique Vite. Usa esa misma URL en todas las pestañas.
+
+1. En A y B pulsa **Entrar a la arena**. Cada pestaña debe mostrar un solo canvas, dos figuras en las mismas posiciones y las mismas etiquetas de ID.
+2. Cierra B. A debe mostrar un solo jugador. Abre otra pestaña y vuelve a entrar. A debe mostrar dos jugadores y la segunda figura debe tener un ID nuevo.
+3. Pulsa **Salir de la arena** y vuelve a entrar dos veces. El canvas debe desaparecer al salir y aparecer una sola vez al entrar. El contador de A debe reflejar cada salida y entrada.
+4. Llena la sala con cuatro pestañas. En una quinta pulsa **Entrar a la arena**. Debe mostrar **La sala está llena.** y las otras cuatro deben seguir conectadas.
+
+Resultado local del 9 de noviembre de 2026 en Chrome. Dos pestañas mostraron las mismas etiquetas y coordenadas. Cerrar una eliminó su figura y volver a entrar generó un ID nuevo. La salida por botón retiró el canvas y la reentrada creó uno solo. Con cuatro pestañas conectadas, la quinta mostró **La sala está llena.**
