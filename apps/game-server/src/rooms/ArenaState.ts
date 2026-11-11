@@ -5,6 +5,7 @@ export class Player extends Schema {
     @type('number') x = 0
     @type('number') y = 0
     @type('number') aimAngle = 0
+    @type('string') name=''
 }
 
 export class ArenaState extends Schema {

@@ -9,7 +9,7 @@ type ArenaState = {
 
 const client = new Client('http://127.0.0.1:2567')
 
-function ArenaSession() {
+function ArenaSession({ playerName }: { playerName: string}) {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [status, setStatus] = useState('Conectando…')
   const [controls, setControls] = useState<ArenaControls | null>(null)
@@ -20,7 +20,9 @@ function ArenaSession() {
 
     async function connect() {
       try {
-        const joined = await client.joinById<ArenaState>('arena-local')
+        const joined = await client.joinById<ArenaState>('arena-local', {
+          name: playerName,
+        })
         joined.reconnection.enabled = false
 
         if (!active) {
@@ -84,17 +86,39 @@ function ArenaSession() {
 }
 
 export default function App() {
-  const [inArena, setInArena] = useState(false)
+  const [name, setName] = useState('')
+  const [playerName, setPlayerName] = useState<string | null>(null)
 
   return (
     <main style={{ width: 'min(94vw, 760px)', margin: '2rem auto' }}>
       <h1>TAP-WAR</h1>
 
-      <button onClick={() => setInArena(!inArena)}>
-        {inArena ? 'Salir de la arena' : 'Entrar a la arena'}
-      </button>
-
-      {inArena && <ArenaSession />}
+      {playerName === null ? (
+        <form onSubmit={(event) => {
+          event.preventDefault()
+          const trimmedName = name.trim()
+          if (trimmedName) setPlayerName(trimmedName)
+        }}>
+          <label htmlFor="player-name">Nombre temporal</label>
+          <input
+            id="player-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            maxLength={24}
+            required
+          />
+          <button type="submit" disabled={!name.trim()}>
+            Entrar a la arena
+          </button>
+        </form>
+      ) : (
+        <>
+          <button type="button" onClick={() => setPlayerName(null)}>
+            Salir de la arena
+          </button>
+          <ArenaSession playerName={playerName} />
+        </>
+      )}
     </main>
   )
 }

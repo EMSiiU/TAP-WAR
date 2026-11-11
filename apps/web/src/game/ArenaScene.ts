@@ -6,6 +6,7 @@ export type PlayerState = {
     x: number
     y: number
     aimAngle: number
+    name: string
 }
 
 export type ArenaControls = {
@@ -145,7 +146,7 @@ export default class ArenaScene extends Phaser.Scene {
         let view = this.playerViews.get(player.id)
 
         if (!view) {
-            view = this.createPlayerView(player.id)
+            view = this.createPlayerView(player.name)
             this.playerViews.set(player.id, view)
         }
 
@@ -154,9 +155,9 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
-    private createPlayerView(id: string): PlayerView {
+    private createPlayerView(name: string): PlayerView {
         const body = this.add.circle(0, 0, arena.playerRadius, 0x38bdf8)
-        const label = this.add.text(0, -28, id).setOrigin(0.5)
+        const label = this.add.text(0, -28, name).setOrigin(0.5)
 
         const aim = this.add.graphics()
         aim.lineStyle(3, 0xffffff)

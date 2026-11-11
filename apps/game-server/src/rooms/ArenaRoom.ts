@@ -1,4 +1,4 @@
-import { Room, type Client } from 'colyseus'
+import { ErrorCode, Room, ServerError, type Client } from 'colyseus'
 import { ArenaState, Player } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
@@ -61,7 +61,20 @@ export class ArenaRoom extends Room {
         }
     }
 
-    onJoin(client: Client) {
+    onAuth(_client: Client, options?: { name?: unknown }) {
+        const name = typeof options?.name === 'string' ? options.name.trim() : ''
+
+        if (name.length < 1 || name.length > 24) {
+            throw new ServerError(
+                ErrorCode.AUTH_FAILED,
+                'El nombre temporal debe tener entre 1 y 24 caracteres.',
+            )
+        }
+
+        return { name }
+    }
+
+    onJoin(client: Client, _options: unknown, auth:{ name: string }) {
         const players = Array.from(this.state.players.values())
         const spawn = arena.spawnPoints.find(({ x, y }) =>
             players.every((player) => player.x !== x || player.y !== y),
@@ -73,6 +86,7 @@ export class ArenaRoom extends Room {
 
         const player = new Player()
         player.id = client.sessionId
+        player.name = auth.name
         player.x = spawn.x
         player.y = spawn.y
 
