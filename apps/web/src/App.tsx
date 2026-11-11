@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Client, ErrorCode, MatchMakeError } from '@colyseus/sdk'
+import { useEffect, useState, useCallback } from 'react'
+import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import PhaserView from './game/PhaserView'
 import type { ArenaControls, PlayerState } from './game/ArenaScene'
 
@@ -9,7 +9,13 @@ type ArenaState = {
 
 const client = new Client('http://127.0.0.1:2567')
 
-function ArenaSession({ playerName }: { playerName: string}) {
+function ArenaSession({ 
+    playerName,
+    onEnd
+  }: { 
+    playerName: string
+    onEnd: (message: string) => void
+  }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [status, setStatus] = useState('Conectando…')
   const [controls, setControls] = useState<ArenaControls | null>(null)
@@ -40,11 +46,7 @@ function ArenaSession({ playerName }: { playerName: string}) {
 
         joined.onStateChange(syncPlayers)
         joined.onLeave(() => {
-          if (active) {
-            setPlayers([])
-            setControls(null)
-            setStatus('Se perdió la conexión. Sal de la arena para volver a entrar.')
-          }
+          if (active) onEnd('Se perdió la conexión. Puedes volver a entrar.')
         })
         syncPlayers(joined.state)
         setControls({
@@ -55,15 +57,23 @@ function ArenaSession({ playerName }: { playerName: string}) {
         })
         setStatus('Conectado')
       } catch (error) {
-        if (active) {
-          setStatus(
-            error instanceof MatchMakeError &&
-            error.code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID &&
-            error.message.endsWith(' is locked')
-              ? 'La sala está llena.'
-              : 'No se pudo conectar a la arena. Comprueba que el servidor esté iniciado.',
-          )
+        if (!active) return
+
+        if (
+          error instanceof MatchMakeError &&
+          error.code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID &&
+          error.message.endsWith(' is locked')
+        ) {
+          onEnd('La sala está llena. Inténtalo cuando haya una plaza.')
+          return
         }
+
+        if (error instanceof ServerError && error.code === ErrorCode.AUTH_FAILED) {
+          onEnd('El nombre temporal debe tener entre 1 y 24 caracteres.')
+          return
+        }
+
+        onEnd('No se pudo conectar a la arena. Comprueba que el servidor esté iniciado.')
       }
     }
 
@@ -75,7 +85,7 @@ function ArenaSession({ playerName }: { playerName: string}) {
       active = false
       disconnect?.()
     }
-  }, [])
+  }, [playerName, onEnd])
 
   return (
     <>
@@ -89,6 +99,13 @@ export default function App() {
   const [name, setName] = useState('')
   const [playerName, setPlayerName] = useState<string | null>(null)
 
+  const [entryMessage, setEntryMessage] = useState('')
+
+  const returnToForm = useCallback((message: string) => {
+    setEntryMessage(message)
+    setPlayerName(null)
+  }, [])
+
   return (
     <main style={{ width: 'min(94vw, 760px)', margin: '2rem auto' }}>
       <h1>TAP-WAR</h1>
@@ -97,8 +114,12 @@ export default function App() {
         <form onSubmit={(event) => {
           event.preventDefault()
           const trimmedName = name.trim()
-          if (trimmedName) setPlayerName(trimmedName)
+          if (trimmedName) {
+            setEntryMessage('')
+            setPlayerName(trimmedName)
+          }
         }}>
+          {entryMessage && <p role='alert'>{entryMessage}</p>}
           <label htmlFor="player-name">Nombre temporal</label>
           <input
             id="player-name"
@@ -113,10 +134,10 @@ export default function App() {
         </form>
       ) : (
         <>
-          <button type="button" onClick={() => setPlayerName(null)}>
+          <button type="button" onClick={() => returnToForm('')}>
             Salir de la arena
           </button>
-          <ArenaSession playerName={playerName} />
+          <ArenaSession playerName={playerName} onEnd={returnToForm} />
         </>
       )}
     </main>
