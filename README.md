@@ -4,7 +4,7 @@ Videojuego multijugador para navegador desarrollado como proyecto de Tópicos Av
 
 ## Estado del proyecto
 
-El cliente React y Phaser ya se puede ejecutar en local con jugadores simulados. La conexión multijugador aún no está integrada. La carpeta `prueba-phaser/` contiene un ejercicio local de aprendizaje; todavía no implementa el juego multijugador de TAP-WAR.
+El cliente React y Phaser se conecta en local a una sala Colyseus de hasta cuatro jugadores. Las pestañas comparten posiciones y apuntado. El servidor calcula el movimiento y resuelve los bordes y el obstáculo de la arena. La carpeta `prueba-phaser/` contiene un ejercicio independiente.
 
 - [Repositorio](https://github.com/EMSiiU/TAP-WAR)
 - [Tablero de trabajo](https://github.com/users/EMSiiU/projects/1)
@@ -21,45 +21,47 @@ Reglas principales: vista 2D, sin salto, sin bloqueo entre jugadores y salas de 
 ```text
 TAP-WAR/
 ├── .github/          # Plantillas de Issues y pull requests
+├── apps/game-server/ # Servidor multijugador Colyseus
 ├── apps/web/         # Cliente React y Phaser
+├── packages/shared/  # Geometría de la arena compartida
 ├── docs/             # Reglas, planificación y criterios de aceptación
 ├── prueba-phaser/    # Ejercicio independiente de aprendizaje
 │   ├── README.md
 │   ├── index.html
 │   └── juego.js
-└── README.md
+├── README.md
+└── DOCUMENTACION.md
 ```
 
 Para las siguientes etapas se prevén estas carpetas:
 
 ```text
-apps/game-server/    # Servidor multijugador Colyseus
-packages/shared/     # Contratos y definiciones compartidas
 assets/source/       # Archivos editables del arte
 ```
 
 Se mantendrá un único repositorio para facilitar cambios coordinados entre cliente, servidor, arte y documentación. Si se incorporan microservicios, podrán tener sus propias carpetas y despliegues dentro de este repositorio.
 
-## Tecnologías previstas
+## Tecnologías y versiones
 
 | Componente | Tecnología | Estado |
 | --- | --- | --- |
-| Interfaz web | React + TypeScript | Cliente local disponible |
-| Juego 2D | Phaser | Escena local con jugadores simulados |
-| Servidor multijugador | Colyseus + TypeScript | Previsto para el sprint 1 |
+| Interfaz web | React 19, TypeScript 6.0 y Vite 8 | Cliente local disponible |
+| Juego 2D | Phaser 3.90.0 | Representa el estado de la sala |
+| Servidor multijugador | Colyseus 0.17.11 y `@colyseus/schema` 4.0.31 | Sala local de cuatro plazas |
+| Conexión desde el navegador | `@colyseus/sdk` 0.17.43 | Cliente de la sala Colyseus 0.17 |
 | Alojamiento | Ubuntu Server de un integrante | Conectividad y recursos por verificar |
 
-La materia no exige microservicios por ahora. La persistencia y sus herramientas se definirán cuando se aborden cuentas y resultados. Las versiones de las aplicaciones se fijarán al crear su estructura.
+Para el desarrollo local usa Node.js 24 con npm. Las versiones exactas que instala `npm ci` están en los archivos `package-lock.json` de `apps/web` y `apps/game-server`.
 
 ## Empezar
+
+Consulta el [manual técnico](DOCUMENTACION.md) para entender la arquitectura, el mapa de archivos y la lógica del juego.
 
 1. Leer las [reglas y decisiones iniciales](docs/decisiones-iniciales.md).
 2. Consultar el [contrato cliente-servidor](docs/contrato-cliente-servidor.md), el [plan del sprint](docs/semana-1.md) y la [distribución vigente con estimaciones y fechas](docs/planificacion-sprint-1.md).
 3. Revisar las dependencias y aceptación de la Issue en el Project antes de implementarla.
-4. [Ejecutar el cliente React y Phaser en local](apps/web/README.md). La escena usa datos simulados y no requiere Colyseus ni Ubuntu.
+4. [Ejecutar Colyseus y el cliente web en local](docs/prueba-sprint-1.md#prueba-local-de-s1-05).
 5. Para aprender Phaser, seguir el [README de la práctica](prueba-phaser/README.md). Sus comandos arrancan únicamente el ejercicio local.
-
-No hay todavía un comando de arranque del producto completo; se documentará al integrar el cliente con el servidor.
 
 ## Equipo
 

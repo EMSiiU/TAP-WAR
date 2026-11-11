@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Client, ErrorCode, MatchMakeError } from '@colyseus/sdk'
 import PhaserView from './game/PhaserView'
-import type { PlayerState } from './game/ArenaScene'
+import type { ArenaControls, PlayerState } from './game/ArenaScene'
 
 type ArenaState = {
   players: Map<string, PlayerState>
@@ -12,7 +12,7 @@ const client = new Client('http://127.0.0.1:2567')
 function ArenaSession() {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [status, setStatus] = useState('Conectando…')
-  const [connected, setConnected] = useState(false)
+  const [controls, setControls] = useState<ArenaControls | null>(null)
 
   useEffect(() => {
     let active = true
@@ -40,12 +40,17 @@ function ArenaSession() {
         joined.onLeave(() => {
           if (active) {
             setPlayers([])
-            setConnected(false)
+            setControls(null)
             setStatus('Se perdió la conexión. Sal de la arena para volver a entrar.')
           }
         })
         syncPlayers(joined.state)
-        setConnected(true)
+        setControls({
+          playerId: joined.sessionId,
+          send: (input) => {
+            if (joined.connection.isOpen) joined.send('input', input)
+          },
+        })
         setStatus('Conectado')
       } catch (error) {
         if (active) {
@@ -72,8 +77,8 @@ function ArenaSession() {
 
   return (
     <>
-      <p role="status">{connected ? `${status} · Jugadores: ${players.length}` : status}</p>
-      {connected && <PhaserView players={players} />}
+      <p role="status">{controls ? `${status} · Jugadores: ${players.length}` : status}</p>
+      {controls && <PhaserView players={players} controls={controls} />}
     </>
   )
 }

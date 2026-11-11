@@ -15,10 +15,10 @@ Prioridad: comprobar integración y escala antes del acabado. Responsable P4; P2
 ## Mapa
 
 - Primero dibujar esquema visto desde arriba con suelo, bordes, un obstáculo rectangular y cuatro apariciones.
-- Propuesta inicial de mundo: 1024 × 768 unidades; 1 píxel del fondo corresponde a 1 unidad del mundo. Confirmar con P2/P3 antes de exportar.
-- Entregar `arena-01.png` para el fondo y `arena-01.json` con dimensiones, rectángulos de colisión y apariciones, conforme al contrato que acuerden P2/P3.
+- La arena local mide 1024 × 768 unidades. Para un fondo a escala 1:1, exporta 1024 × 768 píxeles. Confirma con P2/P3 si el arte requiere cambiar las dimensiones.
+- Entregar `arena-01.png` para el fondo. Usar [arena.json](../packages/shared/arena.json) como referencia de dimensiones, colisiones y apariciones. Acordar con P2/P3 cualquier cambio de geometría.
 - Guardar editable con capas; no hornear elementos que deben tapar al personaje dentro de la capa inferior.
-- El JSON no se considera compatible hasta que lo carguen cliente y servidor. Un PNG no contiene colisiones.
+- Comprueba en el cliente que el PNG alinea el obstáculo y las apariciones con la geometría compartida.
 - Alternativa si el equipo elige tiles: Tiled editable más exportación JSON y tilesets PNG; validar compatibilidad antes de producir el mapa completo.
 
 ## Revisión del día 3
