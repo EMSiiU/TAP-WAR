@@ -29,6 +29,9 @@ Usar la [configuración provisional del contrato](contrato-cliente-servidor.md):
 
 ## Prueba local de S1-05
 
+Usa Node.js 24 con npm. Esta prueba usa Colyseus 0.17 en el servidor y
+en el cliente web. Consulta las [versiones del proyecto](../README.md#tecnologías-y-versiones).
+
 Usa dos terminales desde la raíz del repositorio. En la primera inicia Colyseus:
 
 ```powershell
@@ -53,3 +56,15 @@ Comprueba que `http://127.0.0.1:2567/health` devuelve `{"ok":true}` y abre la UR
 4. Llena la sala con cuatro pestañas. En una quinta pulsa **Entrar a la arena**. Debe mostrar **La sala está llena.** y las otras cuatro deben seguir conectadas.
 
 Resultado local del 9 de noviembre de 2026 en Chrome. Dos pestañas mostraron las mismas etiquetas y coordenadas. Cerrar una eliminó su figura y volver a entrar generó un ID nuevo. La salida por botón retiró el canvas y la reentrada creó uno solo. Con cuatro pestañas conectadas, la quinta mostró **La sala está llena.**
+
+## Prueba local de S1-06
+
+Inicia el servidor y el cliente con los mismos comandos de S1-05. Entra a la sala en dos pestañas.
+
+1. En A, mueve el cursor con el cuerpo quieto y luego usa WASD. B debe ver el mismo ángulo y la misma posición. Las teclas opuestas deben cancelar el movimiento de su eje.
+2. Camina contra los bordes y el rectángulo central. El círculo debe quedar dentro de la arena y detenerse frente al obstáculo. Mantén una dirección diagonal contra una cara para comprobar el deslizamiento.
+3. Mantén una tecla en A y cambia a B. A debe detenerse y seguir quieto al volver hasta que pulses una tecla de nuevo. Sal de la sala y vuelve a entrar para comprobar que los controles y el canvas funcionan una sola vez.
+4. Con dos clientes del SDK, envía entradas a 20 Hz durante el mismo tiempo en línea recta y en diagonal por espacio libre. Compara la distancia recorrida y verifica una velocidad cercana a 220 unidades/s en ambos recorridos.
+5. Deja de enviar entradas válidas mientras el jugador se mueve y envía entradas con un eje fuera de rango. Verifica que se detiene, que se conserva el último ángulo válido y que las coordenadas añadidas a un mensaje no cambian la posición oficial.
+
+Resultado local del 11 de noviembre de 2026. En dos pestañas de Chrome se verificaron WASD, teclas opuestas, apuntado en reposo, detención al perder foco y salida y reentrada sin duplicar el canvas. Dos clientes del SDK observaron el mismo estado al chocar con el obstáculo y el borde. Se midieron 215 unidades/s en línea recta y 224 en diagonal en recorridos de 850 ms. Las entradas inválidas no prolongaron el movimiento y las coordenadas añadidas no cambiaron la posición.

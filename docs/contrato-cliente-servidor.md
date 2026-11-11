@@ -23,11 +23,11 @@ Estado de ejemplo: {"id":"p1","x":240,"y":160,"aimAngle":0}.
 
 - El servidor crea la sala de prueba al arrancar. Todos los clientes web entran por ID a la misma sala, que conserva cuatro plazas y permanece disponible cuando queda vacía.
 - El ID del jugador es el identificador de sesión asignado por Colyseus. El servidor asigna un punto de aparición libre y publica el estado inicial con un ángulo de 0 radianes.
-- Al salir o cerrar la pestaña se elimina al jugador tras detectar la desconexión. Volver a entrar crea una nueva sesión. El movimiento, el apuntado en tiempo real y las colisiones se incorporan en S1-06.
+- Al salir o cerrar la pestaña se elimina al jugador tras detectar la desconexión. Volver a entrar crea una nueva sesión. S1-06 añade el mensaje `input`, el movimiento y las colisiones del servidor. El [manual técnico](../DOCUMENTACION.md) describe cómo se aplican.
 
 ## Datos compartidos
 
-Origen arriba a la izquierda; x crece hacia la derecha e y hacia abajo. La posición representa el centro del cuerpo de colisión. Compartir dimensiones del mundo, geometría de obstáculos y puntos de aparición mediante un archivo de datos. Los jugadores no se bloquean entre sí.
+Origen arriba a la izquierda; x crece hacia la derecha e y hacia abajo. La posición representa el centro del cuerpo de colisión. Ambas aplicaciones leen dimensiones, radio, obstáculos y puntos de aparición de [arena.json](../packages/shared/arena.json). Los jugadores no se bloquean entre sí.
 
 ## Configuración provisional para la primera prueba
 
@@ -45,6 +45,6 @@ Al soltar WASD o perder el foco, enviar movimiento cero de inmediato si la conex
 
 ## Aceptación
 
-Revisar los ejemplos y las reglas del contrato. En la implementación posterior, comprobar con dos clientes: misma rapidez en diagonal y en línea recta, orientación visible al apuntar sin moverse, colisión resuelta por el servidor, rechazo de entradas inválidas y detención al perder el foco o vencer el plazo.
+La [prueba local de S1-06](prueba-sprint-1.md#prueba-local-de-s1-06) comprueba con dos clientes: misma rapidez en diagonal y en línea recta, orientación visible al apuntar sin moverse, colisión resuelta por el servidor, rechazo de entradas inválidas y detención al perder el foco o vencer el plazo.
 
 Para la fase de combate quedan como propuestas: clic izquierdo para ataque básico, derecho para secundario, Espacio para definitiva, Q/E para habilidades y Tab para el marcador.

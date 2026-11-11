@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 258" width="720" height="258" role="img" aria-labelledby="title desc">
+  <title id="title">Velocidad medida en S1-06</title>
+  <desc id="desc">Línea recta 215 y diagonal 224 unidades por segundo. Objetivo 220 unidades por segundo.</desc>
+  <rect width="720" height="258" fill="#101827"/>
+  <g font-family="system-ui, sans-serif" fill="#f1f5f9" font-size="17">
+    <text x="24" y="38" font-size="24" font-weight="700">Velocidad medida en S1-06</text>
+    <text x="24" y="64" fill="#cbd5e1">Prueba local de 850 ms por recorrido · unidades/s</text>
+    <text x="24" y="115">Recta</text>
+    <text x="24" y="165">Diagonal</text>
+    <rect id="straight" x="126" y="92" width="430" height="34" fill="#38bdf8"/>
+    <rect id="diagonal" x="126" y="142" width="448" height="34" fill="#60a5fa"/>
+    <text x="535" y="115" text-anchor="end" fill="#082032" font-weight="700">215</text>
+    <text x="552" y="165" text-anchor="end" fill="#082032" font-weight="700">224</text>
+    <line x1="126" y1="198" x2="626" y2="198" stroke="#94a3b8"/>
+    <line id="target" x1="566" y1="80" x2="566" y2="198" stroke="#fde68a" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="126" y="224" text-anchor="middle">0</text>
+    <text x="326" y="224" text-anchor="middle">100</text>
+    <text x="626" y="224" text-anchor="middle">250</text>
+    <text x="566" y="246" text-anchor="middle" fill="#fde68a">220 objetivo</text>
+  </g>
+</svg>

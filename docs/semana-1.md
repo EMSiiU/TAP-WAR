@@ -81,11 +81,13 @@ Prueba local y pasos de reproducción en [Prueba de aceptación](prueba-sprint-1
 
 ### S1-06 — Integrar movimiento y colisiones autoritativas
 Responsable: P2 y P3, P3 responsable de Issue. Revisión cruzada. Estimación: 4 h P3 + 6 h P2. Dependencias: S1-04 y S1-05.
-- [ ] Capturar WASD y apuntado hacia el cursor; enviar dirección y ángulo. Limpiar el movimiento al perder foco y aplicar el plazo sin entradas en el servidor.
-- [ ] Simular movimiento en servidor y normalizar diagonales.
-- [ ] Aplicar límites y al menos un obstáculo usando geometría compartida.
-- [ ] Mostrar posiciones oficiales en ambos clientes.
+- [x] Capturar WASD y apuntado hacia el cursor; enviar dirección y ángulo. Limpiar el movimiento al perder foco y aplicar el plazo sin entradas en el servidor.
+- [x] Simular movimiento en servidor y normalizar diagonales.
+- [x] Aplicar límites y al menos un obstáculo usando geometría compartida.
+- [x] Mostrar posiciones oficiales en ambos clientes.
 Aceptación: ninguno atraviesa el obstáculo o bordes; ambos observan el movimiento; mensajes malformados y posiciones inventadas no alteran el estado oficial. No se exige predicción avanzada esta semana.
+
+Prueba local y resultados en [prueba-sprint-1.md](prueba-sprint-1.md#prueba-local-de-s1-06).
 
 ### S1-07 — Construir flujo provisional de entrada y salida
 Responsable: P1. Revisor: P2. Estimación: 5 h. Dependencias: S1-03, S1-04 y S1-05.
