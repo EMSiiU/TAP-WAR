@@ -1,6 +1,6 @@
 # Documentación técnica de TAP-WAR
 
-Manual de la implementación local hasta S1-06. Actualizado el 11 de noviembre de 2026.
+Manual de la implementación local hasta S1-07. Actualizado el 11 de noviembre de 2026.
 
 - [Arquitectura y arranque](#arquitectura-y-arranque)
 - [Mapa de archivos](#mapa-de-archivos)
@@ -55,7 +55,7 @@ Desde la raíz, abre dos terminales de PowerShell:
 | `npm ci` | `npm ci` |
 | `npm run dev` | `npm run dev` |
 
-Colyseus escucha en `127.0.0.1:2567`. Su ruta `/health` devuelve `{"ok":true}`. Abre en dos pestañas la URL que muestre Vite y pulsa **Entrar a la arena** en ambas. El puerto de Vite sirve la interfaz y el 2567 sirve la conexión de juego.
+Colyseus escucha en `127.0.0.1:2567`. Su ruta `/health` devuelve `{"ok":true}`. Abre en dos pestañas la URL que muestre Vite. Escribe un nombre temporal y pulsa **Entrar a la arena** en cada una. El puerto de Vite sirve la interfaz y el 2567 sirve la conexión de juego.
 
 ## Mapa de archivos
 
@@ -64,8 +64,8 @@ Colyseus escucha en `127.0.0.1:2567`. Su ruta `/health` devuelve `{"ok":true}`. 
 | Archivo | Responsabilidad |
 | --- | --- |
 | [apps/game-server/src/index.ts](apps/game-server/src/index.ts) | Registra el tipo de sala `arena`, expone `/health`, inicia el servidor y crea la sala local. |
-| [apps/game-server/src/rooms/ArenaRoom.ts](apps/game-server/src/rooms/ArenaRoom.ts) | Gestiona altas y bajas, asigna apariciones, guarda las últimas entradas válidas y ejecuta la simulación. |
-| [apps/game-server/src/rooms/ArenaState.ts](apps/game-server/src/rooms/ArenaState.ts) | Define el esquema de red. `Player` contiene `id`, `x`, `y` y `aimAngle`. `ArenaState` almacena jugadores por ID en un `MapSchema`. |
+| [apps/game-server/src/rooms/ArenaRoom.ts](apps/game-server/src/rooms/ArenaRoom.ts) | Valida nombres, gestiona altas y bajas, asigna apariciones, guarda las últimas entradas válidas y ejecuta la simulación. |
+| [apps/game-server/src/rooms/ArenaState.ts](apps/game-server/src/rooms/ArenaState.ts) | Define el esquema de red. `Player` contiene `id`, `name`, `x`, `y` y `aimAngle`. `ArenaState` almacena jugadores por ID en un `MapSchema`. |
 | [apps/game-server/src/rooms/ArenaInput.ts](apps/game-server/src/rooms/ArenaInput.ts) | Recibe un valor desconocido y devuelve los tres campos validados o `null`. |
 | [apps/game-server/src/rooms/ArenaCollision.ts](apps/game-server/src/rooms/ArenaCollision.ts) | Calcula una posición válida según el radio, los bordes y los rectángulos. |
 | [packages/shared/arena.json](packages/shared/arena.json) | Define ancho, alto, radio, puntos de aparición y obstáculos para ambas aplicaciones. |
@@ -78,9 +78,9 @@ Colyseus escucha en `127.0.0.1:2567`. Su ruta `/health` devuelve `{"ok":true}`. 
 | --- | --- |
 | [apps/web/index.html](apps/web/index.html) | Declara `#root`, carga el favicon e inicia el módulo `main.tsx`. |
 | [apps/web/src/main.tsx](apps/web/src/main.tsx) | Monta React en `#root` bajo `StrictMode` e importa los estilos globales. |
-| [apps/web/src/App.tsx](apps/web/src/App.tsx) | Muestra el botón y el estado de conexión. `ArenaSession` se une a la sala, escucha los parches y proporciona a Phaser el ID propio y el envío de entradas. |
+| [apps/web/src/App.tsx](apps/web/src/App.tsx) | Muestra el formulario de nombre temporal y el estado de conexión. `ArenaSession` se une a la sala, escucha los parches y proporciona a Phaser el ID propio y el envío de entradas. |
 | [apps/web/src/game/PhaserView.tsx](apps/web/src/game/PhaserView.tsx) | Crea una instancia de Phaser al entrar, pasa los jugadores a la escena y destruye el juego al desmontarse. Usa las dimensiones del JSON y escala el canvas con `FIT`. |
-| [apps/web/src/game/ArenaScene.ts](apps/web/src/game/ArenaScene.ts) | Lee teclado y cursor, dibuja los obstáculos y sincroniza las figuras con el estado oficial. |
+| [apps/web/src/game/ArenaScene.ts](apps/web/src/game/ArenaScene.ts) | Lee teclado y cursor, dibuja los obstáculos y sincroniza las figuras con el estado oficial. Cada etiqueta usa `Player.name`. |
 | [index.css](apps/web/src/index.css) y [App.css](apps/web/src/App.css) | El primero aplica estilos globales. El segundo conserva estilos de la plantilla inicial y la aplicación actual no lo importa. |
 | [public/](apps/web/public/) y [src/assets/](apps/web/src/assets/) | Contienen el favicon y recursos de la plantilla. La arena actual dibuja sus figuras en código. |
 | [package.json](apps/web/package.json) y [package-lock.json](apps/web/package-lock.json) | Declaran React, Phaser, el SDK, las herramientas de desarrollo y los comandos de Vite, compilación y lint. |
@@ -106,15 +106,17 @@ sequenceDiagram
     participant S as Colyseus · ArenaRoom
     participant P as Phaser
 
-    J->>R: Entrar a la arena
-    R->>S: joinById("arena-local")
-    S->>S: onJoin asigna sessionId y aparición
+    J->>R: Escribe el nombre y pulsa Entrar a la arena
+    R->>S: joinById("arena-local", { name })
+    S->>S: onAuth valida el nombre
+    S->>S: onJoin asigna sessionId, nombre y aparición
     S-->>R: Estado inicial y parches posteriores
     R->>P: Montar canvas y pasar jugadores
     alt Sale con el botón
         J->>R: Salir de la arena
         R->>P: Limpiar controles y destruir canvas
         R->>S: leave()
+        R-->>J: Volver al formulario
     else Cierra la pestaña
         J->>S: Se cierra la conexión
     end
@@ -124,7 +126,9 @@ sequenceDiagram
 
 - `index.ts` crea la sala una vez al arrancar. `onCreate` le da el ID fijo `arena-local` y `autoDispose = false` la mantiene disponible aunque se vacíe.
 - El máximo de participantes coincide con los cuatro puntos de aparición del JSON. `onJoin` elige el primero cuyo centro no coincide con la posición actual de otro jugador. Usa `client.sessionId` como clave y como `Player.id`.
-- React entra por ID para apuntar siempre a la misma instancia. Colyseus bloquea la sala llena y React traduce el rechazo correspondiente a **La sala está llena.** La reconexión automática está desactivada. Volver a entrar crea otra sesión.
+- El formulario recorta espacios al enviar el nombre y limita el campo a 24 caracteres. El servidor vuelve a recortar el texto en `onAuth` y exige una cadena de 1 a 24 caracteres después del recorte. `onJoin` copia el valor validado a `Player.name`.
+- `Player.name` es una etiqueta provisional y puede repetirse. El `sessionId` identifica al jugador en el mapa, sus entradas de movimiento y su figura en Phaser. El flujo usa un nombre de pantalla y carece de autenticación de cuentas.
+- React entra por ID para apuntar siempre a la misma instancia. Mientras abre la sesión muestra **Conectando…** y al entrar muestra **Conectado** y el número de jugadores. Si la sala está llena, se rechaza el nombre o falla la conexión, `ArenaSession` llama a `onEnd` para volver al formulario y mostrar el aviso. Una desconexión durante la partida sigue el mismo recorrido. Al pulsar **Salir de la arena** también vuelve el formulario, con el nombre escrito y sin aviso. La reconexión automática está desactivada. Volver a entrar crea otra sesión.
 - El efecto de React difiere el inicio a una microtarea y comprueba si sigue activo. Si la conexión termina de abrirse después de salir, el cliente la cierra. `PhaserView` también difiere el arranque y limpia los listeners y el temporizador al desmontarse.
 
 ## Movimiento, apuntado y sincronización
@@ -138,10 +142,10 @@ sequenceDiagram
 El mensaje `input` expresa dirección y ángulo. Cada eje acepta `-1`, `0` o `1`. La derecha y abajo son positivas. El ángulo usa radianes en `[-π, π)`. El servidor obtiene la identidad de la conexión y solo extrae esos tres campos. Si falta alguno o su valor es inválido, descarta el mensaje entero. Si se adjuntan coordenadas, quedan fuera de la entrada validada.
 
 ```json
-{ "id": "ejemplo", "x": 240, "y": 160, "aimAngle": 0 }
+{ "id": "ejemplo", "name": "Luna", "x": 240, "y": 160, "aimAngle": 0 }
 ```
 
-El estado oficial contiene un objeto como ese por jugador. Colyseus envía el estado inicial y después parches. `ArenaSession` convierte el mapa de jugadores en una lista. `applyPlayers` conserva una figura por ID, actualiza su posición y rotación, y destruye las figuras cuyos IDs ya no existen. El cliente renderiza el estado recibido directamente.
+El estado oficial contiene un objeto como ese por jugador. Colyseus envía el estado inicial y después parches. `ArenaSession` convierte el mapa de jugadores en una lista. `applyPlayers` conserva una figura por ID, actualiza su posición y rotación, y destruye las figuras cuyos IDs ya no existen. El cliente renderiza el estado recibido directamente. El nombre viaja con el estado y se usa para dibujar la etiqueta de cada figura.
 
 ### Controles y simulación
 

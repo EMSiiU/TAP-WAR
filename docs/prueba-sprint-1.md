@@ -50,10 +50,10 @@ npm run dev
 
 Comprueba que `http://127.0.0.1:2567/health` devuelve `{"ok":true}` y abre la URL que indique Vite. Usa esa misma URL en todas las pestañas.
 
-1. En A y B pulsa **Entrar a la arena**. Cada pestaña debe mostrar un solo canvas, dos figuras en las mismas posiciones y las mismas etiquetas de ID.
-2. Cierra B. A debe mostrar un solo jugador. Abre otra pestaña y vuelve a entrar. A debe mostrar dos jugadores y la segunda figura debe tener un ID nuevo.
+1. En A y B escribe un nombre distinto y pulsa **Entrar a la arena**. Cada pestaña debe mostrar un solo canvas, las dos figuras en las mismas posiciones y los mismos nombres.
+2. Cierra B. A debe mostrar un solo jugador. Abre otra pestaña y vuelve a entrar. A debe mostrar dos jugadores. El ID nuevo se puede comprobar en el estado del SDK, ya que la etiqueta visible muestra el nombre.
 3. Pulsa **Salir de la arena** y vuelve a entrar dos veces. El canvas debe desaparecer al salir y aparecer una sola vez al entrar. El contador de A debe reflejar cada salida y entrada.
-4. Llena la sala con cuatro pestañas. En una quinta pulsa **Entrar a la arena**. Debe mostrar **La sala está llena.** y las otras cuatro deben seguir conectadas.
+4. Llena la sala con cuatro pestañas. En una quinta escribe un nombre y pulsa **Entrar a la arena**. Debe mostrar **La sala está llena.** y las otras cuatro deben seguir conectadas.
 
 Resultado local del 9 de noviembre de 2026 en Chrome. Dos pestañas mostraron las mismas etiquetas y coordenadas. Cerrar una eliminó su figura y volver a entrar generó un ID nuevo. La salida por botón retiró el canvas y la reentrada creó uno solo. Con cuatro pestañas conectadas, la quinta mostró **La sala está llena.**
 
@@ -68,3 +68,17 @@ Inicia el servidor y el cliente con los mismos comandos de S1-05. Entra a la sal
 5. Deja de enviar entradas válidas mientras el jugador se mueve y envía entradas con un eje fuera de rango. Verifica que se detiene, que se conserva el último ángulo válido y que las coordenadas añadidas a un mensaje no cambian la posición oficial.
 
 Resultado local del 11 de noviembre de 2026. En dos pestañas de Chrome se verificaron WASD, teclas opuestas, apuntado en reposo, detención al perder foco y salida y reentrada sin duplicar el canvas. Dos clientes del SDK observaron el mismo estado al chocar con el obstáculo y el borde. Se midieron 215 unidades/s en línea recta y 224 en diagonal en recorridos de 850 ms. Las entradas inválidas no prolongaron el movimiento y las coordenadas añadidas no cambiaron la posición.
+
+## Prueba local de S1-07
+
+Inicia Colyseus y Vite como en S1-05. Pide a otro integrante que ejecute los pasos desde la interfaz.
+
+| Acción | Resultado esperado |
+| --- | --- |
+| Dejar el campo vacío o escribir solo espacios | **Entrar a la arena** queda deshabilitado. |
+| Entrar con `  Luna  ` y abrir otra pestaña con `Sol` | La interfaz indica que está conectando y luego muestra **Conectado**. Ambas pestañas ven las etiquetas **Luna** y **Sol**. |
+| Entrar desde dos pestañas con `Luna` | Aparecen dos figuras independientes. Al salir una, la otra sigue en la sala. |
+| Pulsar **Salir de la arena** y volver a entrar | Desaparece el canvas, vuelve el formulario con el texto escrito y la otra pestaña deja de ver al jugador. Volver a entrar crea una sesión nueva. |
+| Intentar entrar desde una quinta pestaña con la sala llena | El formulario vuelve con el aviso **La sala está llena** y el nombre conservado. Libera una plaza desde otra pestaña y reintenta. |
+| Intentar entrar con Colyseus apagado | El formulario vuelve con el aviso de fallo y el nombre conservado. Inicia Colyseus y reintenta. |
+| Detener Colyseus durante una sesión | Desaparece el canvas y vuelve el formulario con el aviso de conexión perdida y el nombre conservado. |

@@ -4,7 +4,7 @@ Videojuego multijugador para navegador desarrollado como proyecto de Tópicos Av
 
 ## Estado del proyecto
 
-El cliente React y Phaser se conecta en local a una sala Colyseus de hasta cuatro jugadores. Las pestañas comparten posiciones y apuntado. El servidor calcula el movimiento y resuelve los bordes y el obstáculo de la arena. La carpeta `prueba-phaser/` contiene un ejercicio independiente.
+El cliente React y Phaser permite entrar con un nombre temporal a una sala Colyseus local de hasta cuatro jugadores. Las pestañas comparten posiciones y apuntado. El servidor calcula el movimiento y resuelve los bordes y el obstáculo de la arena. La carpeta `prueba-phaser/` contiene un ejercicio independiente.
 
 - [Repositorio](https://github.com/EMSiiU/TAP-WAR)
 - [Tablero de trabajo](https://github.com/users/EMSiiU/projects/1)

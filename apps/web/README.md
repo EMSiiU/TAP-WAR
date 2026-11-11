@@ -9,6 +9,11 @@ Sigue la [prueba local de S1-05](../../docs/prueba-sprint-1.md#prueba-local-de-s
 para iniciar el servidor y el cliente en terminales separadas y comprobar la
 sincronización entre pestañas.
 
+Escribe un **Nombre temporal** y pulsa **Entrar a la arena**. El nombre aparece
+sobre tu jugador. Pulsa **Salir de la arena** para volver al formulario.
+Si falla la conexión, el formulario vuelve automáticamente con el aviso y el
+nombre conservado. Consulta la [prueba local de S1-07](../../docs/prueba-sprint-1.md#prueba-local-de-s1-07).
+
 Puedes contar los canvas con `document.querySelectorAll('canvas').length`
 en la consola del navegador. Debe dar `1` al entrar en la arena y `0` al salir.
 

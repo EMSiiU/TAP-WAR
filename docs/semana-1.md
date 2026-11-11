@@ -91,10 +91,12 @@ Prueba local y resultados en [prueba-sprint-1.md](prueba-sprint-1.md#prueba-loca
 
 ### S1-07 — Construir flujo provisional de entrada y salida
 Responsable: P1. Revisor: P2. Estimación: 5 h. Dependencias: S1-03, S1-04 y S1-05.
-- [ ] Introducir nombre temporal y entrar a sala de prueba.
-- [ ] Mostrar conectando, conectado, sala llena y fallo de conexión.
-- [ ] Salir, cerrar conexión y regresar al formulario.
+- [x] Introducir nombre temporal y entrar a sala de prueba.
+- [x] Mostrar conectando, conectado, sala llena y fallo de conexión.
+- [x] Salir, cerrar conexión y regresar al formulario.
 Aceptación: otro integrante completa el flujo sin consola ni cambios de código. No se presenta este acceso temporal como autenticación segura.
+
+Flujo integrado en el [PR #16](https://github.com/EMSiiU/TAP-WAR/pull/16). Pasos de comprobación en la [prueba local de S1-07](prueba-sprint-1.md#prueba-local-de-s1-07).
 
 ### S1-08 — Entregar e integrar recursos gráficos de prueba
 Responsable: P4. Revisor: P2. Estimación: 7 h P4 + 2 h P2. Dependencias: S1-01; integración depende de S1-04.

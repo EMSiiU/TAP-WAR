@@ -4,6 +4,12 @@ Estado: borrador para revisión. Alcance: movimiento y apuntado de hasta cuatro 
 
 ## Cliente → servidor
 
+### Entrada a la sala
+
+El cliente se une a `arena-local` con `joinById('arena-local', { name: 'Luna' })`. El servidor recorta espacios y acepta cadenas de 1 a 24 caracteres después del recorte. Rechaza valores ausentes, vacíos o fuera del rango. Los nombres pueden repetirse y se muestran como etiquetas. El identificador de cada participante sigue siendo el `sessionId` de Colyseus.
+
+### Movimiento y apuntado
+
 Mensaje de entrada, ejemplo: {"moveX":1,"moveY":-1,"aimAngle":0}.
 
 - WASD: cada eje acepta únicamente -1, 0 o 1. Derecha y abajo son positivos. Teclas opuestas se cancelan.
@@ -14,10 +20,10 @@ Mensaje de entrada, ejemplo: {"moveX":1,"moveY":-1,"aimAngle":0}.
 
 ## Servidor → cliente
 
-Estado de ejemplo: {"id":"p1","x":240,"y":160,"aimAngle":0}.
+Estado de ejemplo: {"id":"p1","name":"Luna","x":240,"y":160,"aimAngle":0}.
 
 - El servidor decide posición, velocidad y colisiones, normaliza el movimiento diagonal y publica la orientación recibida tras validarla. Apuntar no modifica la dirección de movimiento.
-- Al entrar se recibe el estado inicial de la sala. Después se sincronizan posiciones, orientación, entradas y salidas de participantes. Al reingresar tras desconexión, se crea un ID nuevo y se usa un punto de aparición válido.
+- Al entrar se recibe el estado inicial de la sala. El estado contiene nombre, posición y orientación por participante. Los parches reflejan altas, bajas y cambios de estado. Al reingresar tras desconexión, se crea un ID nuevo y se usa un punto de aparición válido.
 
 ### Implementación local de S1-05
 
