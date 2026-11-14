@@ -39,3 +39,29 @@ export function moveInsideArena(
 
     return { x, y }
 }
+
+export function isBulletHittingObstacle(
+    x: number,
+    y: number,
+    halfSize = 4,
+): boolean {
+    return arena.obstacles.some(
+        (obstacle) =>
+            x + halfSize > obstacle.x &&
+            x - halfSize < obstacle.x + obstacle.width &&
+            y + halfSize > obstacle.y &&
+            y - halfSize < obstacle.y + obstacle.height,
+    )
+}
+
+export function intersectsPlayerHitbox(
+    bulletX: number,
+    bulletY: number,
+    playerX: number,
+    playerY: number,
+    hitRadius: number,
+): boolean {
+    const dx = bulletX - playerX
+    const dy = bulletY - playerY
+    return dx * dx + dy * dy <= hitRadius * hitRadius
+}

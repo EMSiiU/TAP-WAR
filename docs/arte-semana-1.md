@@ -23,8 +23,17 @@ Prioridad: comprobar integración y escala antes del acabado. Responsable P4; P2
 
 ## Revisión del día 3
 
-- [ ] PNG cargado sin bordes o fondo accidental.
-- [ ] Personaje visible sobre el suelo y distinguible por color/indicador.
-- [ ] Obstáculo visual coincide con geometría que usa el servidor.
-- [ ] Apariciones dentro de límites y fuera de obstáculos.
-- [ ] Archivos y exportaciones documentados; sin rutas absolutas de la computadora del diseñador.
+- [x] PNG cargado sin bordes o fondo accidental (`player-idle.png` y `weapon.png` de 128 × 128 px RGBA transparente, Nearest Neighbor).
+- [x] Personaje visible sobre el suelo y distinguible por color/indicador, con etiqueta y arma independiente rotando según `aimAngle`.
+- [x] Obstáculo visual coincide con geometría que usa el servidor (`arena-desert.png` de 1024 × 768 px, cuadrícula 32 × 24 de 32 × 32 px alineada con `packages/shared/arena.json`).
+- [x] Apariciones dentro de límites y fuera de obstáculos (`(128, 128)`, `(896, 128)`, `(128, 640)`, `(896, 640)`).
+- [x] Archivos y exportaciones documentados en `DOCUMENTACION.md` (`docs/art-sources/` contiene `.piskel`, `.tmj`, `tilemap_desert_packed.png` y `License.txt` CC0 1.0 de Kenney); sin rutas absolutas.
+
+### Animación de caminar (`player-walk`)
+
+- **Ruta del archivo**: `apps/web/public/assets/characters/player-walk.png`
+- **Dimensiones totales**: `256 × 128 px` (RGBA transparente, sin padding entre celdas)
+- **Tamaño de celda**: `128 × 128 px` (basado en `tile_0001.png` y `tile_0002.png` de `24 × 24 px` escalados al 400 % a `96 × 96 px` con Nearest Neighbor y centrados con los pies alineados)
+- **Distribución**: `1 fila, 2 cuadros`
+- **Velocidad**: `8 FPS` (`frameRate: 8, repeat: -1`)
+- **Editable**: `docs/art-sources/player-walk.piskel`

@@ -1,22 +1,26 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import PhaserView from './game/PhaserView'
-import type { ArenaControls, PlayerState } from './game/ArenaScene'
+import type { ArenaControls, BulletState, PlayerState } from './game/ArenaScene'
 
 type ArenaState = {
   players: Map<string, PlayerState>
+  bullets: Map<string, BulletState>
 }
 
 const client = new Client('http://127.0.0.1:2567')
 
-function ArenaSession({ 
+function ArenaSession({
     playerName,
+    onExit,
     onEnd
-  }: { 
+  }: {
     playerName: string
+    onExit: () => void
     onEnd: (message: string) => void
   }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
+  const [bullets, setBullets] = useState<BulletState[]>([])
   const [status, setStatus] = useState('Conectando…')
   const [controls, setControls] = useState<ArenaControls | null>(null)
 
@@ -38,17 +42,21 @@ function ArenaSession({
 
         disconnect = () => { void joined.leave() }
 
-        function syncPlayers(state: ArenaState) {
-          if (active && state?.players) {
+        function syncState(state: ArenaState) {
+          if (!active || !state) return
+          if (state.players) {
             setPlayers(Array.from(state.players.values()))
+          }
+          if (state.bullets) {
+            setBullets(Array.from(state.bullets.values()))
           }
         }
 
-        joined.onStateChange(syncPlayers)
+        joined.onStateChange(syncState)
         joined.onLeave(() => {
           if (active) onEnd('Se perdió la conexión. Puedes volver a entrar.')
         })
-        syncPlayers(joined.state)
+        syncState(joined.state)
         setControls({
           playerId: joined.sessionId,
           send: (input) => {
@@ -88,10 +96,31 @@ function ArenaSession({
   }, [playerName, onEnd])
 
   return (
-    <>
-      <p role="status">{controls ? `${status} · Jugadores: ${players.length}` : status}</p>
-      {controls && <PhaserView players={players} controls={controls} />}
-    </>
+    <div style={{ width: '100%', height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <header
+        style={{
+          height: '48px',
+          flexShrink: 0,
+          padding: '0 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <strong style={{ fontSize: '1rem', color: 'var(--text-h)' }}>TAP-WAR</strong>
+        <p role="status" style={{ fontSize: '0.9rem' }}>
+          {controls ? `${status} · Jugadores: ${players.length}` : status}
+        </p>
+        <button type="button" onClick={onExit} style={{ padding: '4px 12px', fontSize: '0.85rem' }}>
+          Salir de la arena
+        </button>
+      </header>
+      <div style={{ flex: 1, minHeight: 0, width: '100%', backgroundColor: '#101827' }}>
+        {controls && <PhaserView players={players} bullets={bullets} controls={controls} />}
+      </div>
+    </div>
   )
 }
 
@@ -106,40 +135,41 @@ export default function App() {
     setPlayerName(null)
   }, [])
 
+  if (playerName !== null) {
+    return (
+      <ArenaSession
+        playerName={playerName}
+        onExit={() => returnToForm('')}
+        onEnd={returnToForm}
+      />
+    )
+  }
+
   return (
-    <main style={{ width: 'min(94vw, 760px)', margin: '2rem auto' }}>
+    <main style={{ width: 'min(94vw, 520px)', margin: '3rem auto' }}>
       <h1>TAP-WAR</h1>
 
-      {playerName === null ? (
-        <form onSubmit={(event) => {
-          event.preventDefault()
-          const trimmedName = name.trim()
-          if (trimmedName) {
-            setEntryMessage('')
-            setPlayerName(trimmedName)
-          }
-        }}>
-          {entryMessage && <p role='alert'>{entryMessage}</p>}
-          <label htmlFor="player-name">Nombre temporal</label>
-          <input
-            id="player-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={24}
-            required
-          />
-          <button type="submit" disabled={!name.trim()}>
-            Entrar a la arena
-          </button>
-        </form>
-      ) : (
-        <>
-          <button type="button" onClick={() => returnToForm('')}>
-            Salir de la arena
-          </button>
-          <ArenaSession playerName={playerName} onEnd={returnToForm} />
-        </>
-      )}
+      <form onSubmit={(event) => {
+        event.preventDefault()
+        const trimmedName = name.trim()
+        if (trimmedName) {
+          setEntryMessage('')
+          setPlayerName(trimmedName)
+        }
+      }}>
+        {entryMessage && <p role='alert'>{entryMessage}</p>}
+        <label htmlFor="player-name">Nombre temporal</label>
+        <input
+          id="player-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          maxLength={24}
+          required
+        />
+        <button type="submit" disabled={!name.trim()}>
+          Entrar a la arena
+        </button>
+      </form>
     </main>
   )
 }

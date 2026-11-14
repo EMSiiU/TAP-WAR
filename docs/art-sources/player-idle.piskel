@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAVaSURBVHhe7ZrBjWw1EEV/TCTBgmjYs0bkwQqJMNhCCgRBALC5PSpKx2XXvNc9svse6Wzm2+6qe9/yfzPGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOM+Sz/3oye/UB/vg09a+5Cud6Gnv1Af74NPWvuQrnehp79QH++DT1r7kK53oae/UB/vg09az6LcjwGrWVWUW7HoLXMKsrtGLSWWUW5HYPWMiOU0zLff/dDyy70RmUXrW0eKJdlqITKLvRGZRetbR4ol2WohMou9EZlF61tHiiXZaiEyi70RmUXrW0eKJchFPoVM3TmijO0tnmgXIZQyFfM0JkrztDa5oFyGUIhXzFDZ644Q2ubB8plCIV8xQydueIMrW0eKJchFHL0799++Z905op//PTj/6Qz0S6K4X1RDkMo5Kg/gM1RDkMo5Kg/gM1RDkMo5Kg/gM1RDkMo5Gj+ALJ0pzIXnqU70asolvdBew+hkKNUepTuVFLpUboTvYpieR+09xAKOUqlR+lOJZUepTvRqyiW90F7D6GQo1R6lO5UUulRuhO9imJ5H7T3EAo5SqVH6U4llR6lOx27KKZz0Z5DKMQolR6lO5VUepTudOyimM5Few6hEKNUepTuVFLpUbrTsYtiOhftOYRCjFLpUbpTSaVH6U7HLorpXLTnEAoxSqU/U5rhijMU07lozyEUWpRKeqY0wxVnKKZz0Z5DKLQolfRMaYYrzlBM56I9h1BoUSrpmdIMV5yhmM5Bey1DoUWppFf6689/ldLM0RmK7Ry01zIUWpRKeaVUepRmjs5QbOegvZah0KJUyiul0qM0c3SGYjsH7bUMhRalUl4plR6lmaMzFNu+aI9PQ6FFqZTos89T6dH8XnaGYtwX7fFpKLQolRJ99nkqPZrfy85QjPuiPT4NhRalUqLPPk+lR/N72RmKcV+0x6eh0KJUSvTZ56n0aH4vO0Mx7oPmXoZC6UilfKU0Y+UMxboPmnsZCqUjlfCV0oyVMxTrPmjuZSiUjlTCV0ozVs5QrPuguZehUDpSCV8pzVg5Q7Hug+YeQiFckUqIZuiNygyd6dhFse6D5h5CoVyRSo9m6I3KDJ3p2EWx7oPmHkKhXJFKj2bojcoMnenYRbHug+YeQqFckUqPZuiNygyd6dhFse6D5h5CoUTpP2JG83kq/ZXmebJdFOO+aI8hFFKUSo/m81TKK83zZLsoxn3RHkMopCiVHs3nqZRXmufJdlGM+6I9hlBIUSo9ms9TKa80z5Ptohj3RXsMoZCiVHq0e55Ku9M8T3aGYjsH7TWEQopSidHueSrtTvM82RmK7Ry01xAKKUolRrvnqbQ7zfNkZyi2c9BeQyikKJUY7Z6n0u40z5OdodjOQXsNoZAqc6H536mUyn/+/L1lvp9/f+YMxXYO2msIhVTpD2AztNcQCqnSH8BmaK8hFFKlP4DN0F7LUGgd8weSzQVSyZX5Ps1QOUOxnYP2WoZC60ilR3OBVHJlvk8zVM5QbOegvZah0DpS6dFcIJVcme/TDJUzFNs5aK9lKLSOVHo0F0glV+b7NEPlDMV2LtpzGQqxMhc0kz6SSvrNyi6K6Vy05zIUaiWVXEklV9JvVnZRTOeiPZehUCup5EoquZJ+s7KLYjoX7bkMhVpJJVdSyZX0m5VdFNP7oL2XoZCjVHI0n6eSo/n8zC6K4X1RDstQ6FEqPZrPU+nRfH5mF8XwviiHZSj0KJUezeep9Gg+P7OLYnhflMMyFHqUSo/m81R6NJ+f2UUxGGOMMcYYY4wxxhhjjDHGGGOMMcbcxLdv/wH2nem5UrBOTgAAAABJRU5ErkJggg==\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "player-idle",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

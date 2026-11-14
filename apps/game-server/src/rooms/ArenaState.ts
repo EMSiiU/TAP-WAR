@@ -6,8 +6,13 @@ export class Player extends Schema {
     @type('number') y = 0
     @type('number') aimAngle = 0
     @type('string') name = ''
+    @type('number') hp = 100
+    @type('number') kills = 0
+    @type('number') deaths = 0
+    @type('boolean') isDead = false
 
-    lastShotAt = 0
+    lastShotAt = -300
+    respawnAt = 0
 }
 
 export class BulletState extends Schema {
