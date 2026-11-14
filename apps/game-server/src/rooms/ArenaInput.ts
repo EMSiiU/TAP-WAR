@@ -4,6 +4,7 @@ export type ArenaInput = {
     moveX: MoveAxis
     moveY: MoveAxis
     aimAngle: number
+    shoot?: boolean
 }
 
 function isMoveAxis(value: unknown): value is MoveAxis {
@@ -20,6 +21,7 @@ export function parseArenaInput(value: unknown): ArenaInput | null {
     }
 
     const { moveX, moveY, aimAngle } = value
+    const shoot = 'shoot' in value ? value.shoot : undefined
 
     if (
         !isMoveAxis(moveX) ||
@@ -27,10 +29,11 @@ export function parseArenaInput(value: unknown): ArenaInput | null {
         typeof aimAngle !== 'number' ||
         !Number.isFinite(aimAngle) ||
         aimAngle < -Math.PI ||
-        aimAngle >= Math.PI
+        aimAngle >= Math.PI ||
+        (shoot !== undefined && typeof shoot !== 'boolean')
     ) {
         return null
     }
 
-    return { moveX, moveY, aimAngle }
+    return shoot === undefined ? { moveX, moveY, aimAngle } : { moveX, moveY, aimAngle, shoot }
 }
