@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
-import ArenaScene, { type ArenaControls, type PlayerState } from './ArenaScene'
+import ArenaScene, { type ArenaControls, type BulletState, type PlayerState } from './ArenaScene'
 import arena from '../../../../packages/shared/arena.json'
 
 type PhaserViewProps = {
   players: PlayerState[]
+  bullets: BulletState[]
   controls: ArenaControls
 }
 
-export default function PhaserView({ players, controls }: PhaserViewProps) {
+export default function PhaserView({ players, bullets, controls }: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
 
@@ -30,7 +31,13 @@ export default function PhaserView({ players, controls }: PhaserViewProps) {
         width: arena.width,
         height: arena.height,
         backgroundColor: '#101827',
-        scale: { mode: Phaser.Scale.FIT },
+        pixelArt: true,
+        scale: {
+          mode: Phaser.Scale.FIT,
+          autoCenter: Phaser.Scale.CENTER_BOTH,
+          width: arena.width,
+          height: arena.height,
+        },
         scene: [scene],
       })
     })
@@ -47,5 +54,9 @@ export default function PhaserView({ players, controls }: PhaserViewProps) {
     sceneRef.current?.setPlayers(players)
   }, [players])
 
-  return <div ref={hostRef} style={{ width: '100%', aspectRatio: arena.width / arena.height }} />
+  useEffect(() => {
+    sceneRef.current?.setBullets(bullets)
+  }, [bullets])
+
+  return <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
 }

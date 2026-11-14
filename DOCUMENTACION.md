@@ -7,6 +7,7 @@ Manual de la implementación local hasta S1-07. Actualizado el 11 de noviembre d
 - [Entrada y salida de la sala](#entrada-y-salida-de-la-sala)
 - [Movimiento, apuntado y sincronización](#movimiento-apuntado-y-sincronización)
 - [Geometría y colisiones](#geometría-y-colisiones)
+- [Créditos de Arte y Audio](#créditos-de-arte-y-audio)
 - [Verificación y diagnóstico](#verificación-y-diagnóstico)
 - [Cómo mantener el manual](#cómo-mantener-el-manual)
 
@@ -80,9 +81,9 @@ Colyseus escucha en `127.0.0.1:2567`. Su ruta `/health` devuelve `{"ok":true}`. 
 | [apps/web/src/main.tsx](apps/web/src/main.tsx) | Monta React en `#root` bajo `StrictMode` e importa los estilos globales. |
 | [apps/web/src/App.tsx](apps/web/src/App.tsx) | Muestra el formulario de nombre temporal y el estado de conexión. `ArenaSession` se une a la sala, escucha los parches y proporciona a Phaser el ID propio y el envío de entradas. |
 | [apps/web/src/game/PhaserView.tsx](apps/web/src/game/PhaserView.tsx) | Crea una instancia de Phaser al entrar, pasa los jugadores a la escena y destruye el juego al desmontarse. Usa las dimensiones del JSON y escala el canvas con `FIT`. |
-| [apps/web/src/game/ArenaScene.ts](apps/web/src/game/ArenaScene.ts) | Lee teclado y cursor, dibuja los obstáculos y sincroniza las figuras con el estado oficial. Cada etiqueta usa `Player.name`. |
+| [apps/web/src/game/ArenaScene.ts](apps/web/src/game/ArenaScene.ts) | Lee teclado y cursor, carga el mapa y los sprites (`arena-desert.png`, `player-idle.png`, `weapon.png`) y sincroniza los jugadores con el estado oficial. Cada etiqueta usa `Player.name`. |
 | [index.css](apps/web/src/index.css) y [App.css](apps/web/src/App.css) | El primero aplica estilos globales. El segundo conserva estilos de la plantilla inicial y la aplicación actual no lo importa. |
-| [public/](apps/web/public/) y [src/assets/](apps/web/src/assets/) | Contienen el favicon y recursos de la plantilla. La arena actual dibuja sus figuras en código. |
+| [public/assets/](apps/web/public/assets/) y [src/assets/](apps/web/src/assets/) | `public/assets/characters/` y `public/assets/maps/` contienen los sprites exportados y el fondo de la arena; `public/` conserva el favicon. |
 | [package.json](apps/web/package.json) y [package-lock.json](apps/web/package-lock.json) | Declaran React, Phaser, el SDK, las herramientas de desarrollo y los comandos de Vite, compilación y lint. |
 | [vite.config.ts](apps/web/vite.config.ts) | Activa el plugin de React y permite servir `packages/shared/` durante el desarrollo. |
 | [tsconfig.json](apps/web/tsconfig.json), [tsconfig.app.json](apps/web/tsconfig.app.json) y [tsconfig.node.json](apps/web/tsconfig.node.json) | Separan la configuración del navegador y la de Vite en Node. La del navegador permite importar el JSON de la arena. |
@@ -194,6 +195,28 @@ if (!overlapsObstacle(x, nextY)) y = nextY
 ```
 
 En Phaser, `setOrigin(0)` alinea cada rectángulo con la misma esquina que usa el servidor. Cuando se cambie el mapa, edita `arena.json` y comprueba las apariciones, los bordes y el obstáculo en dos pestañas.
+
+## Créditos de Arte y Audio
+
+- **Paquete base**: Kenney – *Desert Shooter Pack* (v1.0, 2024; distribuido por Kenney, `www.kenney.nl`, patrocinado por GameMaker).
+- **Licencia**: Creative Commons CC0 1.0 Universal (`http://creativecommons.org/publicdomain/zero/1.0/`). Copia íntegra conservada en [docs/art-sources/License.txt](docs/art-sources/License.txt).
+- **Recursos integrados en `apps/web/public/assets/`**:
+  - [characters/player-idle.png](apps/web/public/assets/characters/player-idle.png): 128 × 128 px RGBA transparente (basado en `Players/Tiles/tile_0000.png` 24 × 24 px completo escalado al 400 % a 96 × 96 px Nearest Neighbor y centrado sin recorte), renderizado en escena con `setDisplaySize(80, 80)` y origen `(0.5, 0.85)`.
+  - [characters/player-dead.png](apps/web/public/assets/characters/player-dead.png): 128 × 128 px RGBA transparente (basado en `Players/Tiles/tile_0003.png` 24 × 24 px escalado al 400 % a 96 × 96 px Nearest Neighbor), mostrado cuando `player.isDead === true`.
+  - [characters/player-walk.png](apps/web/public/assets/characters/player-walk.png): spritesheet de animación de caminar (ver especificaciones abajo).
+  - [characters/weapon.png](apps/web/public/assets/characters/weapon.png): 128 × 128 px RGBA transparente (basado en `Weapons/Tiles/tile_0003.png` 24 × 24 px, escalado Nearest Neighbor), renderizado en escena con `setDisplaySize(68, 68)` (~85% del cuerpo), pivote en la culata `(0.2, 0.5)`, desplazamiento radial de 15 px en dirección de `aimAngle`, anclaje vertical a la cintura (`Y = -10`) y capas de profundidad dinámicas (`setDepth(player.y)` y `player.y + 1`).
+  - [characters/bullet.png](apps/web/public/assets/characters/bullet.png): 64 × 64 px RGBA transparente (basado en `Weapons/Tiles/tile_0023.png` 24 × 24 px, escalado 3× Nearest Neighbor y centrado), renderizado en escena a `24 × 24 px` con rotación `bullet.angle` para proyectiles sincronizados.
+  - [maps/arena-desert.png](apps/web/public/assets/maps/arena-desert.png): 1024 × 768 px (cuadrícula de 32 × 24 celdas con tiles de 16 × 16 px escalados 200 % a 32 × 32 px), alineado 1:1 con los muros, obstáculos y cuatro puntos de aparición de [packages/shared/arena.json](packages/shared/arena.json).
+- **Fuentes editables en `docs/art-sources/`**: [player-idle.piskel](docs/art-sources/player-idle.piskel), [player-walk.piskel](docs/art-sources/player-walk.piskel), [player-dead.piskel](docs/art-sources/player-dead.piskel), [weapon.piskel](docs/art-sources/weapon.piskel), [bullet.piskel](docs/art-sources/bullet.piskel), [arena-desert.tmj](docs/art-sources/arena-desert.tmj) y [tilemap_desert_packed.png](docs/art-sources/tilemap_desert_packed.png).
+
+### Especificación técnica de animación de caminar
+
+- **Ruta del archivo**: `apps/web/public/assets/characters/player-walk.png`
+- **Dimensiones totales**: `256 × 128 px` (RGBA transparente, sin espacio/padding entre celdas)
+- **Tamaño de celda**: `128 × 128 px` (cada cuadro de `24 × 24 px` de `tile_0001.png` y `tile_0002.png` escalado al 400 % a `96 × 96 px` con Nearest Neighbor y centrado con la misma línea base de pies)
+- **Distribución**: `1 fila, 2 cuadros` (tira horizontal, frames `0` y `1`)
+- **Velocidad**: `8 FPS` (`frameRate: 8, repeat: -1`, clave `'walk'` en Phaser)
+- **Ubicación del editable**: [docs/art-sources/player-walk.piskel](docs/art-sources/player-walk.piskel)
 
 ## Verificación y diagnóstico
 

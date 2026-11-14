@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYBAMAAAASWSDLAAAABGdBTUEAALGPC/xhBQAAABtQTFRFAAAA////xKju7Joe/96MiG2v/7hMo4bORzJLosxKyAAAAAF0Uk5TAEDm2GYAAABUSURBVBjTY2CgOugAAhibA8RpgHEay8s1GmASIA5EEqQmNBSiEqihXL0cCEorgJy2tHKXtDQ4x8wlLRmqDMhJa++AcTLa0iug1nB0IFvZgewYagIARHItt4/D85cAAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon",
+                   "width":  24,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  24
+               }
+}

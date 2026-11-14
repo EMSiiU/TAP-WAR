@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAACxSURBVHhe7c+xCYMxEINRz5QlUmT/eRIEKmVDjr+R+R6ouxNoAQAAAAAAAACAx71fn+8/8ds90shT/HaPNPIUv3VLwyZxXZ80ZhLX9UljJnFdnzRG2Um3iuv6pDHKTrpVXNcnjVF20q3iuj5pjLKTbhXX9UljlJ10q7iuTxqj7KRbxXV90phJXNcnjZnEdX3SmElc1y0NO8Vv90gjT/HbPdLIU/wGAAAAAAAAAACestYPYplLgw1++KAAAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "bullet",
+                   "width":  64,
+                   "description":  "Kenney Desert Shooter Pack CC0 source (Weapons/Tiles/tile_0023.png)",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  64
+               }
+}

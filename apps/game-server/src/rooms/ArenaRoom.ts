@@ -2,7 +2,11 @@ import { ErrorCode, Room, ServerError, type Client } from 'colyseus'
 import { ArenaState, BulletState, Player } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
-import { moveInsideArena } from './ArenaCollision.js'
+import {
+    intersectsPlayerHitbox,
+    isBulletHittingObstacle,
+    moveInsideArena,
+} from './ArenaCollision.js'
 
 const STEP_MS = 1000 / 30
 const INPUT_TIMEOUT_MS = 300
@@ -11,6 +15,9 @@ const FIRE_COOLDOWN_MS = 300
 const BULLET_SPEED = 650
 const BULLET_LIFETIME_MS = 2000
 const MUZZLE_OFFSET = 28
+const BULLET_DAMAGE = 25
+const PLAYER_HIT_RADIUS = 26
+const RESPAWN_DELAY_MS = 3000
 
 export class ArenaRoom extends Room {
     maxClients = arena.spawnPoints.length
@@ -28,7 +35,7 @@ export class ArenaRoom extends Room {
         this.onMessage<unknown>('input', (client, message) => {
             const input = parseArenaInput(message)
             const player = this.state.players.get(client.sessionId)
-            if (!input || !player) return
+            if (!input || !player || player.isDead) return
 
             const now = performance.now()
             this.inputs.set(client.sessionId, {
@@ -71,7 +78,7 @@ export class ArenaRoom extends Room {
             }
 
             const player = this.state.players.get(id)
-            if (!player) continue
+            if (!player || player.isDead) continue
 
             const length = Math.hypot(input.moveX, input.moveY)
             if (length === 0) continue
@@ -99,11 +106,72 @@ export class ArenaRoom extends Room {
                 bullet.y > arena.height
             const expired = now - createdAt >= BULLET_LIFETIME_MS
 
-            if (outOfBounds || expired) {
+            if (outOfBounds || expired || isBulletHittingObstacle(bullet.x, bullet.y)) {
                 this.state.bullets.delete(bulletId)
                 this.bulletCreatedAt.delete(bulletId)
+                continue
+            }
+
+            for (const [playerId, target] of this.state.players) {
+                if (playerId === bullet.ownerId || target.isDead || target.hp <= 0) continue
+
+                if (intersectsPlayerHitbox(bullet.x, bullet.y, target.x, target.y, PLAYER_HIT_RADIUS)) {
+                    this.state.bullets.delete(bulletId)
+                    this.bulletCreatedAt.delete(bulletId)
+
+                    target.hp = Math.max(0, target.hp - BULLET_DAMAGE)
+                    if (target.hp <= 0) {
+                        target.hp = 0
+                        target.isDead = true
+                        target.respawnAt = now + RESPAWN_DELAY_MS
+                        target.deaths += 1
+                        this.inputs.delete(playerId)
+
+                        const attacker = this.state.players.get(bullet.ownerId)
+                        if (attacker) attacker.kills += 1
+                    }
+                    break
+                }
             }
         }
+
+        for (const [playerId, player] of this.state.players) {
+            if (!player.isDead || now < player.respawnAt) continue
+
+            const spawn = this.selectSafestSpawnPoint(playerId)
+            player.x = spawn.x
+            player.y = spawn.y
+            player.hp = 100
+            player.isDead = false
+            player.respawnAt = 0
+        }
+    }
+
+    private selectSafestSpawnPoint(respawningPlayerId: string): { x: number; y: number } {
+        const livingRivals = Array.from(this.state.players.values()).filter(
+            (other) => other.id !== respawningPlayerId && !other.isDead,
+        )
+
+        if (livingRivals.length === 0) {
+            return arena.spawnPoints[0]
+        }
+
+        let bestSpawn = arena.spawnPoints[0]
+        let bestMinDist = -1
+
+        for (const candidate of arena.spawnPoints) {
+            let minDist = Infinity
+            for (const rival of livingRivals) {
+                const dist = Math.hypot(candidate.x - rival.x, candidate.y - rival.y)
+                if (dist < minDist) minDist = dist
+            }
+            if (minDist > bestMinDist) {
+                bestMinDist = minDist
+                bestSpawn = candidate
+            }
+        }
+
+        return bestSpawn
     }
 
     onAuth(_client: Client, options?: { name?: unknown }) {
