@@ -1,11 +1,34 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
+import './App.css'
 import PhaserView from './game/PhaserView'
 import type { ArenaControls, BulletState, PlayerState } from './game/ArenaScene'
 
+type MatchPhase = 'waiting' | 'playing' | 'finished'
+
 type ArenaState = {
+  phase: MatchPhase
+  timeRemaining: number
+  killsToWin: number
+  winnerId: string
+  winnerName: string
   players: Map<string, PlayerState>
   bullets: Map<string, BulletState>
+}
+
+type MatchMeta = {
+  phase: MatchPhase
+  timeRemaining: number
+  killsToWin: number
+  winnerId: string
+  winnerName: string
+}
+
+function formatClock(seconds: number): string {
+  const total = Math.ceil(Math.max(0, seconds))
+  const mins = Math.floor(total / 60)
+  const secs = total % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
 const client = new Client('http://127.0.0.1:2567')
@@ -21,8 +44,16 @@ function ArenaSession({
   }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [bullets, setBullets] = useState<BulletState[]>([])
+  const [matchMeta, setMatchMeta] = useState<MatchMeta>({
+    phase: 'waiting',
+    timeRemaining: 180,
+    killsToWin: 10,
+    winnerId: '',
+    winnerName: '',
+  })
   const [status, setStatus] = useState('Conectando…')
   const [controls, setControls] = useState<ArenaControls | null>(null)
+  const rematchRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     let active = true
@@ -41,6 +72,9 @@ function ArenaSession({
         }
 
         disconnect = () => { void joined.leave() }
+        rematchRef.current = () => {
+          if (joined.connection.isOpen) joined.send('rematch')
+        }
 
         function syncState(state: ArenaState) {
           if (!active || !state) return
@@ -50,6 +84,13 @@ function ArenaSession({
           if (state.bullets) {
             setBullets(Array.from(state.bullets.values()))
           }
+          setMatchMeta({
+            phase: state.phase ?? 'waiting',
+            timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 180,
+            killsToWin: typeof state.killsToWin === 'number' ? state.killsToWin : 10,
+            winnerId: state.winnerId ?? '',
+            winnerName: state.winnerName ?? '',
+          })
         }
 
         joined.onStateChange(syncState)
@@ -91,34 +132,91 @@ function ArenaSession({
 
     return () => {
       active = false
+      rematchRef.current = null
       disconnect?.()
     }
   }, [playerName, onEnd])
 
+  const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+  const scoreLine = players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
+  const finishReason =
+    matchMeta.timeRemaining <= 0
+      ? 'Tiempo agotado'
+      : `Meta de ${matchMeta.killsToWin} bajas alcanzada`
+
   return (
-    <div style={{ width: '100%', height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <header
-        style={{
-          height: '48px',
-          flexShrink: 0,
-          padding: '0 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
+    <div className="arena-shell">
+      <header className="arena-header">
         <strong style={{ fontSize: '1rem', color: 'var(--text-h)' }}>TAP-WAR</strong>
-        <p role="status" style={{ fontSize: '0.9rem' }}>
-          {controls ? `${status} · Jugadores: ${players.length}` : status}
-        </p>
-        <button type="button" onClick={onExit} style={{ padding: '4px 12px', fontSize: '0.85rem' }}>
+        <div className="arena-scoreboard" role="status">
+          <span className="arena-clock">{formatClock(matchMeta.timeRemaining)}</span>
+          {players.length > 0 && (
+            <span>
+              {scoreLine} | Meta: {matchMeta.killsToWin}
+            </span>
+          )}
+          <span>{controls ? status : `${status}`}</span>
+        </div>
+        <button type="button" onClick={onExit} className="arena-btn-secondary">
           Salir de la arena
         </button>
       </header>
-      <div style={{ flex: 1, minHeight: 0, width: '100%', backgroundColor: '#101827' }}>
+
+      <div className="arena-stage">
+        {controls && matchMeta.phase === 'waiting' && (
+          <div className="arena-waiting-banner" role="status">
+            Esperando al segundo jugador para iniciar la partida...
+          </div>
+        )}
+
         {controls && <PhaserView players={players} bullets={bullets} controls={controls} />}
+
+        {matchMeta.phase === 'finished' && (
+          <div className="arena-results-overlay" role="dialog" aria-modal="true">
+            <div className="arena-results-modal">
+              <h2>
+                {matchMeta.winnerName ? `Ganador: ${matchMeta.winnerName}` : 'Empate'}
+              </h2>
+              <p className="arena-results-subtitle">{finishReason}</p>
+
+              <table className="arena-results-table">
+                <thead>
+                  <tr>
+                    <th>Jugador</th>
+                    <th>Eliminaciones</th>
+                    <th>Muertes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedPlayers.map((player) => (
+                    <tr key={player.id}>
+                      <td>{player.name}</td>
+                      <td>{player.kills}</td>
+                      <td>{player.deaths}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <div className="arena-results-actions">
+                <button
+                  type="button"
+                  className="arena-btn-primary"
+                  onClick={() => rematchRef.current?.()}
+                >
+                  Jugar revancha
+                </button>
+                <button
+                  type="button"
+                  className="arena-btn-secondary"
+                  onClick={onExit}
+                >
+                  Salir de la arena
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

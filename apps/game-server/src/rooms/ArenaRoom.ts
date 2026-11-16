@@ -18,6 +18,8 @@ const MUZZLE_OFFSET = 28
 const BULLET_DAMAGE = 25
 const PLAYER_HIT_RADIUS = 26
 const RESPAWN_DELAY_MS = 3000
+const MATCH_DURATION_SECONDS = 180
+const KILLS_TO_WIN = 10
 
 export class ArenaRoom extends Room {
     maxClients = arena.spawnPoints.length
@@ -35,7 +37,7 @@ export class ArenaRoom extends Room {
         this.onMessage<unknown>('input', (client, message) => {
             const input = parseArenaInput(message)
             const player = this.state.players.get(client.sessionId)
-            if (!input || !player || player.isDead) return
+            if (!input || !player || player.isDead || this.state.phase === 'finished') return
 
             const now = performance.now()
             this.inputs.set(client.sessionId, {
@@ -44,13 +46,99 @@ export class ArenaRoom extends Room {
             })
             player.aimAngle = input.aimAngle
 
-            if (input.shoot === true && now - player.lastShotAt >= FIRE_COOLDOWN_MS) {
+            if (
+                this.state.phase === 'playing' &&
+                input.shoot === true &&
+                now - player.lastShotAt >= FIRE_COOLDOWN_MS
+            ) {
                 player.lastShotAt = now
                 this.spawnBullet(client.sessionId, player, input.aimAngle, now)
             }
         })
 
+        this.onMessage('rematch', () => {
+            if (this.state.phase !== 'finished') return
+            if (this.state.players.size >= 2) {
+                this.startMatch()
+            } else {
+                this.resetToWaiting()
+            }
+        })
+
         this.setSimulationInterval((deltaMs) => this.simulate(deltaMs), STEP_MS)
+    }
+
+    private clearCombatEntities() {
+        this.state.bullets.clear()
+        this.bulletCreatedAt.clear()
+        this.inputs.clear()
+    }
+
+    private startMatch() {
+        this.clearCombatEntities()
+        this.state.phase = 'playing'
+        this.state.timeRemaining = MATCH_DURATION_SECONDS
+        this.state.killsToWin = KILLS_TO_WIN
+        this.state.winnerId = ''
+        this.state.winnerName = ''
+
+        let index = 0
+        for (const player of this.state.players.values()) {
+            const spawn = arena.spawnPoints[index % arena.spawnPoints.length]
+            player.x = spawn.x
+            player.y = spawn.y
+            player.hp = 100
+            player.kills = 0
+            player.deaths = 0
+            player.isDead = false
+            player.respawnAt = 0
+            player.lastShotAt = -FIRE_COOLDOWN_MS
+            index++
+        }
+    }
+
+    private resetToWaiting() {
+        this.clearCombatEntities()
+        this.state.phase = 'waiting'
+        this.state.timeRemaining = MATCH_DURATION_SECONDS
+        this.state.winnerId = ''
+        this.state.winnerName = ''
+
+        for (const player of this.state.players.values()) {
+            player.hp = 100
+            player.kills = 0
+            player.deaths = 0
+            player.isDead = false
+            player.respawnAt = 0
+            player.lastShotAt = -FIRE_COOLDOWN_MS
+        }
+    }
+
+    private finishMatch(winnerId: string, winnerName: string) {
+        this.clearCombatEntities()
+        this.state.phase = 'finished'
+        this.state.winnerId = winnerId
+        this.state.winnerName = winnerName
+    }
+
+    private finishMatchByTime() {
+        let topKills = -1
+        let leaders: Player[] = []
+
+        for (const player of this.state.players.values()) {
+            if (player.kills > topKills) {
+                topKills = player.kills
+                leaders = [player]
+            } else if (player.kills === topKills) {
+                leaders.push(player)
+            }
+        }
+
+        if (leaders.length === 1) {
+            this.finishMatch(leaders[0].id, leaders[0].name)
+        } else {
+            this.finishMatch('', '')
+        }
     }
 
     private spawnBullet(ownerId: string, player: Player, angle: number, now: number) {
@@ -68,6 +156,8 @@ export class ArenaRoom extends Room {
     }
 
     private simulate(deltaMs: number) {
+        if (this.state.phase === 'finished') return
+
         const now = performance.now()
         const dt = deltaMs / 1000
 
@@ -93,6 +183,10 @@ export class ArenaRoom extends Room {
             player.x = next.x
             player.y = next.y
         }
+
+        if (this.state.phase !== 'playing') return
+
+        this.state.timeRemaining = Math.max(0, this.state.timeRemaining - dt)
 
         for (const [bulletId, bullet] of this.state.bullets) {
             bullet.x += bullet.vx * dt
@@ -128,7 +222,13 @@ export class ArenaRoom extends Room {
                         this.inputs.delete(playerId)
 
                         const attacker = this.state.players.get(bullet.ownerId)
-                        if (attacker) attacker.kills += 1
+                        if (attacker) {
+                            attacker.kills += 1
+                            if (attacker.kills >= this.state.killsToWin) {
+                                this.finishMatch(attacker.id, attacker.name)
+                                return
+                            }
+                        }
                     }
                     break
                 }
@@ -144,6 +244,10 @@ export class ArenaRoom extends Room {
             player.hp = 100
             player.isDead = false
             player.respawnAt = 0
+        }
+
+        if (this.state.timeRemaining <= 0) {
+            this.finishMatchByTime()
         }
     }
 
@@ -204,10 +308,20 @@ export class ArenaRoom extends Room {
         player.y = spawn.y
 
         this.state.players.set(player.id, player)
+
+        if (this.state.phase === 'waiting' && this.state.players.size >= 2) {
+            this.startMatch()
+        }
     }
 
     onLeave(client: Client) {
         this.inputs.delete(client.sessionId)
         this.state.players.delete(client.sessionId)
+
+        if (this.state.players.size < 2 && this.state.phase === 'playing') {
+            this.resetToWaiting()
+        } else if (this.state.players.size === 0) {
+            this.resetToWaiting()
+        }
     }
 }
