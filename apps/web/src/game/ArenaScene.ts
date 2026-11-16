@@ -22,6 +22,8 @@ export type BulletState = {
     angle: number
 }
 
+export type MatchPhase = 'waiting' | 'playing' | 'finished'
+
 export type ArenaControls = {
     playerId: string
     send: (input: { moveX: number; moveY: number; aimAngle: number; shoot?: boolean }) => void
@@ -46,6 +48,9 @@ type PlayerView = {
     hpBarBg: Phaser.GameObjects.Rectangle
     hpBarFill: Phaser.GameObjects.Rectangle
     isDead: boolean
+    lastHp: number
+    targetX: number
+    targetY: number
     lastX: number
     lastY: number
     lastMovedAt: number
@@ -54,6 +59,7 @@ type PlayerView = {
 export default class ArenaScene extends Phaser.Scene {
     private players: PlayerState[] = []
     private bullets: BulletState[] = []
+    private currentPhase: MatchPhase = 'waiting'
     private playerViews = new Map<string, PlayerView>()
     private bulletViews = new Map<string, Phaser.GameObjects.Image>()
     private isReady = false
@@ -76,6 +82,10 @@ export default class ArenaScene extends Phaser.Scene {
         })
         this.load.image('weapon', '/assets/characters/weapon.png')
         this.load.image('bullet', '/assets/characters/bullet.png')
+        this.load.audio('shoot-a', '/assets/sounds/shoot-a.ogg')
+        this.load.audio('hurt-a', '/assets/sounds/hurt-a.ogg')
+        this.load.audio('explosion-a', '/assets/sounds/explosion-a.ogg')
+        this.load.audio('select-a', '/assets/sounds/select-a.ogg')
     }
 
     create() {
@@ -104,8 +114,19 @@ export default class ArenaScene extends Phaser.Scene {
         this.startControls()
     }
 
-    update(time: number) {
-        for (const view of this.playerViews.values()) {
+    update(time: number, delta: number) {
+        const interpFactor = 1 - Math.pow(1 - 0.25, delta / 16.667)
+
+        for (const [id, view] of this.playerViews) {
+            if (id !== this.controls.playerId) {
+                const nextX = Phaser.Math.Linear(view.root.x, view.targetX, interpFactor)
+                const nextY = Phaser.Math.Linear(view.root.y, view.targetY, interpFactor)
+                view.root.setPosition(nextX, nextY)
+                view.root.setDepth(nextY)
+                view.body.setDepth(nextY)
+                view.weapon.setDepth(nextY + 1)
+            }
+
             if (view.isDead) {
                 if (view.body.anims.isPlaying) view.body.anims.stop()
                 if (view.body.texture.key !== 'player-dead') {
@@ -122,6 +143,11 @@ export default class ArenaScene extends Phaser.Scene {
                 view.body.setTexture('player-idle')
             }
         }
+    }
+
+    private playSound(key: string, volume: number) {
+        if (!this.isReady || this.sound.locked || !this.cache.audio.exists(key)) return
+        this.sound.play(key, { volume })
     }
 
     stopControls() {
@@ -257,6 +283,14 @@ export default class ArenaScene extends Phaser.Scene {
         if (this.isReady && this.sys.isActive()) this.applyBullets(bullets)
     }
 
+    setPhase(phase: MatchPhase) {
+        const previous = this.currentPhase
+        this.currentPhase = phase
+        if (this.isReady && phase === 'playing' && previous !== 'playing') {
+            this.playSound('select-a', 0.4)
+        }
+    }
+
     private applyBullets(bullets: BulletState[]) {
         const activeIds = new Set(bullets.map((bullet) => bullet.id))
 
@@ -274,12 +308,29 @@ export default class ArenaScene extends Phaser.Scene {
                     .image(bullet.x, bullet.y, 'bullet')
                     .setDisplaySize(BULLET_DISPLAY_SIZE, BULLET_DISPLAY_SIZE)
                 this.bulletViews.set(bullet.id, sprite)
+                this.spawnMuzzleFlash(bullet.x, bullet.y)
+                this.playSound('shoot-a', 0.35)
+
+                if (bullet.ownerId === this.controls.playerId) {
+                    this.cameras.main.shake(60, 0.002)
+                }
             }
 
             sprite.setPosition(bullet.x, bullet.y)
             sprite.setRotation(bullet.angle)
             sprite.setDepth(bullet.y + 2)
         }
+    }
+
+    private spawnMuzzleFlash(x: number, y: number) {
+        const flash = this.add.circle(x, y, 9, 0xfef08a, 0.95).setDepth(y + 3)
+        this.tweens.add({
+            targets: flash,
+            alpha: 0,
+            scale: 1.6,
+            duration: 60,
+            onComplete: () => flash.destroy(),
+        })
     }
 
     private applyPlayers(players: PlayerState[]) {
@@ -296,20 +347,50 @@ export default class ArenaScene extends Phaser.Scene {
             let view = this.playerViews.get(player.id)
 
             if (!view) {
-                view = this.createPlayerView(player.name, player.x, player.y)
+                view = this.createPlayerView(player.name, player.x, player.y, player.hp ?? 100)
                 this.playerViews.set(player.id, view)
-            } else if (player.x !== view.lastX || player.y !== view.lastY) {
-                view.lastX = player.x
-                view.lastY = player.y
-                view.lastMovedAt = this.time.now
+            } else {
+                if (player.x !== view.lastX || player.y !== view.lastY) {
+                    view.lastX = player.x
+                    view.lastY = player.y
+                    view.lastMovedAt = this.time.now
+                }
+
+                const currentHp = player.hp ?? 100
+                if (currentHp < view.lastHp) {
+                    this.playSound('hurt-a', 0.45)
+                    view.body.setTint(0xff4d4d)
+                    this.time.delayedCall(120, () => {
+                        if (view && view.body.scene) view.body.clearTint()
+                    })
+                    if (player.id === this.controls.playerId) {
+                        this.cameras.main.shake(60, 0.002)
+                    }
+                }
+                view.lastHp = currentHp
+            }
+
+            const wasDead = view.isDead
+            const isDeadNow = Boolean(player.isDead)
+            if (isDeadNow && !wasDead) {
+                this.playSound('explosion-a', 0.5)
+            }
+
+            const isLocal = player.id === this.controls.playerId
+            const respawnTeleport =
+                (!isDeadNow && wasDead) || Math.hypot(player.x - view.root.x, player.y - view.root.y) > 160
+
+            view.targetX = player.x
+            view.targetY = player.y
+            if (isLocal || respawnTeleport) {
+                view.root.setPosition(player.x, player.y)
+                view.root.setDepth(player.y)
+                view.body.setDepth(player.y)
             }
 
             const facingLeft = player.aimAngle > Math.PI / 2 || player.aimAngle < -Math.PI / 2
-            view.isDead = Boolean(player.isDead)
-            view.root.setPosition(player.x, player.y)
-            view.root.setDepth(player.y)
+            view.isDead = isDeadNow
             view.body.setFlipX(facingLeft)
-            view.body.setDepth(player.y)
 
             if (view.isDead) {
                 if (view.body.anims.isPlaying) view.body.anims.stop()
@@ -337,11 +418,11 @@ export default class ArenaScene extends Phaser.Scene {
             view.weapon.setPosition(weaponX, weaponY)
             view.weapon.setRotation(player.aimAngle)
             view.weapon.setFlipY(facingLeft)
-            view.weapon.setDepth(player.y + 1)
+            view.weapon.setDepth((isLocal ? player.y : view.root.y) + 1)
         }
     }
 
-    private createPlayerView(name: string, x: number, y: number): PlayerView {
+    private createPlayerView(name: string, x: number, y: number, hp: number): PlayerView {
         const body = this.add
             .sprite(0, 0, 'player-idle')
             .setDisplaySize(PLAYER_DISPLAY_SIZE, PLAYER_DISPLAY_SIZE)
@@ -377,6 +458,9 @@ export default class ArenaScene extends Phaser.Scene {
             hpBarBg,
             hpBarFill,
             isDead: false,
+            lastHp: hp,
+            targetX: x,
+            targetY: y,
             lastX: x,
             lastY: y,
             lastMovedAt: -WALK_ANIM_TIMEOUT_MS,
