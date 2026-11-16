@@ -1,5 +1,9 @@
 {
     "skins": ["fox", "squirrel", "mouse", "rabbit"],
+    "skinTeams": {
+        "orange": ["fox", "squirrel"],
+        "blue": ["mouse", "rabbit"]
+    },
     "pickupIntervalMs": 15000,
     "pickupRadius": 28,
     "pickupSpawnPoints": [
@@ -7,29 +11,121 @@
         { "x": 512, "y": 538 }
     ],
     "weapons": {
-        "rifle": {
-            "label": "Rifle",
-            "cooldownMs": 300,
-            "damage": 25,
+        "pistol": {
+            "id": "pistol",
+            "name": "Pistola",
+            "cooldownMs": 260,
+            "damage": 18,
+            "speed": 620,
             "pellets": 1,
             "spreadDeg": 0,
-            "bulletSpeed": 650
+            "bulletScale": 0.85,
+            "maxAmmo": 12
         },
-        "shotgun": {
-            "label": "Escopeta",
-            "cooldownMs": 650,
-            "damage": 18,
-            "pellets": 3,
-            "spreadDeg": 12,
-            "bulletSpeed": 650
+        "revolver": {
+            "id": "revolver",
+            "name": "Revólver",
+            "cooldownMs": 450,
+            "damage": 32,
+            "speed": 720,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletScale": 1.0,
+            "maxAmmo": 6
+        },
+        "smg": {
+            "id": "smg",
+            "name": "Subfusil",
+            "cooldownMs": 140,
+            "damage": 12,
+            "speed": 680,
+            "pellets": 1,
+            "spreadDeg": 4,
+            "bulletScale": 0.8,
+            "maxAmmo": 24
         },
         "sniper": {
-            "label": "Francotirador",
-            "cooldownMs": 900,
-            "damage": 50,
+            "id": "sniper",
+            "name": "Francotirador",
+            "cooldownMs": 950,
+            "damage": 55,
+            "speed": 980,
             "pellets": 1,
             "spreadDeg": 0,
-            "bulletSpeed": 950
+            "bulletScale": 1.15,
+            "maxAmmo": 5
+        },
+        "launcher": {
+            "id": "launcher",
+            "name": "Lanzagranadas",
+            "cooldownMs": 1100,
+            "damage": 60,
+            "speed": 480,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletScale": 1.5,
+            "maxAmmo": 4
+        },
+        "rifle": {
+            "id": "rifle",
+            "name": "Rifle",
+            "cooldownMs": 300,
+            "damage": 25,
+            "speed": 650,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletScale": 1.0,
+            "maxAmmo": 15
+        },
+        "plasma": {
+            "id": "plasma",
+            "name": "Rifle de Plasma",
+            "cooldownMs": 240,
+            "damage": 22,
+            "speed": 780,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletScale": 1.2,
+            "maxAmmo": 10
+        },
+        "shotgun": {
+            "id": "shotgun",
+            "name": "Escopeta",
+            "cooldownMs": 650,
+            "damage": 18,
+            "speed": 650,
+            "pellets": 3,
+            "spreadDeg": 12,
+            "bulletScale": 0.9,
+            "maxAmmo": 6
+        },
+        "knife": {
+            "id": "knife",
+            "name": "Cuchillo",
+            "isMelee": true,
+            "cooldownMs": 260,
+            "damage": 50,
+            "rangePx": 58,
+            "arcDeg": 110,
+            "speed": 0,
+            "pellets": 0,
+            "spreadDeg": 0,
+            "bulletScale": 1,
+            "maxAmmo": 0
+        },
+        "axe": {
+            "id": "axe",
+            "name": "Hacha",
+            "isMelee": true,
+            "cooldownMs": 550,
+            "damage": 100,
+            "rangePx": 86,
+            "arcDeg": 140,
+            "speed": 0,
+            "pellets": 0,
+            "spreadDeg": 0,
+            "bulletScale": 1,
+            "maxAmmo": 0
         }
     }
 }

@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAADiSURBVHhe7ZCxDcJQDAUzE0tQkD1gmLAPy8AalEGWnsCRXhVc+Ed30jW/sP1vAgAAAACAcs6ny1qhxo2H+8weNW483Gf2qHFj4D5Qqdb0xR1dqdb0xR1dqdb0xR0dPq+z9X2/fc3vbkaoNX1xR4f5c1kCEIAABCAAAQhAAAIQgACbdzcj1Jq+uKPD/LksAQhAAAIQgAAEOH6A9TF7X8vP9O5mhFrTF3d0mD+3kQAEIAABCEAAAhw+QJVa0xd3dKVa0xd3dKVa0xd3dKVa0xd3dKVa0xd3dKVaAwAAAAAA/zBNH0OxQV0ihpcgAAAAAElFTkSuQmCC\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "shell-shotgun",
+                   "width":  64,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  64
+               }
+}

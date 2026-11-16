@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,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\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-axe-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

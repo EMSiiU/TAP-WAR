@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAMRSURBVHhe7ZcxjlRBDAX3TFyCgGMQcwJyxCWIkBAZKQfYmJgDEBOTQfKItoQ8azTt7l8lVTZu2c8O5j+IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiInMnLF69+P9c8ITtDi62aJ2RnaLFV84TsDC22ap6QnaHFVs0T8hcK6WomimtCgVzNRHFNKJCrmSiuCQVyNRPFNaFArmaiOB8a/hQ/vvv2RPpdx8S4LzTUKXoABWioU/QACtBQp+gBFKChTvHSB0DNdqQwSaol335/HCP1VzVxz4Oa7UjLJqmWpEWskvqrmrjnQc12pGWTVEvSIlZJ/VVN3POgZjvSskmqJWkRq6T+qibueVCzHWnZJNWStIhVUn9VE/c8qNmOtOzHzz+f7YdfP8ZI/VEGZOKeBzXb0QNgE/c8qNmOHgCbuOdBzXb0ANjEPQ9qtqMHwCbueVCz5Ouvn55I/5SrUpgk1a6S+qOsyMQ9D2qW9AA8AA8A+qOsyMQ9D2qW9AA8AA8A+qOsyMQ9D2qWpEA60tcCSbWrpFyqJu55ULMkBdKRlk1S7Sopl6qJex7ULEmBdKRlk1S7SsqlauKeBzVLUiAdadkk1a6ScqmauOdBzZIUSEdaNkm1q6RcqibueVCzZOcrgN4j37/58sTO70g6MpJqOybueVCzpAfQM3HPg5olPYCeiXse1CzpAfRM3POgZkkPoGfingc1u0paBEm1Vek9kmrJxLgvNNQqaREk1Val90iqJRPjvtBQq6RFkFRbld4jqZZMjPtCQ62SFkFSbVV6j6RaMjHuCw21SloESbVV6T2SasnEeBY06D2kRZBUu8pEdhY06D2kZZNUu8pEdhY06D2kZZNUu8pEdhY06D2kZZNUu8pEdhY06D2kZZNUu8pEJv+CgtvRjCO3QmHuaMaRW6EwdzTjyK1QmDuaceRWKMwdzTjyP6CAO+ZZ2QVaYsc8K7tAS+yYZ2UXaIkd86zsAi2xY54VERERERERERERERERERERERERERERERERERERERERERERWcrDwx//5N+dyqt72AAAAABJRU5ErkJggg==\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-plasma-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

@@ -5,27 +5,30 @@ import {
     Player,
     WeaponPickup,
     type PlayerSkin,
+    type TeamColor,
     type WeaponType,
 } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
 import weaponsConfig from '../../../../packages/shared/weapons.json' with { type: 'json' }
 import {
-    intersectsPlayerHitbox,
     isBulletHittingObstacle,
     moveInsideArena,
+    segmentBlockedByObstacle,
+    segmentIntersectsPlayerHitbox,
 } from './ArenaCollision.js'
 
 const STEP_MS = 1000 / 30
 const INPUT_TIMEOUT_MS = 300
 const SPEED = 220
 const BULLET_LIFETIME_MS = 2000
-const MUZZLE_OFFSET = 28
-const PLAYER_HIT_RADIUS = 26
+const MUZZLE_OFFSET = 38
+const MUZZLE_OFFSET_Y = -12
+const PLAYER_HIT_RADIUS = 30
 const RESPAWN_DELAY_MS = 3000
 const MATCH_DURATION_SECONDS = 180
 const KILLS_TO_WIN = 10
-const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper']
+const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper', 'smg', 'launcher', 'plasma', 'axe']
 
 export class ArenaRoom extends Room {
     maxClients = arena.spawnPoints.length
@@ -45,7 +48,15 @@ export class ArenaRoom extends Room {
         this.onMessage<unknown>('input', (client, message) => {
             const input = parseArenaInput(message)
             const player = this.state.players.get(client.sessionId)
-            if (!input || !player || player.isDead || this.state.phase === 'finished') return
+            if (
+                !input ||
+                !player ||
+                player.isDead ||
+                this.state.phase === 'finished' ||
+                this.state.isPaused
+            ) {
+                return
+            }
 
             const now = performance.now()
             this.inputs.set(client.sessionId, {
@@ -61,7 +72,11 @@ export class ArenaRoom extends Room {
                 now - player.lastShotAt >= weaponSpec.cooldownMs
             ) {
                 player.lastShotAt = now
-                this.fireWeapon(client.sessionId, player, input.aimAngle, now)
+                if ('isMelee' in weaponSpec && weaponSpec.isMelee) {
+                    this.performMeleeAttack(client.sessionId, player, input.aimAngle, now)
+                } else {
+                    this.fireWeapon(client.sessionId, player, input.aimAngle, now)
+                }
             }
         })
 
@@ -83,6 +98,19 @@ export class ArenaRoom extends Room {
             player.emoteUntil = Date.now() + 2000
         })
 
+        this.onMessage<unknown>('pause', (client, message) => {
+            if (typeof message !== 'boolean' || this.state.phase === 'finished') return
+            if (message) {
+                const player = this.state.players.get(client.sessionId)
+                this.state.isPaused = true
+                this.state.pausedByName = player?.name ?? ''
+                this.inputs.clear()
+            } else {
+                this.state.isPaused = false
+                this.state.pausedByName = ''
+            }
+        })
+
         this.setSimulationInterval((deltaMs) => this.simulate(deltaMs), STEP_MS)
     }
 
@@ -93,10 +121,32 @@ export class ArenaRoom extends Room {
         this.inputs.clear()
     }
 
+    private equipWeapon(player: Player, weaponType: WeaponType, updateMeleeBackup = true) {
+        const spec = weaponsConfig.weapons[weaponType]
+        player.weaponType = weaponType
+        if ('isMelee' in spec && spec.isMelee) {
+            player.ammo = 0
+            player.maxAmmo = 0
+            if (updateMeleeBackup && (weaponType === 'knife' || weaponType === 'axe')) {
+                player.lastMeleeWeapon = weaponType
+            }
+        } else {
+            player.ammo = spec.maxAmmo
+            player.maxAmmo = spec.maxAmmo
+        }
+    }
+
+    private resetPlayerLoadout(player: Player) {
+        player.lastMeleeWeapon = 'knife'
+        this.equipWeapon(player, player.startingWeapon, true)
+    }
+
     private startMatch() {
         const now = performance.now()
         this.clearCombatEntities()
         this.state.phase = 'playing'
+        this.state.isPaused = false
+        this.state.pausedByName = ''
         this.state.timeRemaining = MATCH_DURATION_SECONDS
         this.state.killsToWin = KILLS_TO_WIN
         this.state.winnerId = ''
@@ -112,9 +162,11 @@ export class ArenaRoom extends Room {
             player.kills = 0
             player.deaths = 0
             player.isDead = false
-            player.weaponType = 'rifle'
+            this.resetPlayerLoadout(player)
             player.emote = ''
             player.emoteUntil = 0
+            player.meleeAttackSeq = 0
+            player.lastMeleeAngle = 0
             player.respawnAt = 0
             player.lastShotAt = -1000
             index++
@@ -124,6 +176,8 @@ export class ArenaRoom extends Room {
     private resetToWaiting() {
         this.clearCombatEntities()
         this.state.phase = 'waiting'
+        this.state.isPaused = false
+        this.state.pausedByName = ''
         this.state.timeRemaining = MATCH_DURATION_SECONDS
         this.state.winnerId = ''
         this.state.winnerName = ''
@@ -134,9 +188,11 @@ export class ArenaRoom extends Room {
             player.kills = 0
             player.deaths = 0
             player.isDead = false
-            player.weaponType = 'rifle'
+            this.resetPlayerLoadout(player)
             player.emote = ''
             player.emoteUntil = 0
+            player.meleeAttackSeq = 0
+            player.lastMeleeAngle = 0
             player.respawnAt = 0
             player.lastShotAt = -1000
         }
@@ -169,6 +225,73 @@ export class ArenaRoom extends Room {
         }
     }
 
+    private performMeleeAttack(
+        attackerId: string,
+        attacker: Player,
+        aimAngle: number,
+        now: number,
+    ) {
+        const spec = weaponsConfig.weapons[attacker.weaponType] as {
+            damage: number
+            rangePx?: number
+            arcDeg?: number
+        }
+        const rangePx = spec.rangePx ?? 58
+        const halfArcRad = (((spec.arcDeg ?? 110) / 2) * Math.PI) / 180
+
+        attacker.meleeAttackSeq += 1
+        attacker.lastMeleeAngle = aimAngle
+
+        for (const [targetId, target] of this.state.players) {
+            if (targetId === attackerId || target.isDead || target.hp <= 0) continue
+
+            const dx = target.x - attacker.x
+            const dy = target.y - attacker.y
+            const dist = Math.hypot(dx, dy)
+            if (dist > rangePx) continue
+
+            const angleToTarget = Math.atan2(dy, dx)
+            const angleDiff = Math.atan2(
+                Math.sin(angleToTarget - aimAngle),
+                Math.cos(angleToTarget - aimAngle),
+            )
+            if (Math.abs(angleDiff) > halfArcRad) continue
+
+            if (segmentBlockedByObstacle(attacker.x, attacker.y, target.x, target.y)) continue
+
+            if (this.applyDamageToPlayer(targetId, target, attackerId, spec.damage, now)) {
+                return
+            }
+        }
+    }
+
+    private applyDamageToPlayer(
+        targetId: string,
+        target: Player,
+        attackerId: string,
+        damage: number,
+        now: number,
+    ): boolean {
+        target.hp = Math.max(0, target.hp - damage)
+        if (target.hp <= 0) {
+            target.hp = 0
+            target.isDead = true
+            target.respawnAt = now + RESPAWN_DELAY_MS
+            target.deaths += 1
+            this.inputs.delete(targetId)
+
+            const attacker = this.state.players.get(attackerId)
+            if (attacker) {
+                attacker.kills += 1
+                if (attacker.kills >= this.state.killsToWin) {
+                    this.finishMatch(attacker.id, attacker.name)
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
     private fireWeapon(ownerId: string, player: Player, aimAngle: number, now: number) {
         const spec = weaponsConfig.weapons[player.weaponType]
         const spreadRad = (spec.spreadDeg * Math.PI) / 180
@@ -177,7 +300,22 @@ export class ArenaRoom extends Room {
         for (let i = 0; i < spec.pellets; i++) {
             const offsetIndex = i - halfPellets
             const angle = aimAngle + offsetIndex * spreadRad
-            this.spawnBullet(ownerId, player, angle, spec.bulletSpeed, spec.damage, now)
+            this.spawnBullet(
+                ownerId,
+                player,
+                angle,
+                spec.speed,
+                spec.damage,
+                spec.bulletScale,
+                player.teamColor,
+                now,
+            )
+        }
+
+        player.ammo = Math.max(0, player.ammo - 1)
+        if (player.ammo <= 0) {
+            player.weaponType = player.lastMeleeWeapon
+            player.maxAmmo = 0
         }
     }
 
@@ -187,17 +325,40 @@ export class ArenaRoom extends Room {
         angle: number,
         speed: number,
         damage: number,
+        scale: number,
+        teamColor: TeamColor,
         now: number,
     ) {
+        const originX = player.x
+        const originY = player.y + MUZZLE_OFFSET_Y
+        const spawnX = originX + Math.cos(angle) * MUZZLE_OFFSET
+        const spawnY = originY + Math.sin(angle) * MUZZLE_OFFSET
+
+        if (segmentBlockedByObstacle(originX, originY, spawnX, spawnY) || isBulletHittingObstacle(spawnX, spawnY)) {
+            return
+        }
+
+        for (const [playerId, target] of this.state.players) {
+            if (playerId === ownerId || target.isDead || target.hp <= 0) continue
+
+            if (segmentIntersectsPlayerHitbox(originX, originY, spawnX, spawnY, target.x, target.y, PLAYER_HIT_RADIUS)) {
+                this.applyDamageToPlayer(playerId, target, ownerId, damage, now)
+                return
+            }
+        }
+
         const bullet = new BulletState()
         bullet.id = `b-${++this.nextBulletId}`
         bullet.ownerId = ownerId
+        bullet.weaponType = player.weaponType
         bullet.angle = angle
-        bullet.x = player.x + Math.cos(angle) * MUZZLE_OFFSET
-        bullet.y = player.y + Math.sin(angle) * MUZZLE_OFFSET
+        bullet.x = spawnX
+        bullet.y = spawnY
         bullet.vx = Math.cos(angle) * speed
         bullet.vy = Math.sin(angle) * speed
         bullet.damage = damage
+        bullet.scale = scale
+        bullet.teamColor = teamColor
 
         this.state.bullets.set(bullet.id, bullet)
         this.bulletCreatedAt.set(bullet.id, now)
@@ -213,6 +374,19 @@ export class ArenaRoom extends Room {
         }
 
         if (this.state.phase === 'finished') return
+
+        if (this.state.isPaused) {
+            this.nextPickupAt += deltaMs
+            for (const [bulletId, createdAt] of this.bulletCreatedAt) {
+                this.bulletCreatedAt.set(bulletId, createdAt + deltaMs)
+            }
+            for (const player of this.state.players.values()) {
+                if (player.isDead && player.respawnAt > 0) {
+                    player.respawnAt += deltaMs
+                }
+            }
+            return
+        }
 
         const now = performance.now()
         const dt = deltaMs / 1000
@@ -245,6 +419,8 @@ export class ArenaRoom extends Room {
         this.state.timeRemaining = Math.max(0, this.state.timeRemaining - dt)
 
         for (const [bulletId, bullet] of this.state.bullets) {
+            const prevX = bullet.x
+            const prevY = bullet.y
             bullet.x += bullet.vx * dt
             bullet.y += bullet.vy * dt
 
@@ -265,26 +441,22 @@ export class ArenaRoom extends Room {
             for (const [playerId, target] of this.state.players) {
                 if (playerId === bullet.ownerId || target.isDead || target.hp <= 0) continue
 
-                if (intersectsPlayerHitbox(bullet.x, bullet.y, target.x, target.y, PLAYER_HIT_RADIUS)) {
+                if (
+                    segmentIntersectsPlayerHitbox(
+                        prevX,
+                        prevY,
+                        bullet.x,
+                        bullet.y,
+                        target.x,
+                        target.y,
+                        PLAYER_HIT_RADIUS,
+                    )
+                ) {
                     this.state.bullets.delete(bulletId)
                     this.bulletCreatedAt.delete(bulletId)
 
-                    target.hp = Math.max(0, target.hp - bullet.damage)
-                    if (target.hp <= 0) {
-                        target.hp = 0
-                        target.isDead = true
-                        target.respawnAt = now + RESPAWN_DELAY_MS
-                        target.deaths += 1
-                        this.inputs.delete(playerId)
-
-                        const attacker = this.state.players.get(bullet.ownerId)
-                        if (attacker) {
-                            attacker.kills += 1
-                            if (attacker.kills >= this.state.killsToWin) {
-                                this.finishMatch(attacker.id, attacker.name)
-                                return
-                            }
-                        }
+                    if (this.applyDamageToPlayer(playerId, target, bullet.ownerId, bullet.damage, now)) {
+                        return
                     }
                     break
                 }
@@ -301,7 +473,7 @@ export class ArenaRoom extends Room {
                 if (player.isDead) continue
                 const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y)
                 if (dist <= weaponsConfig.pickupRadius) {
-                    player.weaponType = pickup.weaponType
+                    this.equipWeapon(player, pickup.weaponType, true)
                     this.state.pickups.delete(pickupId)
                     break
                 }
@@ -315,7 +487,7 @@ export class ArenaRoom extends Room {
             player.x = spawn.x
             player.y = spawn.y
             player.hp = 100
-            player.weaponType = 'rifle'
+            this.resetPlayerLoadout(player)
             player.isDead = false
             player.respawnAt = 0
         }
@@ -370,7 +542,7 @@ export class ArenaRoom extends Room {
         return bestSpawn
     }
 
-    onAuth(_client: Client, options?: { name?: unknown; skin?: unknown }) {
+    onAuth(_client: Client, options?: { name?: unknown; skin?: unknown; weapon?: unknown }) {
         const name = typeof options?.name === 'string' ? options.name.trim() : ''
 
         if (name.length < 1 || name.length > 24) {
@@ -385,10 +557,26 @@ export class ArenaRoom extends Room {
             ? (rawSkin as PlayerSkin)
             : 'fox'
 
-        return { name, skin }
+        const teamColor: TeamColor = weaponsConfig.skinTeams.blue.includes(skin)
+            ? 'blue'
+            : 'orange'
+
+        const rawWeapon = typeof options?.weapon === 'string' ? options.weapon : 'rifle'
+        const weapon: WeaponType = Object.prototype.hasOwnProperty.call(
+            weaponsConfig.weapons,
+            rawWeapon,
+        )
+            ? (rawWeapon as WeaponType)
+            : 'rifle'
+
+        return { name, skin, teamColor, weapon }
     }
 
-    onJoin(client: Client, _options: unknown, auth: { name: string; skin: PlayerSkin }) {
+    onJoin(
+        client: Client,
+        _options: unknown,
+        auth: { name: string; skin: PlayerSkin; teamColor: TeamColor; weapon: WeaponType },
+    ) {
         const players = Array.from(this.state.players.values())
         const spawn = arena.spawnPoints.find(({ x, y }) =>
             players.every((player) => player.x !== x || player.y !== y),
@@ -402,7 +590,9 @@ export class ArenaRoom extends Room {
         player.id = client.sessionId
         player.name = auth.name
         player.skin = auth.skin
-        player.weaponType = 'rifle'
+        player.teamColor = auth.teamColor
+        player.startingWeapon = auth.weapon
+        this.resetPlayerLoadout(player)
         player.x = spawn.x
         player.y = spawn.y
 
@@ -414,8 +604,14 @@ export class ArenaRoom extends Room {
     }
 
     onLeave(client: Client) {
+        const leavingPlayer = this.state.players.get(client.sessionId)
         this.inputs.delete(client.sessionId)
         this.state.players.delete(client.sessionId)
+
+        if (this.state.isPaused && leavingPlayer && leavingPlayer.name === this.state.pausedByName) {
+            this.state.isPaused = false
+            this.state.pausedByName = ''
+        }
 
         if (this.state.players.size < 2 && this.state.phase === 'playing') {
             this.resetToWaiting()

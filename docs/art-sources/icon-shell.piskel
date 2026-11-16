@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEBSURBVHhe7ZDBDcIwEARTE03wIH1AMdAPzUAbPOGzD+eyygM5d1Y0K83Lkj2eiTHGeu58unz3RM+MOyfdEz0z7px0T/TMuHPSPdEz48xJZiKNujmpTKRRNyeViTTq5qQykUbdnFTL6zpv8nncFsRzd2eLNOrmpFrihyIEIAABCEAAAhCAAAQgAAEIQAACEGB17u5skUbdnFRL/FCEAAQgAAEIQAACEIAABDhogO9z3uZ9XxLO3Z0t0qibk2qJH1pBAAIQgAAEIAABCEAAAhwzwN5Io25OKhNp1M1JZSKNujmpTKRRNyeViTTq5qQykUbdnFQm0qibk8pEGowx9sem6QfsFa0TUGLY1QAAAABJRU5ErkJggg==\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "icon-shell",
+                   "width":  64,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  64
+               }
+}

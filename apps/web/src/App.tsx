@@ -2,17 +2,23 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
 import PhaserView from './game/PhaserView'
+import weaponsConfig from '../../../packages/shared/weapons.json'
 import type {
   ArenaControls,
   BulletState,
+  CrosshairStyle,
   MatchPhase,
   PickupState,
   PlayerSkin,
   PlayerState,
+  TeamColor,
+  WeaponType,
 } from './game/ArenaScene'
 
 type ArenaState = {
   phase: MatchPhase
+  isPaused: boolean
+  pausedByName: string
   timeRemaining: number
   killsToWin: number
   winnerId: string
@@ -29,8 +35,30 @@ const SKIN_OPTIONS: { id: PlayerSkin; label: string }[] = [
   { id: 'rabbit', label: 'Conejo' },
 ]
 
+const WEAPON_OPTIONS = Object.values(weaponsConfig.weapons) as {
+  id: WeaponType
+  name: string
+  isMelee?: boolean
+  cooldownMs: number
+  damage: number
+  rangePx?: number
+  arcDeg?: number
+  speed: number
+  pellets: number
+  spreadDeg: number
+  bulletScale: number
+  maxAmmo: number
+}[]
+
+const WEAPON_BY_ID = Object.fromEntries(WEAPON_OPTIONS.map((w) => [w.id, w])) as Record<
+  WeaponType,
+  (typeof WEAPON_OPTIONS)[number]
+>
+
 type MatchMeta = {
   phase: MatchPhase
+  isPaused: boolean
+  pausedByName: string
   timeRemaining: number
   killsToWin: number
   winnerId: string
@@ -49,19 +77,26 @@ const client = new Client('http://127.0.0.1:2567')
 function ArenaSession({
     playerName,
     playerSkin,
+    playerWeapon,
+    crosshairStyle,
     onExit,
     onEnd
   }: {
     playerName: string
     playerSkin: PlayerSkin
+    playerWeapon: WeaponType
+    crosshairStyle: CrosshairStyle
     onExit: () => void
     onEnd: (message: string) => void
   }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [bullets, setBullets] = useState<BulletState[]>([])
   const [pickups, setPickups] = useState<PickupState[]>([])
+  const [resumeSignal, setResumeSignal] = useState(0)
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
     phase: 'waiting',
+    isPaused: false,
+    pausedByName: '',
     timeRemaining: 180,
     killsToWin: 10,
     winnerId: '',
@@ -80,6 +115,7 @@ function ArenaSession({
         const joined = await client.joinById<ArenaState>('arena-local', {
           name: playerName,
           skin: playerSkin,
+          weapon: playerWeapon,
         })
         joined.reconnection.enabled = false
 
@@ -106,6 +142,8 @@ function ArenaSession({
           }
           setMatchMeta({
             phase: state.phase ?? 'waiting',
+            isPaused: Boolean(state.isPaused),
+            pausedByName: state.pausedByName ?? '',
             timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 180,
             killsToWin: typeof state.killsToWin === 'number' ? state.killsToWin : 10,
             winnerId: state.winnerId ?? '',
@@ -125,6 +163,9 @@ function ArenaSession({
           },
           sendEmote: (emote) => {
             if (joined.connection.isOpen) joined.send('emote', emote)
+          },
+          sendPause: (paused) => {
+            if (joined.connection.isOpen) joined.send('pause', paused)
           },
         })
         setStatus('Conectado')
@@ -158,10 +199,32 @@ function ArenaSession({
       rematchRef.current = null
       disconnect?.()
     }
-  }, [playerName, playerSkin, onEnd])
+  }, [playerName, playerSkin, playerWeapon, onEnd])
+
+  useEffect(() => {
+    if (matchMeta.phase === 'finished' && matchMeta.winnerId && matchMeta.winnerId !== controls?.playerId) {
+      const audio = new Audio('/assets/sounds/lose-a.ogg')
+      audio.volume = 0.55
+      audio.play().catch(() => {})
+    }
+  }, [matchMeta.phase, matchMeta.winnerId, controls?.playerId])
 
   const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
   const scoreLine = players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
+  const localPlayer = players.find((p) => p.id === controls?.playerId)
+  const localWeaponSpec = localPlayer ? WEAPON_BY_ID[localPlayer.weaponType] : undefined
+  const localTeamColor: TeamColor =
+    localPlayer?.teamColor === 'blue' ||
+    localPlayer?.skin === 'mouse' ||
+    localPlayer?.skin === 'rabbit'
+      ? 'blue'
+      : 'orange'
+  const localAmmo = localPlayer?.ammo ?? 0
+  const localMaxAmmo = localPlayer?.maxAmmo ?? localWeaponSpec?.maxAmmo ?? 0
+  const isLocalFirearm = Boolean(localWeaponSpec && !localWeaponSpec.isMelee && localMaxAmmo > 0)
+  const isLowAmmo = isLocalFirearm && localAmmo <= Math.ceil(localMaxAmmo * 0.25)
+  const ammoIconSrc =
+    localPlayer?.weaponType === 'shotgun' ? '/assets/ui/icon-shell.png' : '/assets/ui/icon-bullet.png'
   const finishReason =
     matchMeta.timeRemaining <= 0
       ? 'Tiempo agotado'
@@ -170,7 +233,9 @@ function ArenaSession({
   return (
     <div className="arena-shell">
       <header className="arena-header">
-        <strong style={{ fontSize: '1rem', color: 'var(--text-h)' }}>TAP-WAR</strong>
+        <strong style={{ fontSize: '1.05rem', color: '#ffffff', letterSpacing: '1px' }}>
+          TAP-WAR
+        </strong>
         <div className="arena-scoreboard" role="status">
           <span className="arena-clock">{formatClock(matchMeta.timeRemaining)}</span>
           {players.length > 0 && (
@@ -180,9 +245,12 @@ function ArenaSession({
           )}
           <span>{controls ? status : `${status}`}</span>
         </div>
-        <button type="button" onClick={onExit} className="arena-btn-secondary">
-          Salir de la arena
-        </button>
+        <div className="arena-header-actions">
+          <span style={{ fontSize: '0.78rem', opacity: 0.85 }}>[ESC] Pausa</span>
+          <button type="button" onClick={onExit} className="kenney-btn-secondary">
+            Salir de la arena
+          </button>
+        </div>
       </header>
 
       <div className="arena-stage">
@@ -192,14 +260,74 @@ function ArenaSession({
           </div>
         )}
 
-        {controls && (
-          <PhaserView
-            players={players}
-            bullets={bullets}
-            pickups={pickups}
-            phase={matchMeta.phase}
-            controls={controls}
-          />
+        <div className="arena-canvas-wrap">
+          {controls && localWeaponSpec && localPlayer && (
+            <div className={`arena-ammo-badge${isLowAmmo ? ' is-low' : ''}`} role="status">
+              {isLocalFirearm ? (
+                <>
+                  <span className="arena-ammo-icons" aria-hidden="true">
+                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
+                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
+                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
+                  </span>
+                  <span>
+                    {localAmmo} / {localMaxAmmo}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <img
+                    src={`/assets/weapons/weapon-${localPlayer.weaponType}-${localTeamColor}.png`}
+                    alt={localWeaponSpec.name}
+                    className="arena-melee-icon"
+                  />
+                  <span>{localWeaponSpec.name} · Melé</span>
+                </>
+              )}
+            </div>
+          )}
+
+          {controls && (
+            <PhaserView
+              players={players}
+              bullets={bullets}
+              pickups={pickups}
+              phase={matchMeta.phase}
+              isPaused={matchMeta.isPaused}
+              crosshairStyle={crosshairStyle}
+              resumeSignal={resumeSignal}
+              controls={controls}
+            />
+          )}
+        </div>
+
+        {matchMeta.isPaused && matchMeta.phase !== 'finished' && (
+          <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Pausa">
+            <div className="arena-pause-modal">
+              <h2 className="arena-pause-title">PAUSA</h2>
+              <p className="arena-pause-hint">
+                {matchMeta.pausedByName
+                  ? `Partida pausada por ${matchMeta.pausedByName}.`
+                  : 'Partida en pausa.'}
+              </p>
+              <div className="arena-pause-actions">
+                <button
+                  type="button"
+                  className="kenney-btn-primary"
+                  onClick={() => setResumeSignal((n) => n + 1)}
+                >
+                  Continuar
+                </button>
+                <button
+                  type="button"
+                  className="kenney-btn-secondary"
+                  onClick={onExit}
+                >
+                  Salir de la arena
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {matchMeta.phase === 'finished' && (
@@ -256,6 +384,8 @@ function ArenaSession({
 export default function App() {
   const [name, setName] = useState('')
   const [skin, setSkin] = useState<PlayerSkin>('fox')
+  const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>('rifle')
+  const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>('outline')
   const [playerName, setPlayerName] = useState<string | null>(null)
 
   const [entryMessage, setEntryMessage] = useState('')
@@ -270,11 +400,17 @@ export default function App() {
       <ArenaSession
         playerName={playerName}
         playerSkin={skin}
+        playerWeapon={selectedWeapon}
+        crosshairStyle={crosshairStyle}
         onExit={() => returnToForm('')}
         onEnd={returnToForm}
       />
     )
   }
+
+  const currentTeamColor: TeamColor = weaponsConfig.skinTeams.blue.includes(skin)
+    ? 'blue'
+    : 'orange'
 
   return (
     <main className="lobby-page">
@@ -313,6 +449,61 @@ export default function App() {
                 <span>{option.label}</span>
               </button>
             ))}
+          </div>
+
+          <span className="skin-grid-label">Elige tu arma inicial</span>
+          <div className="weapon-grid" role="radiogroup" aria-label="Selector de arma">
+            {WEAPON_OPTIONS.map((weapon) => (
+              <button
+                key={weapon.id}
+                type="button"
+                role="radio"
+                aria-checked={selectedWeapon === weapon.id}
+                className={`weapon-option${selectedWeapon === weapon.id ? ' is-selected' : ''}`}
+                onClick={() => setSelectedWeapon(weapon.id)}
+              >
+                <img
+                  src={`/assets/weapons/weapon-${weapon.id}-${currentTeamColor}.png`}
+                  alt={weapon.name}
+                />
+                <span>{weapon.name}</span>
+                <span className="weapon-stats">
+                  {weapon.isMelee
+                    ? `${weapon.damage} dmg · ${weapon.rangePx ?? 60}px · Melé`
+                    : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo} balas`}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <span className="skin-grid-label">Estilo de mira</span>
+          <div className="crosshair-grid" role="radiogroup" aria-label="Estilo de mira">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={crosshairStyle === 'outline'}
+              className={`crosshair-option${crosshairStyle === 'outline' ? ' is-selected' : ''}`}
+              onClick={() => setCrosshairStyle('outline')}
+            >
+              <img
+                src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-orange.png`}
+                alt="Con contorno"
+              />
+              <span>Con contorno</span>
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={crosshairStyle === 'plain'}
+              className={`crosshair-option${crosshairStyle === 'plain' ? ' is-selected' : ''}`}
+              onClick={() => setCrosshairStyle('plain')}
+            >
+              <img
+                src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-blue.png`}
+                alt="Sin contorno"
+              />
+              <span>Sin contorno</span>
+            </button>
           </div>
 
           <div className="lobby-field">

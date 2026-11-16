@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAANLSURBVHhe7dghsiRVEEbhtyY2gZhloFkBnphNoIggcFgWMBrNAtBoHJhUxCdu9K3pruo6J+K4ya68/5/mzUdERERERERERERERERERERERERERERERERERERExGX49ptP/x7p/GxcBZW44/xsXAWVuOP8bFwFlbjj/GxcBZW44/xsHIECzhsdmR6fHcDtnXjeHz0+O4DbO/G8F3roq/z8/W9LavYZTmTvhR76KlW21OwznMjeCz30VapsqdlnOJG9F3roq1TZUrPPcCJ7L/TQV6mypWaf4UT2Xuih8ucf/zjUH/78sqRmpQ5F/07qvXIiey/0UKngdlTZUrOyA3gQPVQquB1VttSs7AAeRA+VCm5HlS01KzuAB9FDpYLbUWVLzcoOYAE9alUF9+XXvx/2p3/+WlKz2qUDWECPWlXBqZxVVbbUrHbpABbQo1ZVcCpnVZUtNatdOoAF9KhVFZzKWVVlS81qlw5gAT1qVQWnclZV2VKz2qUD+B96wI4KTuWsqrKlZrWLdj7aifYa6AE7KnSVs6rKlprVLtr5aCfaa6AH7KjQVc6qKltqVrto56OdaK+BHrCjQlc5q6psqVntop2PdqK9BnrAjgpd5ayqsqVmtYt2PtqJ9nxo2VX1369Soe+ob0jNylv/FaBlV1XoUsHtqG9IzcoO4EEVulRwO+obUrOyA3hQhS4V3I76htSs7AAeVKFLBbejviE1KzuABRXwjvrGd7//sqRmpf4KkB3AgipxR31DZUvNSpUtO4AFVeKO+obKlpqVKlt2AAuqxB31DZUtNStVtuwAFlSJO+obKltqVqps2QEsqCJUrNTvSc1KzUoVJjV7tBP3+dCysgPYc+I+H1pWdgB7TtznQ8vKDmDPift8aFnZAew5cZ8PLfsqVbbU7NmduM+Hln2VKltq9uxO3OdDy75KlS01e3Yn7vOhZV+lypaaPbsT9/nQsq9SZUvNnt2J+xroAXdzorgnCuRuThT3RIHczYniniiQuzlR3BMFcjcnivhaKPSjnU/FGVFhRzufijOiwo52PhVnRIUd7XwqzogKO9r5VERERERERERERERERERERERERERERERERERERERERERERERERERExNfj4+M/MwWPQiMb+OYAAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-launcher-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

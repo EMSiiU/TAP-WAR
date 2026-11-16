@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAEjSURBVHhe7ZPRScVQEAVTiUXYhB9amhW8SqzGCiwhEFlYwnmPs4qS7EKYgfm5PHPnHnABAAAAAAAAAIAfeHl+3abNlBlcULeZMoML6jZTZnBBk2ZWHy5i0szqw0VMmll9uIjw6/a0W52r67rubh9vv6rfrMzEc3EXh/q46lxlgCsPsH2+7+q5+tcBVHf/o5l7PO6yUB/HAAxw7gCqawkz93jcZaE+jgEY4IQB5Jt67lrCzD0ed1moj9NYPVcZ4GoDaFQVq94NoL+vlL919z+aucfjLgs1sApXGeBqA+j/d3Wu3g0gj6vUb1Zm4rm4i0N9XHWuMsDVBpgys/pwEZNmVh8uYtLM6sNFdJspM7igbjNlBhfUbaYAAAAAAAAAAMD/WJZvGcFSsBH74WAAAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "bullet-heavy",
+                   "width":  64,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  64
+               }
+}

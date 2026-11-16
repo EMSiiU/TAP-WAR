@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAOcSURBVHhe7ZexjR1HEAUvJiYhQ2HQVgTyCeYhQJAnVwHQlq0omALlvDP+Z2HxpJnr3eVVAeX97u3uN8bdi4iIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiMg+fvrw87edpu026ButaSFH0OFWTNtt0Dda00KOoMOtmLbboG+0poUcQYdbMW23Qd9oTQs5gg63Ytpug77RmhbvEzqI9uaM94WW0t6c8b7QUtqbM94XWkp7c8b7Qktpb844Bw1xlr99+ruSaif8/Muf30m/WzGxzEFDnCWFTVLthD6AN5bCJql2Qh/AG0thk1Q7oQ/gjaWwSaqd0AfwP6UQv/zx9RRplt2uPJTEMgcNsVs6EoUzIc2yWx/Ak3QkCmdCmmW3PoAn6UgUzoQ0y259AE/SkSicCWmW3f6QD+DjX79/56//fKmkI1E4E9Isu6X7tSaWOWgI0gfQS/drTSxz0BCkD6CX7teaWOagIUgfQC/drzWxzEFDkD6AXrpfa2KZg4YgKdhWOtKVpJlbqd8P+V8ALd9KR7qSNHMr9fMBPElHupI0cyv18wE8SUe6kjRzK/XzATxJR7qSNHMr9XvXD4D+W6B+JNWSVEtHJ6mW9milfismljloCJKWJ9vASKolqZbCJqmW9milfismljloCJKWJ9vASKolqZbCJqmW9milfismljloCJKWJ9vASKolqZbCJqmW9milfismljloCJKWJ9vASKolqZbCJqmW9milfismljloiAnpmK3Uj/4ab6V+Z5lY5qAhJqRgW6kfBdtK/c4yscxBQ0xIwbZSPwq2lfqdZWKZg4aYkIJtpX4UbCv1O8vEMgcNMSEF20r9KNhW6neWieVcaLDdUrAk1bZS2K3UrzVnvC+01G4pbJJqWynYVurXmjPeF1pqtxQ2SbWtFGwr9WvNGe8LLbVbCpuk2lYKtpX6teaM94WW2i2FTVJtKwXbSv1ac8b3CR3kSlLYJNWSWVteoSNdSQqbpFoya8srdKQrSWGTVEtmbXmFjnQlKWySasmsLa/Qka4khU1SLZm15Qg63Ipp+wD9bsJ8Xo6gw62Ytg/Q7ybM5+UIOtyKafsA/W7CfF6OoMOtmLYP0O8mzOflCDrcimn7AP1uwnxerggFtmLayl2gEFdMW7kLFOKKaSt3gUJcMW3lLlCIK6atiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIyH/i5eVf7Xd3kzOL1S8AAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-rifle-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

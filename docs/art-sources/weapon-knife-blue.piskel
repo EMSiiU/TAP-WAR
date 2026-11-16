@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAMQSURBVHhe7dghzjZFEADh70xcAsGR8NwCheEgv0ZzADQaB6blIyaw9L6TVCUlZ7uTarVfERERERERERERERERERERERERERERERERb/L9dz/8/X87o+ITUbCnnVHxiSjY086o+EQU7GlnVHwiCva0Myo+EQXbcMbH2yjOhjM+3kZxNpzx8TaKs+GMj7dRnA1nfLyN4shvv/55pN6eOivFJgohFVvq7amzUmyiEFKxpd6eOivFJgohFVvq7amzUmyiEFKxpd6eOivFJgohf/nptyP/y1HMSrGJQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQkjFlh3AZSiEVGzZAVyGQsif//rjX6vvyVkpNlEIqbCn6ntyVopNFEIq7Kn6npyVYhOFkAp7qr4nZ6XYRCGkwp6q78lZKTZRiFN//P3bkXorZ6XYRCFOVWypt3JWik0U4lTFlnorZ6XYRCFOVWypt3JWik0U4lTFlnorZ6XYRCFOVWypt3JWik0U4lTFlnorZ6XYRCFOVWypt3JWik0U4lTFlnorZ6XYRCFOVWypt3JWik0UQuoX76n6npyVYhOFkAp7qr4nZ6XYRCGkwp6q78lZKTZRCKmwp+p7claKTRRCKuyp+p6clWIThXjLWSk2UYi3nJViE4V4y1kpNlGIt5yVYhOFeMtZKd5GcZ52RsUnomBPO6PiE1Gwp51R8Yko2NPOqPhEFOxpZ1RERERERERERERERERERERERERERERERMQLfH39A4uL9u6Bq1yBAAAAAElFTkSuQmCC\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-knife-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}
