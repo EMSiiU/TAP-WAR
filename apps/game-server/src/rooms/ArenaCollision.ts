@@ -65,3 +65,46 @@ export function intersectsPlayerHitbox(
     const dy = bulletY - playerY
     return dx * dx + dy * dy <= hitRadius * hitRadius
 }
+
+export function segmentIntersectsPlayerHitbox(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    playerX: number,
+    playerY: number,
+    hitRadius: number,
+): boolean {
+    const segDx = x2 - x1
+    const segDy = y2 - y1
+    const lenSq = segDx * segDx + segDy * segDy
+    if (lenSq === 0) {
+        return intersectsPlayerHitbox(x2, y2, playerX, playerY, hitRadius)
+    }
+
+    const t = Math.max(0, Math.min(1, ((playerX - x1) * segDx + (playerY - y1) * segDy) / lenSq))
+    const closestX = x1 + t * segDx
+    const closestY = y1 + t * segDy
+    const dx = closestX - playerX
+    const dy = closestY - playerY
+    return dx * dx + dy * dy <= hitRadius * hitRadius
+}
+
+export function segmentBlockedByObstacle(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+): boolean {
+    const dist = Math.hypot(x2 - x1, y2 - y1)
+    const steps = Math.max(1, Math.ceil(dist / 4))
+    for (let i = 1; i < steps; i++) {
+        const t = i / steps
+        const px = x1 + (x2 - x1) * t
+        const py = y1 + (y2 - y1) * t
+        if (isBulletHittingObstacle(px, py, 2)) {
+            return true
+        }
+    }
+    return false
+}

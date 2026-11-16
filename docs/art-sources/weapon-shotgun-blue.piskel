@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAMTSURBVHhe7ZaxrVNBFAV/TTRBQBnEVECO6AMJkZFSwI9/TBW0AMkhMSProF3su2ZGmszv7b3zNvCTiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiMhf8/rVm587zWu3QWe05hVyDQq3Yl67DTqjNa+Qa1C4FfPabdAZrXmFXIPCrZjXboPOaM0r5BoUbsW8dht0RmteIb+hSNqbjOdCS2lvMp4LLaW9yXgutJT2JuO50FLam4znQkuRH999raRnb+G9ZknGc6GlSApM0rO38F6zJOO50FIkBSbp2Vt4r1mS8VxoKZICk/TsLbzXLMl4LrQUSYFJevYW3muWZDwXWoqkwJ8+vBxnuwc1IJPxXGgpsg033XYPakAm47nQUmQbbrrtHtSATMZzoaXINtx02z2oAZmM50JLkW246bZ7UAMyGc+AFliRwj1/+THadmbal0zaM6AFVmxjTrKdmfYlk/YMaIEV25iTbGemfcmkPQNaYMU25iTbmWlfMmnPgBZYsY05yXZm2pdM2nnQsCu2/55b339//ufSue0e1IBM7nnQsCu24Vrpg+2Wzm33oAZkcs+Dhl2xDddKH2y3dG67BzUgk3seNOyKbbhW+mC7pXPbPagBmdzzoGFXbMO10gfbLZ3b7kENyOSeBw1Lvv32+Q8pZivFJOnZdpb2d3SuF+DCNmYrxSTp2XaW9nd0rhfgwjZmK8Uk6dl2lvZ3dK4X4MI2ZivFJOnZdpb2d3SuF+DCNmYrxSTp2XaW9nd0rhfgQgq3IgVuz20/bPs7One3yT0PGpakcCt6AYZAw5IUbkUvwBBoWJLCregFGAINS1K4Fb0AQ6BhyTYmSe/730zuedCwpBdgzeSeBw1LegHWTO550LCkF2DN5J4HDUt6AdZM7nnQsMom2WNBiyqbZI8FLapskj0WtKiySfZY0KLKJtnjQ8vvNkfJROiD7TZHyUTog+02R8lE6IPtNkfJROiD7TZHiYiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIgcxtPTL8FyAtAD/FeCAAAAAElFTkSuQmCC\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-shotgun-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

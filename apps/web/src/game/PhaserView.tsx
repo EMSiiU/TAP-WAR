@@ -3,6 +3,7 @@ import Phaser from 'phaser'
 import ArenaScene, {
   type ArenaControls,
   type BulletState,
+  type CrosshairStyle,
   type MatchPhase,
   type PickupState,
   type PlayerState,
@@ -14,10 +15,22 @@ type PhaserViewProps = {
   bullets: BulletState[]
   pickups: PickupState[]
   phase: MatchPhase
+  isPaused: boolean
+  crosshairStyle: CrosshairStyle
+  resumeSignal: number
   controls: ArenaControls
 }
 
-export default function PhaserView({ players, bullets, pickups, phase, controls }: PhaserViewProps) {
+export default function PhaserView({
+  players,
+  bullets,
+  pickups,
+  phase,
+  isPaused,
+  crosshairStyle,
+  resumeSignal,
+  controls,
+}: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
 
@@ -38,7 +51,7 @@ export default function PhaserView({ players, bullets, pickups, phase, controls 
         parent,
         width: arena.width,
         height: arena.height,
-        backgroundColor: '#101827',
+        backgroundColor: '#2b2038',
         pixelArt: true,
         scale: {
           mode: Phaser.Scale.FIT,
@@ -73,6 +86,20 @@ export default function PhaserView({ players, bullets, pickups, phase, controls 
   useEffect(() => {
     sceneRef.current?.setPhase(phase)
   }, [phase])
+
+  useEffect(() => {
+    sceneRef.current?.setPaused(isPaused)
+  }, [isPaused])
+
+  useEffect(() => {
+    sceneRef.current?.setCrosshairStyle(crosshairStyle)
+  }, [crosshairStyle])
+
+  useEffect(() => {
+    if (resumeSignal > 0) {
+      sceneRef.current?.resume()
+    }
+  }, [resumeSignal])
 
   return <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
 }

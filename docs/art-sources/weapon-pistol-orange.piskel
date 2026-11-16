@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAHASURBVHhe7dKxkdRAEEDRi4kkMCAuEsEhBALAJhRSOJz27hui1OyuVO9VfW93NNU9bwAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/4vOnL++bzbFcRS3xTHMsV1FLPNMcy1XUEs80x3IVtcQzzbFcRS3x1Zurs6EG/OrN1dlQA3715upsqAG/enN1NtSAX725OhtqwNX3b78/VL97RHN1NtSAKw/gpmrAlQdwUzXgygO4qRpw5QHcVA34aL9+/DlUPZ6qvlHN1dlQAz5aLbuqZVf1jWquzoYa8NFq2VUtu6pvVHN1NtSAj1bLrmrZVX2jmquzoQZ8tFp2Vcuu6hvVXJ0NNeDq/efXD9WyqzrvTHN1NtSAKw/gpmrAlQdwUzXgygO4qRpw5QHcVA24qgdQ1X+3m6uzoQZc1bKr+u92c3U21ICrWnZV/91urs6GGnBVy67qv9vN1dlQA65q2VX9d7u5OhtqwI9oPs+z1XIe0XyeZ6vlPKL5PM9Wy3lE83merZbziObzvKJa2JnmWK6ilnimOZarqCWeaY7lKmqJZ5pjuYpa4pnmWAAAAAAAAAAAAAAAAAAAAAAAAAAAAID/7O3tL0tPfS17QOWqAAAAAElFTkSuQmCC\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-pistol-orange",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

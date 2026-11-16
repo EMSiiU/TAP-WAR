@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAPISURBVHhe7daxzSxFEEXhPyaSwCAMbCLARySBhYTwcAng2dgEgI2NBxIqi/cZtaqanR50j3S87a7qe8fYjxBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQtjjyy+++vtka81wFQr9JGvNcBUK/SRrzXAVCv0ka81wFQr9JGvNsIECfqL1nPAqCvOJ1nPCqyjMJ1rPCa+iMJ9oPSe8isJ8ovWc8CoKU4ofv/tt1U8///mZ2kXWc8KrKEwpVOLEfAA3oDClUIkT8wHcgMKUQiVOzAdwAwpTCpU4MR/AIgppolCJEycfwF1W3OehZScKlTgxH8AiWnaiUIkT8wEsomUnCpU4MR/AIlp2olCJE/MB/AcNPMnvv/llVc043arqGjTwJFXiRM043arqGjTwJFXiRM043arqGjTwJFXiRM043arqGjTwJFXiRM043apqji7fVv+8pcr59vdPl6tdtu2+TfnJqm+OLt9WgchuSNtql227b1N+suqbo8u3VSCyG9K22mXb7tuUn6z65ujybRWI7Ia0rXbZtvs25Servjm6fFsFIrshbatdtu2+TfnJqm+OLpdatqsCkT/89UdLzdhW+038+tefPlNzlb2s+ubocqlluyoQqbKlZmyr/SbmA2iosqVmbKv9JuYDaKiypWZsq/0m5gNoqLKlZmyr/Sb+Lz+A7qO6v1PZUmffoXK5y6pvji6XCqRbbPd3Klvq7DtULndZ9c3R5VKBdIvt/k5lS519h8rlLqu+ObpcKpBusd3fqWyps+9Qudxl1TdHl0sF0i22+zuVLXX2HSqXu6z65uhyqUC6dj+Artqv+897W83Vzl31Nln1zdHlUst2VXD6XVftpyI0d1vN1c5d9TZZ9c3R5VLLdlVw+l1X7aciNHdbzdXOXfU2WfXN0eVSy3ZVcPpdV+2nIjR3W83Vzl31Nln1zdHlUst2VXD6XVftpyI0d1vN1c5d9TZZ9c3R5VLLSp2VOisVsNQMqRnbau62Vd8cXS71UKmzUmelypaaITVjW83dtuqbo8ulHip1VuqsVNlSM6RmbKu521Z9c3S51EOlzkqdlSpbaobUjG01d9uqb44ul3qo1Fmps1JlS82QmrGt5m5b9c3R5fF8q745ujyeb9U3R5fH86365ujyeL5V3xxdHs+36rsGDYwzK9pnoAfEmRXtM9AD4syK9hnoAXFmRfsM9IA4s6INIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEEEIIIYQQQgghhBBCCCGEf/n4+Ad7PFLJSnCODAAAAABJRU5ErkJggg==\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-sniper-blue",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

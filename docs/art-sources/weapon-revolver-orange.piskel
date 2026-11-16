@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAH7SURBVHhe7dLBjRNBEEDRjYkkOEBcJMKFEAiAM6GQAgip+rT/MPa0bO/oPenfPD3uqnkDAAAAAAAAAAAAAAAAAAAAAAAAAAAA+O/zpy9/dzbH3qXOO9ocwa1qmGeaY+9S5x1tjuBWNcwzzbF3qfOONkdwqxrmmebYu9R5R5sjuFUN80xz7F3qvKPNEdyqhnnl5tosNaQrN9dmqSFdubk2Sw3pys21WWpIV26uzVJDqr5/+/2u+t3udr93rs1SQ6p2L+Jou98712apIVW7F3G03e+da7PUkKrdizja7vfOtVlqSNXuRRxt93vn2iw1pKP9+vHnULXE3dX/q+baLDWko9Wyq1rY7ur/VXNtlhrS0WrZVS1sd/X/qrk2Sw3paLXsqha2u/p/1VybpYZ0tFp2VQvbXf2/aq7NUkOq/v78+q5adlXnPau5NksNqfIBXFQNqfIBXFQNqfIBXFQNqfIBXFQNqaoPoKpnX6m5NksNqaplV/XsKzXXZqkhVbXsqp59pebaLDWkqpZd1bOv1FybpYZU1bKrevaVmmuz1JAe0byeZ6vlPKJ5Pc9Wy3lE83qerZbziOb1PFst5xHN63lFtbAzzbF8FLXEM82xfBS1xDPNsXwUtcQzzbF8FLXEM82xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/i7e0f4lEOG5niTsEAAAAASUVORK5CYII=\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-revolver-orange",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

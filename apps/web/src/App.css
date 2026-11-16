@@ -189,17 +189,20 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: #2b2038;
 }
 
 .arena-header {
-  height: 52px;
+  height: 54px;
   flex-shrink: 0;
-  padding: 0 16px;
+  padding: 0 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border-bottom: 1px solid var(--border);
+  background: #3d2e4f;
+  border-bottom: 3px solid #241932;
+  color: #f5e2cb;
 }
 
 .arena-scoreboard {
@@ -207,17 +210,86 @@
   align-items: center;
   gap: 14px;
   font-size: 0.9rem;
+  font-weight: 600;
   flex-wrap: wrap;
   justify-content: center;
 }
 
 .arena-clock {
   font-family: var(--mono);
-  font-weight: 700;
-  color: var(--text-h);
-  padding: 2px 8px;
+  font-weight: 800;
+  color: #ffffff;
+  padding: 3px 10px;
   border-radius: 6px;
-  background: var(--code-bg);
+  background: #c85a3f;
+  border: 2px solid #241932;
+}
+
+.arena-ammo-badge {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 15;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #f5e2cb;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(36, 25, 50, 0.86);
+  border: 3px solid #3d2e4f;
+  outline: 2px solid rgba(245, 226, 203, 0.55);
+  box-shadow: 0 6px 16px rgba(10, 6, 16, 0.5);
+}
+
+.arena-ammo-icons {
+  display: inline-flex;
+  align-items: center;
+}
+
+.arena-ammo-icon {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+.arena-ammo-icon + .arena-ammo-icon {
+  margin-left: -10px;
+}
+
+.arena-melee-icon {
+  width: 32px;
+  height: 32px;
+  image-rendering: pixelated;
+}
+
+@keyframes ammo-low-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.arena-ammo-badge.is-low {
+  border-color: #ef4444;
+  color: #fecaca;
+  animation: ammo-low-pulse 0.8s ease-in-out infinite;
+}
+
+.arena-ammo-badge.is-low .arena-ammo-icon {
+  filter: drop-shadow(0 0 2px #ef4444);
+}
+
+.arena-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .arena-stage {
@@ -225,7 +297,28 @@
   flex: 1;
   min-height: 0;
   width: 100%;
-  background-color: #101827;
+  padding: 10px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle at center, rgba(229, 183, 140, 0.14) 0%, rgba(43, 32, 56, 0.92) 72%, #1d1427 100%);
+}
+
+.arena-canvas-wrap {
+  position: relative;
+  width: min(100%, calc((100dvh - 74px) * 1024 / 768));
+  aspect-ratio: 1024 / 768;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arena-stage canvas {
+  border: 4px solid #3d2e4f;
+  box-shadow: 0 0 0 2px rgba(245, 226, 203, 0.35), 0 18px 40px rgba(10, 6, 16, 0.65);
+  border-radius: 6px;
 }
 
 .arena-waiting-banner {
@@ -251,8 +344,100 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: rgba(10, 14, 24, 0.78);
-  backdrop-filter: blur(4px);
+  background: rgba(20, 14, 28, 0.68);
+  backdrop-filter: blur(6px);
+}
+
+.arena-pause-modal {
+  width: min(92vw, 400px);
+  padding: 26px 24px;
+  border-radius: 10px;
+  background: #b64935;
+  color: #ffffff;
+  border: 4px solid #3d2e4f;
+  outline: 3px solid #ffffff;
+  box-shadow: 0 14px 36px rgba(10, 6, 16, 0.6);
+  text-align: center;
+}
+
+.arena-pause-title {
+  margin: 0 0 8px;
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: #ffffff;
+  text-shadow: 3px 3px 0 #3d2e4f;
+}
+
+.arena-pause-hint {
+  margin: 0 0 20px;
+  font-size: 0.9rem;
+  color: #f5e2cb;
+  font-weight: 600;
+}
+
+.arena-pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kenney-btn-primary {
+  padding: 10px 18px;
+  border-radius: 6px;
+  border: 3px solid #3d2e4f;
+  outline: 2px solid #ffffff;
+  background: #e26a4a;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.kenney-btn-secondary {
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 3px solid #3d2e4f;
+  outline: 2px solid #ffffff;
+  background: #8e9cc6;
+  color: #241932;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.crosshair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.crosshair-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 3px solid #3d2e4f;
+  background: #8e9cc6;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.crosshair-option.is-selected {
+  background: #c85a3f;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px #fef08a;
+}
+
+.crosshair-option img {
+  width: 30px;
+  height: 30px;
+  image-rendering: pixelated;
 }
 
 .arena-results-modal {
@@ -334,8 +519,8 @@
 }
 
 .lobby-card {
-  width: min(94vw, 540px);
-  padding: 28px 24px;
+  width: min(94vw, 660px);
+  padding: 24px 22px;
   background: #f5e2cb;
   border: 4px solid #3d2e4f;
   box-shadow: 0 8px 0 #3d2e4f, 0 18px 36px rgba(30, 20, 40, 0.25);
@@ -416,6 +601,56 @@
   width: 56px;
   height: 56px;
   image-rendering: pixelated;
+}
+
+.weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 560px) {
+  .weapon-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.weapon-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 3px solid #3d2e4f;
+  background: #8e9cc6;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: transform 0.1s ease, background-color 0.15s ease;
+}
+
+.weapon-option:hover {
+  transform: translateY(-2px);
+}
+
+.weapon-option.is-selected {
+  background: #c85a3f;
+  box-shadow: 0 0 0 3px #fef08a;
+}
+
+.weapon-option img {
+  width: 44px;
+  height: 44px;
+  image-rendering: pixelated;
+}
+
+.weapon-stats {
+  font-size: 0.68rem;
+  font-weight: 600;
+  opacity: 0.92;
 }
 
 .lobby-field {
