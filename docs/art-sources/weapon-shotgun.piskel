@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAJySURBVHhe7de9rRRBEEXhjYQgSAID4iIIXBxCIABsIkGk8J5zPY5xRbdGNT3nk443P9W14+xLkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiRJkiTw6ePnt53lsZejWdryiGeihayUx16OZmnLI56JFrJSHns5mqUtj3gmWshKeezlaJa2POKZaCEr5bGXo1na8ojz0eGNy8rOQgc1Lis7Cx3UuKzsLHRQ47Kys9BBjcvK7osO1fb96+8qundSu2fOau+BDtBGi6Po3kntnjmrvQc6QBstjqJ7J7V75qz2HugAbbQ4iu6d1O6Zs9p7oAO00eIoundSu2fOauehYVeixf368ffYaAdU1j0PDbuSHwCXdc9Dw67kB8Bl3fPQsCv5AXBZ9zw07Ep+AFzWPQ8NS/359uGf3n5++e9omRTd287SXkfvbaNdUVn3PDQs1S6zjZZJ0b3tLO119N422hWVdc9Dw1LtMttomRTd287SXkfvbaNdUVn3PDQs1S6zjZZJ0b3tLO119N422hWVdc9Dw1LtMttomRTd287SXkfvbaNdUVn3PDQsRYtbif4ttO9tf9j2Onrv7rLueWhYiha3kh/AEDQsRYtbyQ9gCBqWosWt5AcwBA1L0eJW8gMYgoal2mVS9LynlXXPQ8NSfgBrZd3z0LCUH8BaWfc8NCzlB7BW1j0PDUv5AayVdc9DwxqXlZ2FDmpcVnYWOqhxWdlZ6KDGZWVnoYMal5Wdjw6/u7xKE9EPtru8ShPRD7a7vEoT0Q+2u7xKE9EPtru8SpIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIkSZIk6WZer3fTy/IHCv8xKgAAAABJRU5ErkJggg==\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-shotgun",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

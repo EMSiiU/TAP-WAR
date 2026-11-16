@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAM+SURBVHhe7ZaxrRRBEAV/JARBEhiQCmkgDCLAxcHDJQBsQiACRAqH887hl9Asb1Y3s1RJ5e3MdPdrY59ERERERERERERERERERERERERERERERERERERERERERERE5vHq5evbyqZMOQsa+kqmTDkLGvpKpkw5Cxr6SqZMOQsa+kqmTJkBDXhH044chYa5o2lHjkLD3NG0I0ehYe5o2pGj0DB3NO3IUWiYJPHp3fepfvv865lUC5l25Cg0TJKgEBtdgAdAwyQJCrHRBXgANEySoBAbXYAHQMMkCQqx0QWYCA2pkaAQG5sFeJQZ93pQsY0EhdjoAkyEim0kKMRGF2AiVGwjQSE2ugAToWIbCQqx0QX4A3pwJd+//TJVemN1E9U50IMrSSE20hurm6jOgR5cSQqxkd5Y3UR1DvTgSlKIjfTG6iaqc6AHV5JCbKQ3VjdR9dDls6U/b5L+xum7HaXFo+9ofmTi66HLZ0uNki6AC+ACwPzIxNdDl8+WGiVdABfABYD5kYmvhy4nb1/f/LPUKHn78WFMeKORapmtCzAghk3CG41Uy2xdgAExbBLeaKRaZusCDIhhk/BGI9UyWxdgQAybhDcaqZbZ/tcL8PPji2fSdxg2SWcHpVqo39VNfD10OUnDHJWGTt9h2CSdHZRqoX5XN/H10OUkDXNUGjp9h2GTdHZQqoX6Xd3E10OXkzTMUWno9B2GTdLZQakW6nd1E18PXU7SMEelodN3GDZJZwelWqjf1U18PXQ5ScMclYZO341K9TV/1Dua+HrocpKCGNUFmG/i66HLSQpiVBdgvomvhy4nKYhRXYD5Jr4eupykIEZ1Aeab+HrocpKCIOksSWdJCpakNxoznutDzZMUDklnSTpLUtgkvdGY8Vwfap6kcEg6S9JZksIm6Y3GjOf6UPMkhUPSWZLOkhQ2SW80ZjzXh5onKRySzpJ0lqSwSXqjMeO5PtT8lU3bcoeGdGXTttyhIV3ZtC13aEhXNm3LHRrSlU3b8jdocDuaduQoNMwdTTtyFBrmjqYdOQoNc0fTjhyFhrmjaUdERERERERERERERERERERERERERERERERERERERERERERkOZ6efgNN6dkNoUleCQAAAABJRU5ErkJggg==\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "weapon-sniper",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

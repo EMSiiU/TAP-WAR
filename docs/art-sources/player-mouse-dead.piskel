@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAASjSURBVHhe7ZvBkS01EATXJpzg8O3BAMyA7wJeQHDDEM4YAJc6dFSU1CNWs6t5mxmRpyeNuqvO7w0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYMS/N6Nn4FTU023oGTgV9XQbegZORT3dhp6Bu1DOj0Fjwy6U62PQ2LAL5foYNDbsQrk+Bo0N/xfleBs//vDtXa6iteAqyu02UqkrrqK14CrK7TZSqSuuorXgKsrtNlKpK66itWCEcrpMKuUz3Y1i+Tpo78ukEj7T3SiWr4P2vkwq4TPdjWL5Omjvy6QSPtPdKJbXRXteJoW+03/++m1qulO9G8X2Omivy6TQd5pKr6Y71btRbK+D9rpMCn2nqfRqulO9G8X2Omivy6TQd5pKr6Y71btRbK+D9hqSQp7580/fl/T7qfSqn9/tKorxuWiPISmkmankmX4/lV7187tdRTE+F+0xJIU0M5U80++n0qt+frerKMbnoj2GpJBmppJn+v1UetXP73YVxfhctMeQFFI1lTozfWPmL7/+MTXd2ekqivU5aO4hKZRqKnlm+sbMVHo13dnpKor1OWjuISmUaip5ZvrGzFR6Nd3Z6SqK9Tlo7iEplGoqeWb6xsxUejXd2ekqivU5aO4hKZRqKrnq51OJ79HfS2dm+nydqyjmc9GcQ1IIVS/A9fOphPfo76UzM32+zlUU87loziEphKoX4Pr5VMJ79PfSmZk+X+cqivlcNOeQFELVC3D9fCrhPfp76cxMn69zFcV8LppzSAqh6gW4fj6VUF097+/577//+fdUv+/vd3Yo5nPRnEPS0lUP0PXzXpC7et7f899T6VW/7+93dijmc9GcQ9LSVQ/Q9fNekLt63t/z31PpVb/v73d2KOZz0ZxD0tJVD9D1816Qu3re3/PfU+lVv+/vd3Yo5nPRnEPS0jO7QL0gd/W8v+e/p9Krft/1edwOxXwumnNIWnpmF6AX5K6e9/f891R61e+7Po/boZjPRXMOSUvP7AL0gtzV8/6e/55Kr/p91+dxOxTzuWjOIWnpmV2AXpC7et7f899T6VW/7/o8bodiPhfNeZkUwope0N2m0qup9GraodqhmM9Fc14mhbBiKulOU+nVVHo17VDtUMznojkvk0JYMZV0p6n0aiq9mnaodijmc9Gcl0khrJhKutNUejWVXk07VDsU87loziFp6ZmphBV3f29Vf7+zQzGfi+YckpaemUJdcff3VvX3OzsU87loziFp6Zkp1BV3f29Vf7+zQzGfi+YckpaemUJdcff3VvX3OzsU87loziFp6aoHmP7MUfXzbvf9j9bncTsU87loziFp6aoHlkqv+nm3+/5H6/O4HYr5XDTnkLR01QNLpVf9vNt9/6P1edwOxXwumnNIWrrqgaXSq37e7b7/0fo8bodiPhfNOSQtXfXAUulVP3+6aedqh2I+F805JC1d9cBS6VU/f7pp52qHYj4XzTkkLV31wFLpVT9/umnnaodiPhfNOSQtXfXAUulVP3+6aedqh2IGAAAAAAAAAAAAAAAAAAAAGPD29h+ay0KC7pNaAQAAAABJRU5ErkJggg==\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "player-mouse-dead",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

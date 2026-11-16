@@ -2,9 +2,14 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
 import PhaserView from './game/PhaserView'
-import type { ArenaControls, BulletState, PlayerState } from './game/ArenaScene'
-
-type MatchPhase = 'waiting' | 'playing' | 'finished'
+import type {
+  ArenaControls,
+  BulletState,
+  MatchPhase,
+  PickupState,
+  PlayerSkin,
+  PlayerState,
+} from './game/ArenaScene'
 
 type ArenaState = {
   phase: MatchPhase
@@ -14,7 +19,15 @@ type ArenaState = {
   winnerName: string
   players: Map<string, PlayerState>
   bullets: Map<string, BulletState>
+  pickups: Map<string, PickupState>
 }
+
+const SKIN_OPTIONS: { id: PlayerSkin; label: string }[] = [
+  { id: 'fox', label: 'Zorro' },
+  { id: 'squirrel', label: 'Ardilla' },
+  { id: 'mouse', label: 'Ratón' },
+  { id: 'rabbit', label: 'Conejo' },
+]
 
 type MatchMeta = {
   phase: MatchPhase
@@ -35,15 +48,18 @@ const client = new Client('http://127.0.0.1:2567')
 
 function ArenaSession({
     playerName,
+    playerSkin,
     onExit,
     onEnd
   }: {
     playerName: string
+    playerSkin: PlayerSkin
     onExit: () => void
     onEnd: (message: string) => void
   }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [bullets, setBullets] = useState<BulletState[]>([])
+  const [pickups, setPickups] = useState<PickupState[]>([])
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
     phase: 'waiting',
     timeRemaining: 180,
@@ -63,6 +79,7 @@ function ArenaSession({
       try {
         const joined = await client.joinById<ArenaState>('arena-local', {
           name: playerName,
+          skin: playerSkin,
         })
         joined.reconnection.enabled = false
 
@@ -84,6 +101,9 @@ function ArenaSession({
           if (state.bullets) {
             setBullets(Array.from(state.bullets.values()))
           }
+          if (state.pickups) {
+            setPickups(Array.from(state.pickups.values()))
+          }
           setMatchMeta({
             phase: state.phase ?? 'waiting',
             timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 180,
@@ -102,6 +122,9 @@ function ArenaSession({
           playerId: joined.sessionId,
           send: (input) => {
             if (joined.connection.isOpen) joined.send('input', input)
+          },
+          sendEmote: (emote) => {
+            if (joined.connection.isOpen) joined.send('emote', emote)
           },
         })
         setStatus('Conectado')
@@ -135,7 +158,7 @@ function ArenaSession({
       rematchRef.current = null
       disconnect?.()
     }
-  }, [playerName, onEnd])
+  }, [playerName, playerSkin, onEnd])
 
   const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
   const scoreLine = players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
@@ -173,6 +196,7 @@ function ArenaSession({
           <PhaserView
             players={players}
             bullets={bullets}
+            pickups={pickups}
             phase={matchMeta.phase}
             controls={controls}
           />
@@ -231,6 +255,7 @@ function ArenaSession({
 
 export default function App() {
   const [name, setName] = useState('')
+  const [skin, setSkin] = useState<PlayerSkin>('fox')
   const [playerName, setPlayerName] = useState<string | null>(null)
 
   const [entryMessage, setEntryMessage] = useState('')
@@ -244,6 +269,7 @@ export default function App() {
     return (
       <ArenaSession
         playerName={playerName}
+        playerSkin={skin}
         onExit={() => returnToForm('')}
         onEnd={returnToForm}
       />
@@ -251,30 +277,61 @@ export default function App() {
   }
 
   return (
-    <main style={{ width: 'min(94vw, 520px)', margin: '3rem auto' }}>
-      <h1>TAP-WAR</h1>
+    <main className="lobby-page">
+      <div className="lobby-card">
+        <h1 className="lobby-title">TAP-WAR</h1>
+        <p className="lobby-subtitle">Duelo multijugador en la arena del desierto</p>
 
-      <form onSubmit={(event) => {
-        event.preventDefault()
-        const trimmedName = name.trim()
-        if (trimmedName) {
-          setEntryMessage('')
-          setPlayerName(trimmedName)
-        }
-      }}>
-        {entryMessage && <p role='alert'>{entryMessage}</p>}
-        <label htmlFor="player-name">Nombre temporal</label>
-        <input
-          id="player-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          maxLength={24}
-          required
-        />
-        <button type="submit" disabled={!name.trim()}>
-          Entrar a la arena
-        </button>
-      </form>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            const trimmedName = name.trim()
+            if (trimmedName) {
+              setEntryMessage('')
+              setPlayerName(trimmedName)
+            }
+          }}
+        >
+          {entryMessage && (
+            <p className="lobby-alert" role="alert">
+              {entryMessage}
+            </p>
+          )}
+
+          <span className="skin-grid-label">Elige tu personaje</span>
+          <div className="skin-grid" role="radiogroup" aria-label="Selector de personaje">
+            {SKIN_OPTIONS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={skin === option.id}
+                className={`skin-option${skin === option.id ? ' is-selected' : ''}`}
+                onClick={() => setSkin(option.id)}
+              >
+                <img src={`/assets/characters/player-${option.id}-idle.png`} alt={option.label} />
+                <span>{option.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="lobby-field">
+            <label htmlFor="player-name">Nombre de jugador</label>
+            <input
+              id="player-name"
+              placeholder="Ej. Johnny"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              maxLength={24}
+              required
+            />
+          </div>
+
+          <button type="submit" className="lobby-submit" disabled={!name.trim()}>
+            Entrar a la arena
+          </button>
+        </form>
+      </div>
     </main>
   )
 }

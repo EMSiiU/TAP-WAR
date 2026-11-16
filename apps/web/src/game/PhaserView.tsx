@@ -4,6 +4,7 @@ import ArenaScene, {
   type ArenaControls,
   type BulletState,
   type MatchPhase,
+  type PickupState,
   type PlayerState,
 } from './ArenaScene'
 import arena from '../../../../packages/shared/arena.json'
@@ -11,11 +12,12 @@ import arena from '../../../../packages/shared/arena.json'
 type PhaserViewProps = {
   players: PlayerState[]
   bullets: BulletState[]
+  pickups: PickupState[]
   phase: MatchPhase
   controls: ArenaControls
 }
 
-export default function PhaserView({ players, bullets, phase, controls }: PhaserViewProps) {
+export default function PhaserView({ players, bullets, pickups, phase, controls }: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
 
@@ -63,6 +65,10 @@ export default function PhaserView({ players, bullets, phase, controls }: Phaser
   useEffect(() => {
     sceneRef.current?.setBullets(bullets)
   }, [bullets])
+
+  useEffect(() => {
+    sceneRef.current?.setPickups(pickups)
+  }, [pickups])
 
   useEffect(() => {
     sceneRef.current?.setPhase(phase)

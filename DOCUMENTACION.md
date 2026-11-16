@@ -201,18 +201,21 @@ En Phaser, `setOrigin(0)` alinea cada rectángulo con la misma esquina que usa e
 - **Paquete base**: Kenney – *Desert Shooter Pack* (v1.0, 2024; distribuido por Kenney, `www.kenney.nl`, patrocinado por GameMaker).
 - **Licencia**: Creative Commons CC0 1.0 Universal (`http://creativecommons.org/publicdomain/zero/1.0/`). Copia íntegra conservada en [docs/art-sources/License.txt](docs/art-sources/License.txt).
 - **Recursos integrados en `apps/web/public/assets/`**:
-  - [characters/player-idle.png](apps/web/public/assets/characters/player-idle.png): 128 × 128 px RGBA transparente (basado en `Players/Tiles/tile_0000.png` 24 × 24 px completo escalado al 400 % a 96 × 96 px Nearest Neighbor y centrado sin recorte), renderizado en escena con `setDisplaySize(80, 80)` y origen `(0.5, 0.85)`.
-  - [characters/player-dead.png](apps/web/public/assets/characters/player-dead.png): 128 × 128 px RGBA transparente (basado en `Players/Tiles/tile_0003.png` 24 × 24 px escalado al 400 % a 96 × 96 px Nearest Neighbor), mostrado cuando `player.isDead === true`.
-  - [characters/player-walk.png](apps/web/public/assets/characters/player-walk.png): spritesheet de animación de caminar (ver especificaciones abajo).
-  - [characters/weapon.png](apps/web/public/assets/characters/weapon.png): 128 × 128 px RGBA transparente (basado en `Weapons/Tiles/tile_0003.png` 24 × 24 px, escalado Nearest Neighbor), renderizado en escena con `setDisplaySize(68, 68)` (~85% del cuerpo), pivote en la culata `(0.2, 0.5)`, desplazamiento radial de 15 px en dirección de `aimAngle`, anclaje vertical a la cintura (`Y = -10`) y capas de profundidad dinámicas (`setDepth(player.y)` y `player.y + 1`).
+  - **4 Skins jugables** (`fox`, `squirrel`, `mouse`, `rabbit`): cada skin cuenta con `player-<skin>-idle.png` (`128 × 128 px`, Nearest Neighbor 400%), `player-<skin>-walk.png` (`256 × 128 px`, 2 cuadros a 8 FPS) y `player-<skin>-dead.png` (`128 × 128 px`), generados desde `PNG/Players/Tilemap/tilemap_packed.png` (filas 0 a 3).
+  - **3 Armas** ([packages/shared/weapons.json](packages/shared/weapons.json)):
+    - [characters/weapon-rifle.png](apps/web/public/assets/characters/weapon-rifle.png) (`Weapons/Tiles/tile_0005.png`, arma inicial: cadencia 300 ms, daño 25, 1 bala a 650 u/s).
+    - [characters/weapon-shotgun.png](apps/web/public/assets/characters/weapon-shotgun.png) (`Weapons/Tiles/tile_0007.png`, recogible: cadencia 650 ms, daño 18 por perdigón, 3 balas en abanico de ±12°).
+    - [characters/weapon-sniper.png](apps/web/public/assets/characters/weapon-sniper.png) (`Weapons/Tiles/tile_0003.png`, recogible: cadencia 900 ms, daño 50, 1 bala rápida a 950 u/s).
   - [characters/bullet.png](apps/web/public/assets/characters/bullet.png): 64 × 64 px RGBA transparente (basado en `Weapons/Tiles/tile_0023.png` 24 × 24 px, escalado 3× Nearest Neighbor y centrado), renderizado en escena a `24 × 24 px` con rotación `bullet.angle` para proyectiles sincronizados.
+  - [ui/emote-dots.png](apps/web/public/assets/ui/emote-dots.png) y [ui/emote-alert.png](apps/web/public/assets/ui/emote-alert.png): globos de expresión (`...` y `!`, `64 × 64 px` RGBA transparente desde `PNG/Interface/Tiles/tile_0059.png` y `tile_0060.png`), activados con las teclas `1` y `2`.
   - [maps/arena-desert.png](apps/web/public/assets/maps/arena-desert.png): 1024 × 768 px (cuadrícula de 32 × 24 celdas con tiles de 16 × 16 px escalados 200 % a 32 × 32 px), alineado 1:1 con los muros, obstáculos y cuatro puntos de aparición de [packages/shared/arena.json](packages/shared/arena.json).
 - **Recursos de audio integrados en `apps/web/public/assets/sounds/`**:
   - [sounds/shoot-a.ogg](apps/web/public/assets/sounds/shoot-a.ogg): efecto de disparo al crearse un proyectil.
   - [sounds/hurt-a.ogg](apps/web/public/assets/sounds/hurt-a.ogg): efecto de impacto cuando disminuye `hp`.
   - [sounds/explosion-a.ogg](apps/web/public/assets/sounds/explosion-a.ogg): efecto de eliminación cuando `isDead` pasa a `true`.
   - [sounds/select-a.ogg](apps/web/public/assets/sounds/select-a.ogg): efecto de inicio de partida / revancha al pasar a `phase === 'playing'`.
-- **Fuentes editables en `docs/art-sources/`**: [player-idle.piskel](docs/art-sources/player-idle.piskel), [player-walk.piskel](docs/art-sources/player-walk.piskel), [player-dead.piskel](docs/art-sources/player-dead.piskel), [weapon.piskel](docs/art-sources/weapon.piskel), [bullet.piskel](docs/art-sources/bullet.piskel), [arena-desert.tmj](docs/art-sources/arena-desert.tmj) y [tilemap_desert_packed.png](docs/art-sources/tilemap_desert_packed.png).
+  - [sounds/coin-a.ogg](apps/web/public/assets/sounds/coin-a.ogg): efecto de recogida de arma en el mapa.
+- **Fuentes editables en `docs/art-sources/`**: `player-<skin>-idle.piskel`, `player-<skin>-walk.piskel`, `player-<skin>-dead.piskel` para las 4 skins, [weapon-rifle.piskel](docs/art-sources/weapon-rifle.piskel), [weapon-shotgun.piskel](docs/art-sources/weapon-shotgun.piskel), [weapon-sniper.piskel](docs/art-sources/weapon-sniper.piskel), [bullet.piskel](docs/art-sources/bullet.piskel), [emote-dots.piskel](docs/art-sources/emote-dots.piskel), [emote-alert.piskel](docs/art-sources/emote-alert.piskel), [arena-desert.tmj](docs/art-sources/arena-desert.tmj) y [tilemap_desert_packed.png](docs/art-sources/tilemap_desert_packed.png).
 
 ### Especificación técnica de animación de caminar
 

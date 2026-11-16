@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAPeSURBVHhe7daxjRxXEIThi0lJ0GA8DIAeUxAZAQFlQUEeY5BNmwFIThnNQr3X+3Azy3cz/weUdbsz3dVr3AsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALif/zanMXEW9bwtjYmzqOdtaUycRT1vS2NiRD3dlmq4L/VwW6rhvtTDbamG+1IPt6Ua7kN7n+bdH+9/a15LNV2X9jxNOsoz81qq6bq052nSUZ6Z11JN16U9T5OO8sy8lmq6Du31sFTqlbJKNb5d2uNhqbQrZZVqfLu0x8NSaVfKKtX4dmmPh6XSrpRVqvHt0NwPSyUdmT8//31q0jtXsko170tzPiyVcmTS0Y5MeudKVqnmfWnOh6VSjkw62pFJ71zJKtW8L835sFTKkUlHOzLpnStZpZr3pTmHUgmz/Pv101LSkWr8+T+///VLus/737v497usUu370FxDaelZ0pFnSUeo8efzAziY5hpKS8+SjjxLOkKNP58fwME011BaepZ05FnSEWr8+fwADqa5htLSNR8/fPkl6cizpCPU+Pv8B+Bx/rxv//yYxvfx93fpqPZ9aK6htGSNF5aOPIsfyOPvS0evcf68dPQa38ff36Wj2vehuYbSkjVeWDryLH4gj78vHb3G+fPS0Wt8H39/l45q34fmGkpL1nhh6ciz+IE8/r509Brnz0tHr/F9/P1dOqp9H5prKC1Z44Wtxg/UxQ/uf3f+93T0mjRjTeqgpqPa96G5htKSNamklfiBuvADOJjmGkpL1qSSVuIH6sIP4GCaaygtWZNKWokfqAs/gINprqG0ZM1qQR4/0NlJR6/xfTxph5qOat+H5hpKS9asFuRJRzoz6eg1vo8n7VDTUe370FxDacma1YI86UhnJh29xvfxpB1qOqp9H5prKC1Zs1qQJx3pzKSj1/g+nrRDTUe170NzDaUlZ/F/0rqkI9X489Nnzoy/v0tHte9Dcw2lJWdJR54llV7jz0+fOTP+/i4d1b4PzTWUlpwlHXmWVHqNPz995sz4+7t0VPs+NNdQWnKWdORZUuk1/vz0mTPj7+/SUe370FxDackaLywdeRb/vqd737Pj83g6qn0fmmsoLVnjBaUjz+Lf93Tve3Z8Hk9Hte9Dcw2lJWu8oHTkWfz7nu59z47P4+mo9n1orqG0ZI0XlI48i3/f073v2fF5PB3Vvg/NNZSWrEklXTmpg5qOat+H5hpKS9akkq6c1EFNR7XvQ3MNpSVrUklXTuqgpqPa96G5htKSNamkKyd1UNNR7QAAAAAAAAAAAAAAAAMvL/8DUc+HtCJWNhgAAAAASUVORK5CYII=\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "player-rabbit-dead",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}
