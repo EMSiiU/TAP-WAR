@@ -1,15 +1,22 @@
 import Phaser from 'phaser'
 
+export type MatchPhase = 'waiting' | 'playing' | 'finished'
+export type PlayerSkin = 'fox' | 'squirrel' | 'mouse' | 'rabbit'
+export type WeaponType = 'rifle' | 'shotgun' | 'sniper'
+
 export type PlayerState = {
     id: string
     x: number
     y: number
     aimAngle: number
     name: string
+    skin: PlayerSkin
+    weaponType: WeaponType
     hp: number
     kills: number
     deaths: number
     isDead: boolean
+    emote: string
 }
 
 export type BulletState = {
@@ -22,11 +29,17 @@ export type BulletState = {
     angle: number
 }
 
-export type MatchPhase = 'waiting' | 'playing' | 'finished'
+export type PickupState = {
+    id: string
+    weaponType: WeaponType
+    x: number
+    y: number
+}
 
 export type ArenaControls = {
     playerId: string
     send: (input: { moveX: number; moveY: number; aimAngle: number; shoot?: boolean }) => void
+    sendEmote?: (emote: 'dots' | 'alert') => void
 }
 
 const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
@@ -37,16 +50,24 @@ const WEAPON_DISPLAY_SIZE = 68 // ~85% del tamaño del personaje (68 / 80)
 const WEAPON_BASE_Y = -10 // Altura de cintura/manos proporcional al nuevo tamaño
 const WEAPON_RADIAL_OFFSET = 15 // Desplazamiento radial en dirección de aimAngle
 const BULLET_DISPLAY_SIZE = 24
+const PICKUP_DISPLAY_SIZE = 44
+const EMOTE_DISPLAY_SIZE = 32
+const EMOTE_OFFSET_Y = -104
 const HP_BAR_WIDTH = 48
 const HP_BAR_HEIGHT = 6
 const HP_BAR_Y = -62
+const SKINS: PlayerSkin[] = ['fox', 'squirrel', 'mouse', 'rabbit']
+const WEAPON_TYPES: WeaponType[] = ['rifle', 'shotgun', 'sniper']
 
 type PlayerView = {
     root: Phaser.GameObjects.Container
     body: Phaser.GameObjects.Sprite
     weapon: Phaser.GameObjects.Image
+    emoteSprite: Phaser.GameObjects.Image
     hpBarBg: Phaser.GameObjects.Rectangle
     hpBarFill: Phaser.GameObjects.Rectangle
+    skin: PlayerSkin
+    weaponType: WeaponType
     isDead: boolean
     lastHp: number
     targetX: number
@@ -56,12 +77,19 @@ type PlayerView = {
     lastMovedAt: number
 }
 
+type PickupView = {
+    root: Phaser.GameObjects.Container
+    sprite: Phaser.GameObjects.Image
+}
+
 export default class ArenaScene extends Phaser.Scene {
     private players: PlayerState[] = []
     private bullets: BulletState[] = []
+    private pickups: PickupState[] = []
     private currentPhase: MatchPhase = 'waiting'
     private playerViews = new Map<string, PlayerView>()
     private bulletViews = new Map<string, Phaser.GameObjects.Image>()
+    private pickupViews = new Map<string, PickupView>()
     private isReady = false
 
     private controls: ArenaControls
@@ -74,18 +102,25 @@ export default class ArenaScene extends Phaser.Scene {
 
     preload() {
         this.load.image('arena-desert', '/assets/maps/arena-desert.png')
-        this.load.image('player-idle', '/assets/characters/player-idle.png')
-        this.load.image('player-dead', '/assets/characters/player-dead.png')
-        this.load.spritesheet('player-walk', '/assets/characters/player-walk.png', {
-            frameWidth: 128,
-            frameHeight: 128,
-        })
-        this.load.image('weapon', '/assets/characters/weapon.png')
+        for (const skin of SKINS) {
+            this.load.image(`player-${skin}-idle`, `/assets/characters/player-${skin}-idle.png`)
+            this.load.image(`player-${skin}-dead`, `/assets/characters/player-${skin}-dead.png`)
+            this.load.spritesheet(`player-${skin}-walk`, `/assets/characters/player-${skin}-walk.png`, {
+                frameWidth: 128,
+                frameHeight: 128,
+            })
+        }
+        for (const weaponType of WEAPON_TYPES) {
+            this.load.image(`weapon-${weaponType}`, `/assets/characters/weapon-${weaponType}.png`)
+        }
         this.load.image('bullet', '/assets/characters/bullet.png')
+        this.load.image('emote-dots', '/assets/ui/emote-dots.png')
+        this.load.image('emote-alert', '/assets/ui/emote-alert.png')
         this.load.audio('shoot-a', '/assets/sounds/shoot-a.ogg')
         this.load.audio('hurt-a', '/assets/sounds/hurt-a.ogg')
         this.load.audio('explosion-a', '/assets/sounds/explosion-a.ogg')
         this.load.audio('select-a', '/assets/sounds/select-a.ogg')
+        this.load.audio('coin-a', '/assets/sounds/coin-a.ogg')
     }
 
     create() {
@@ -96,21 +131,26 @@ export default class ArenaScene extends Phaser.Scene {
             this.stopControls()
             this.playerViews.clear()
             this.bulletViews.clear()
+            this.pickupViews.clear()
         })
 
         this.add.image(0, 0, 'arena-desert').setOrigin(0, 0)
 
-        if (!this.anims.exists('walk')) {
-            this.anims.create({
-                key: 'walk',
-                frames: this.anims.generateFrameNumbers('player-walk', { start: 0, end: 1 }),
-                frameRate: 8,
-                repeat: -1,
-            })
+        for (const skin of SKINS) {
+            const animKey = `walk-${skin}`
+            if (!this.anims.exists(animKey)) {
+                this.anims.create({
+                    key: animKey,
+                    frames: this.anims.generateFrameNumbers(`player-${skin}-walk`, { start: 0, end: 1 }),
+                    frameRate: 8,
+                    repeat: -1,
+                })
+            }
         }
 
         this.applyPlayers(this.players)
         this.applyBullets(this.bullets)
+        this.applyPickups(this.pickups)
         this.startControls()
     }
 
@@ -127,20 +167,24 @@ export default class ArenaScene extends Phaser.Scene {
                 view.weapon.setDepth(nextY + 1)
             }
 
+            const deadKey = `player-${view.skin}-dead`
+            const idleKey = `player-${view.skin}-idle`
+            const walkKey = `walk-${view.skin}`
+
             if (view.isDead) {
                 if (view.body.anims.isPlaying) view.body.anims.stop()
-                if (view.body.texture.key !== 'player-dead') {
-                    view.body.setTexture('player-dead')
+                if (view.body.texture.key !== deadKey) {
+                    view.body.setTexture(deadKey)
                 }
                 continue
             }
 
             const isMoving = time - view.lastMovedAt < WALK_ANIM_TIMEOUT_MS
             if (isMoving) {
-                view.body.anims.play('walk', true)
-            } else if (view.body.anims.isPlaying || view.body.texture.key !== 'player-idle') {
+                view.body.anims.play(walkKey, true)
+            } else if (view.body.anims.isPlaying || view.body.texture.key !== idleKey) {
                 view.body.anims.stop()
-                view.body.setTexture('player-idle')
+                view.body.setTexture(idleKey)
             }
         }
     }
@@ -225,6 +269,10 @@ export default class ArenaScene extends Phaser.Scene {
                 spaceDown = true
                 pendingShot = true
                 sendInput()
+            } else if (event.code === 'Digit1' || event.code === 'Numpad1') {
+                this.controls.sendEmote?.('dots')
+            } else if (event.code === 'Digit2' || event.code === 'Numpad2') {
+                this.controls.sendEmote?.('alert')
             }
         }
 
@@ -281,6 +329,44 @@ export default class ArenaScene extends Phaser.Scene {
     setBullets(bullets: BulletState[]) {
         this.bullets = bullets
         if (this.isReady && this.sys.isActive()) this.applyBullets(bullets)
+    }
+
+    setPickups(pickups: PickupState[]) {
+        this.pickups = pickups
+        if (this.isReady && this.sys.isActive()) this.applyPickups(pickups)
+    }
+
+    private applyPickups(pickups: PickupState[]) {
+        const activeIds = new Set(pickups.map((pickup) => pickup.id))
+
+        for (const [id, view] of this.pickupViews) {
+            if (!activeIds.has(id)) {
+                view.root.destroy()
+                this.pickupViews.delete(id)
+            }
+        }
+
+        for (const pickup of pickups) {
+            if (this.pickupViews.has(pickup.id)) continue
+
+            const glow = this.add.circle(0, 0, 22, 0xfbbf24, 0.28)
+            glow.setStrokeStyle(2, 0x3d2e4f)
+            const sprite = this.add
+                .image(0, 0, `weapon-${pickup.weaponType}`)
+                .setDisplaySize(PICKUP_DISPLAY_SIZE, PICKUP_DISPLAY_SIZE)
+            const root = this.add.container(pickup.x, pickup.y, [glow, sprite]).setDepth(pickup.y)
+
+            this.tweens.add({
+                targets: sprite,
+                y: -4,
+                duration: 700,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+            })
+
+            this.pickupViews.set(pickup.id, { root, sprite })
+        }
     }
 
     setPhase(phase: MatchPhase) {
@@ -344,16 +430,29 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         for (const player of players) {
+            const skin: PlayerSkin = SKINS.includes(player.skin) ? player.skin : 'fox'
+            const weaponType: WeaponType = WEAPON_TYPES.includes(player.weaponType)
+                ? player.weaponType
+                : 'rifle'
+
             let view = this.playerViews.get(player.id)
 
             if (!view) {
-                view = this.createPlayerView(player.name, player.x, player.y, player.hp ?? 100)
+                view = this.createPlayerView(player.name, player.x, player.y, player.hp ?? 100, skin, weaponType)
                 this.playerViews.set(player.id, view)
             } else {
                 if (player.x !== view.lastX || player.y !== view.lastY) {
                     view.lastX = player.x
                     view.lastY = player.y
                     view.lastMovedAt = this.time.now
+                }
+
+                if (view.weaponType !== weaponType) {
+                    view.weaponType = weaponType
+                    view.weapon.setTexture(`weapon-${weaponType}`)
+                    if (weaponType !== 'rifle') {
+                        this.playSound('coin-a', 0.45)
+                    }
                 }
 
                 const currentHp = player.hp ?? 100
@@ -392,10 +491,21 @@ export default class ArenaScene extends Phaser.Scene {
             view.isDead = isDeadNow
             view.body.setFlipX(facingLeft)
 
+            if (player.emote === 'dots' || player.emote === 'alert') {
+                const emoteKey = `emote-${player.emote}`
+                if (view.emoteSprite.texture.key !== emoteKey) {
+                    view.emoteSprite.setTexture(emoteKey)
+                }
+                view.emoteSprite.setVisible(true)
+            } else {
+                view.emoteSprite.setVisible(false)
+            }
+
+            const deadKey = `player-${view.skin}-dead`
             if (view.isDead) {
                 if (view.body.anims.isPlaying) view.body.anims.stop()
-                if (view.body.texture.key !== 'player-dead') {
-                    view.body.setTexture('player-dead')
+                if (view.body.texture.key !== deadKey) {
+                    view.body.setTexture(deadKey)
                 }
                 view.weapon.setVisible(false)
                 view.hpBarBg.setVisible(false)
@@ -422,14 +532,21 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
-    private createPlayerView(name: string, x: number, y: number, hp: number): PlayerView {
+    private createPlayerView(
+        name: string,
+        x: number,
+        y: number,
+        hp: number,
+        skin: PlayerSkin,
+        weaponType: WeaponType,
+    ): PlayerView {
         const body = this.add
-            .sprite(0, 0, 'player-idle')
+            .sprite(0, 0, `player-${skin}-idle`)
             .setDisplaySize(PLAYER_DISPLAY_SIZE, PLAYER_DISPLAY_SIZE)
             .setOrigin(0.5, 0.85)
 
         const weapon = this.add
-            .image(0, WEAPON_BASE_Y, 'weapon')
+            .image(0, WEAPON_BASE_Y, `weapon-${weaponType}`)
             .setDisplaySize(WEAPON_DISPLAY_SIZE, WEAPON_DISPLAY_SIZE)
             .setOrigin(0.2, 0.5)
 
@@ -450,13 +567,21 @@ export default class ArenaScene extends Phaser.Scene {
             })
             .setOrigin(0.5)
 
-        const root = this.add.container(x, y, [body, weapon, hpBarBg, hpBarFill, label])
+        const emoteSprite = this.add
+            .image(0, EMOTE_OFFSET_Y, 'emote-dots')
+            .setDisplaySize(EMOTE_DISPLAY_SIZE, EMOTE_DISPLAY_SIZE)
+            .setVisible(false)
+
+        const root = this.add.container(x, y, [body, weapon, hpBarBg, hpBarFill, label, emoteSprite])
         return {
             root,
             body,
             weapon,
+            emoteSprite,
             hpBarBg,
             hpBarFill,
+            skin,
+            weaponType,
             isDead: false,
             lastHp: hp,
             targetX: x,

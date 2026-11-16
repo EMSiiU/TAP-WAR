@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAS2SURBVHhe7ZnBbSRHEARpk5zQQ9bcXwbIFQEyQ9+zQUbIAOmTBAqF6KouLncxPZsBxIvd5GRmPw64D2OMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxhhjjDHGGGOMMcYYY4wxxpgJ/x2GPtt8F+r1GPTZ5rtQr8egzzbfhXo9Bn22+Srq8TYoltlFvd0GxTK7qLfboFhmF/V2GxTLrFBP2/z6y28PmaEzE6cotvlEvWxDI0zM0JmJUxTbfKJetqERJmbozMQpim0+US/b0AgTM3Rm4hTFfl/UwzZU+pWdolreB+Xehkq+slNUy/ug3NtQyVd2imp5H5R7Gyr5yk5RLfdFOb8MlRz9588/SulO5d+//yilO5Udqum+KOeXoVKjNHqU7lTS6FG6U9mhmu6Lcn4ZKjVKo0fpTiWNHqU7lR2q6b4o55ehUqM0epTuVNLoUbpT2aGa7oNybUOlTaTRn+n0QXSotvugXNtQaRNppGfqB9CgXNtQaRNppGfqB9CgXNtQaRNppGfqB5BQjm2opEekkV4pfVO0QzWei3JsQyU9Io3ySumboh2q8VyUYxsq6RFplFdK3xTtUI3nohzbUEmPSKO8UvqmaIdqPBflWEKlVOZ/ZGXzeRolOj2f7e7nn2c7VOO5KMcSKqWSRo/m83mQ7PR8truff57tUI3nohxLqJRKGj2az+dBstPz2e5+/nm2QzWei3IsoVIqafRoPp8HyU7PZ7v7+efZDtV4LsqxhEqJ5kKzjz6Af3/+VZp/X5buROlOtEM1notyLKFSojRa1A/g4ijHEiolSqNF/QAujnIsoVKiNFrUD+DiKMcSKiVKo0X9AC6OciyhUqI0WtQP4OIoxxIqJUqjRf0ALo5yLKFSojRa1A/g4ijHEiolSqNFH30AnR10J5q/J9uhGs9FOZZQKVEqNeoHcHGUYwmVEqVSo34AF0c5llApUSo16gdwcZRjCZUSpVKjz34Aj5q/J9uhGs9FOZZQKVEqNeoHcHGUYwmVEqVSo34AF0c5llApUSo16gdwcZRjCZVSmQfvpFFeKWWIdqjGc1GOJVRKJY1cSaO8UsoQ7VCN56IcS6iUShq5kkZ5pZQh2qEaz0U5llAplTRyJY3ySilDtEM1notybEMlVdLoURqlkv5Dp5J+R5S+OdqhGs9FObahkipp9CiNUkkjV9LviNI3RztU47koxzZUUiWNHqVRKmnkSvodUfrmaIdqPBfl2IZKqqTRozRKJY1cSb8jSt8c7VCN90G5tqHSJtIolTRyZb6fHyB9U7RDtd0H5dqGSpuYB+qkkSvzfT+ABuXahkqbmAfqpJEr830/gAbl2oZKm5gH6qSRK/N9P4AhyrkNlViZB+rMA3bS35zYoZrui3JuQyVW0siVNHIl/c2JHarpvijnNlRiJY1cSSNX0t+c2KGa7otybkMlVtLIlTRyJf3NiR2q6X1Q7m2o1CiNHM3naeRoPj+1QzW8L+phGyo5SqNH83kaPZrPT+1QDe+LetiGSo7S6NF8nkaP5vNTO1TD+6IetqGSozR6NJ+n0aP5/NQO1WCMMcYYY4wxxhhjjDHGGGOMMcYY8018fPwPuMvRynoL6ucAAAAASUVORK5CYII=\",\"layout\":[[0]]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "player-squirrel-idle",
+                   "width":  128,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  128
+               }
+}

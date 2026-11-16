@@ -1,0 +1,16 @@
+{
+    "modelVersion":  2,
+    "piskel":  {
+                   "layers":  [
+                                  "{\"chunks\":[{\"base64PNG\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAL7SURBVHhe7ZSxkRRREEM3EoIgCQwIjQiIhGiIgBwOR4ZQvdbe7F8+N1ujqmdKLTl9u3Tp0qWmL5+/vp0ZzXhcFHomNONxUeiZ0IzHRaFnQjPeLwp5JTRzFpleCc2cRaZXQjNnkemV0MxZZHLefn77m1/f/y/Rhzo7mjmLTE4exFI7iT7U2dHMWWRy8iCW2kn0oc6OZs4ik5MHsdROog91djRzFpmcewXuQZkOeSrRhzIdzZxFJicPYqkCZTrkqUQfynQ0cxaZnDyIpQqU6ZCnEn0o09HMWWRy8iCWKlCmQ55K9KFMRzNnkcnJg1iqQJkOeSrRhzIdzZxFJicPYqkCZTrkqUQfynQ0cxaZnDyIpQqU6ZCnEn0o09HMWWRy8iCWKlCmQ55K9KFMRzNnkcnJg1iqQJkOeSrRhzIdzZxFJicPYqkCZTrkqUQfynQ0cxaZnDyIpQqU6ZCnEn0o09HMWWRy8iCWKlCmQ55K9KFMRzNnkcnJg1hqJ9GHOjuaOYtMTh7EUjuJPtTZ0cxZZHLyIJbaSfShzo5mziKTkwex1E6iD3V2NHMWmZw8iKUKlOmQpxJ9KNPRzFlkcvIglipQpkOeSvShTEczZ5HJyYNYqkCZDnkq0YcyHc2cRSYnD2KpAmU65KlEH8p0NHMWmZw8iKUKlOmQpxJ9KNPRzFlkcvIglipQpkOeSvShTEczZ5HJyYNYqkCZDnkq0YcyHc2cRSYnD2KpAmU65KlEH8p0NHMWmZx7BbYTfaizo5mzyOTkQSy1k+hDnR3NnEUmJw9iqZ1EH+rsaOYsMjl5EEvtJPpQZ0czZ5Fphd8/Pi1BmSto5iwyrUCjjkCZK2jmLDKtQKOOQJkraOYsMq1Ao45AmSto5vtFISvk00rIs4JmPC4KXYFGO+RZQTMeF4WuQKMd8qygGY+LQleg0Q55VtCMfaISz0RnPq6o9DPRmY8rKv1MdObjiko/E505j2jEERRzXtGoIyjmvKJRR1DMeUWjjqCYS5cuXfoHut3+AKOOsBhIU4cBAAAAAElFTkSuQmCC\",\"layout\":[0]}],\"name\":\"Layer 1\",\"opacity\":1,\"frameCount\":1}"
+                              ],
+                   "name":  "emote-alert",
+                   "width":  64,
+                   "description":  "Kenney Desert Shooter Pack CC0 source",
+                   "hiddenFrames":  [
+
+                                    ],
+                   "fps":  12,
+                   "height":  64
+               }
+}

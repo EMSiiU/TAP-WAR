@@ -1,0 +1,35 @@
+{
+    "skins": ["fox", "squirrel", "mouse", "rabbit"],
+    "pickupIntervalMs": 15000,
+    "pickupRadius": 28,
+    "pickupSpawnPoints": [
+        { "x": 512, "y": 230 },
+        { "x": 512, "y": 538 }
+    ],
+    "weapons": {
+        "rifle": {
+            "label": "Rifle",
+            "cooldownMs": 300,
+            "damage": 25,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletSpeed": 650
+        },
+        "shotgun": {
+            "label": "Escopeta",
+            "cooldownMs": 650,
+            "damage": 18,
+            "pellets": 3,
+            "spreadDeg": 12,
+            "bulletSpeed": 650
+        },
+        "sniper": {
+            "label": "Francotirador",
+            "cooldownMs": 900,
+            "damage": 50,
+            "pellets": 1,
+            "spreadDeg": 0,
+            "bulletSpeed": 950
+        }
+    }
+}
