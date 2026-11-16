@@ -207,6 +207,11 @@ En Phaser, `setOrigin(0)` alinea cada rectángulo con la misma esquina que usa e
   - [characters/weapon.png](apps/web/public/assets/characters/weapon.png): 128 × 128 px RGBA transparente (basado en `Weapons/Tiles/tile_0003.png` 24 × 24 px, escalado Nearest Neighbor), renderizado en escena con `setDisplaySize(68, 68)` (~85% del cuerpo), pivote en la culata `(0.2, 0.5)`, desplazamiento radial de 15 px en dirección de `aimAngle`, anclaje vertical a la cintura (`Y = -10`) y capas de profundidad dinámicas (`setDepth(player.y)` y `player.y + 1`).
   - [characters/bullet.png](apps/web/public/assets/characters/bullet.png): 64 × 64 px RGBA transparente (basado en `Weapons/Tiles/tile_0023.png` 24 × 24 px, escalado 3× Nearest Neighbor y centrado), renderizado en escena a `24 × 24 px` con rotación `bullet.angle` para proyectiles sincronizados.
   - [maps/arena-desert.png](apps/web/public/assets/maps/arena-desert.png): 1024 × 768 px (cuadrícula de 32 × 24 celdas con tiles de 16 × 16 px escalados 200 % a 32 × 32 px), alineado 1:1 con los muros, obstáculos y cuatro puntos de aparición de [packages/shared/arena.json](packages/shared/arena.json).
+- **Recursos de audio integrados en `apps/web/public/assets/sounds/`**:
+  - [sounds/shoot-a.ogg](apps/web/public/assets/sounds/shoot-a.ogg): efecto de disparo al crearse un proyectil.
+  - [sounds/hurt-a.ogg](apps/web/public/assets/sounds/hurt-a.ogg): efecto de impacto cuando disminuye `hp`.
+  - [sounds/explosion-a.ogg](apps/web/public/assets/sounds/explosion-a.ogg): efecto de eliminación cuando `isDead` pasa a `true`.
+  - [sounds/select-a.ogg](apps/web/public/assets/sounds/select-a.ogg): efecto de inicio de partida / revancha al pasar a `phase === 'playing'`.
 - **Fuentes editables en `docs/art-sources/`**: [player-idle.piskel](docs/art-sources/player-idle.piskel), [player-walk.piskel](docs/art-sources/player-walk.piskel), [player-dead.piskel](docs/art-sources/player-dead.piskel), [weapon.piskel](docs/art-sources/weapon.piskel), [bullet.piskel](docs/art-sources/bullet.piskel), [arena-desert.tmj](docs/art-sources/arena-desert.tmj) y [tilemap_desert_packed.png](docs/art-sources/tilemap_desert_packed.png).
 
 ### Especificación técnica de animación de caminar

@@ -169,7 +169,14 @@ function ArenaSession({
           </div>
         )}
 
-        {controls && <PhaserView players={players} bullets={bullets} controls={controls} />}
+        {controls && (
+          <PhaserView
+            players={players}
+            bullets={bullets}
+            phase={matchMeta.phase}
+            controls={controls}
+          />
+        )}
 
         {matchMeta.phase === 'finished' && (
           <div className="arena-results-overlay" role="dialog" aria-modal="true">
