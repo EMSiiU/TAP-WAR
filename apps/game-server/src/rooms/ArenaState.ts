@@ -25,7 +25,14 @@ export class BulletState extends Schema {
     @type('number') angle = 0
 }
 
+export type MatchPhase = 'waiting' | 'playing' | 'finished'
+
 export class ArenaState extends Schema {
+    @type('string') phase: MatchPhase = 'waiting'
+    @type('number') timeRemaining = 180
+    @type('number') killsToWin = 10
+    @type('string') winnerId = ''
+    @type('string') winnerName = ''
     @type({ map: Player }) players = new MapSchema<Player>()
     @type({ map: BulletState }) bullets = new MapSchema<BulletState>()
 }
