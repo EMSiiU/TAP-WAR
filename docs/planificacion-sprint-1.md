@@ -1,5 +1,7 @@
 # Planificación vigente — Sprint 1
 
+> Documento histórico del sprint 1. Para el alcance vigente, consultar el [estado actual](estado-actual.md) y la [configuración de autenticación](autenticacion-supabase.md).
+
 Actualizada el 27-oct-2026 tras revisar asignaciones reales en GitHub. Sprint: 27-oct a 04-nov, siete días de lunes a viernes. Fechas objetivo, sin declarar trabajo realizado.
 
 ## Convenciones

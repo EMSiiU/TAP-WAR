@@ -1,67 +1,88 @@
 # TAP-WAR
 
-Videojuego multijugador para navegador desarrollado como proyecto de Tópicos Avanzados de Desarrollo Web. La propuesta es competir con personajes en una arena 2D, con movimiento y combate coordinados por un servidor autoritativo. (Estilo LOL)
+Videojuego multijugador para navegador desarrollado para Tópicos Avanzados de Desarrollo Web. React gestiona la interfaz, Phaser representa la arena y Colyseus mantiene el estado autoritativo de la partida.
+
+- [Repositorio](https://github.com/EMSiiU/TAP-WAR)
+- [Project](https://github.com/users/EMSiiU/projects/1)
 
 ## Estado del proyecto
 
-El cliente React y Phaser permite entrar con un nombre temporal a una sala Colyseus local de hasta cuatro jugadores. Las pestañas comparten posiciones y apuntado. El servidor calcula el movimiento y resuelve los bordes y el obstáculo de la arena. La carpeta `prueba-phaser/` contiene un ejercicio independiente.
+- Arena para hasta cuatro conexiones, con movimiento, apuntado, colisiones y combate autoritativos.
+- Cuatro personajes, diez armas, dos estilos de mira, munición, pickups, reaparición, pausa, resultados y revancha.
+- Acceso con correo/contraseña o Google mediante Supabase. GitHub está preparado como opción de configuración, pendiente de habilitación y prueba.
+- Username obligatorio antes del lobby, editable desde Mi perfil; de 3 a 20 caracteres ASCII, números o guion bajo, único sin distinguir mayúsculas.
+- Foto de perfil opcional: subida, reemplazo y eliminación con Supabase Storage privado. No sustituye al personaje de la arena.
+- Preferencias de personaje, arma y mira guardadas por cuenta. Colyseus verifica el token y obtiene el username del perfil.
 
-- [Repositorio](https://github.com/EMSiiU/TAP-WAR)
-- [Tablero de trabajo](https://github.com/users/EMSiiU/projects/1)
-- Sprint 1: del 27 de octubre al 4 de noviembre de 2026, siete días de lunes a viernes.
-
-## Objetivo del primer sprint
-
-Dos personas desde redes distintas entran a una misma sala alojada en Ubuntu y ven sus movimientos. El servidor valida posiciones, límites y obstáculos. Se integran un personaje y un mapa de prueba.
-
-Reglas principales: vista 2D, sin salto, sin bloqueo entre jugadores y salas de hasta cuatro participantes. Volver tras una desconexión crea una participación nueva, sin recuperar la posición anterior. Combate, cuentas y resultados persistentes se incorporarán en etapas posteriores.
+SMTP y recuperación de contraseña quedan para una etapa posterior. El despliegue en Ubuntu y los resultados persistentes también están pendientes. El [estado de validación](docs/estado-actual.md) distingue implementación, pruebas realizadas y casos por verificar.
 
 ## Organización del repositorio
 
 ```text
-TAP-WAR/
-├── .github/          # Plantillas de Issues y pull requests
-├── apps/game-server/ # Servidor multijugador Colyseus
-├── apps/web/         # Cliente React y Phaser
-├── packages/shared/  # Geometría de la arena compartida
-├── docs/             # Reglas, planificación y criterios de aceptación
-├── prueba-phaser/    # Ejercicio independiente de aprendizaje
-│   ├── README.md
-│   ├── index.html
-│   └── juego.js
-├── README.md
-└── DOCUMENTACION.md
+apps/web/             Cliente React, TypeScript y Phaser
+apps/game-server/     Servidor Colyseus y validación de cuentas
+packages/shared/      Geometría de arena y catálogo de armas
+supabase/migrations/  Esquema, permisos, perfiles y Storage
+supabase/tests/       Inspecciones y pruebas SQL manuales
+docs/                 Contrato, configuración, estado y planificación
+docs/art-sources/     Editables y licencia del arte
+prueba-phaser/        Práctica independiente de aprendizaje
 ```
-
-Para las siguientes etapas se prevén estas carpetas:
-
-```text
-assets/source/       # Archivos editables del arte
-```
-
-Se mantendrá un único repositorio para facilitar cambios coordinados entre cliente, servidor, arte y documentación. Si se incorporan microservicios, podrán tener sus propias carpetas y despliegues dentro de este repositorio.
 
 ## Tecnologías y versiones
 
-| Componente | Tecnología | Estado |
-| --- | --- | --- |
-| Interfaz web | React 19, TypeScript 6.0 y Vite 8 | Cliente local disponible |
-| Juego 2D | Phaser 3.90.0 | Representa el estado de la sala |
-| Servidor multijugador | Colyseus 0.17.11 y `@colyseus/schema` 4.0.31 | Sala local de cuatro plazas |
-| Conexión desde el navegador | `@colyseus/sdk` 0.17.43 | Cliente de la sala Colyseus 0.17 |
-| Alojamiento | Ubuntu Server de un integrante | Conectividad y recursos por verificar |
+| Componente | Tecnología |
+| --- | --- |
+| Interfaz | React 19, TypeScript 6.0 y Vite 8 |
+| Juego 2D | Phaser 3.90.0 |
+| Servidor | Colyseus 0.17.11 y @colyseus/schema 4.0.31 |
+| Conexión del navegador | @colyseus/sdk 0.17.43 |
+| Cuentas y almacenamiento | Supabase Auth, Postgres y Storage; supabase-js 2.119.2 |
+| Entorno de desarrollo | Node.js 24 y npm |
 
-Para el desarrollo local usa Node.js 24 con npm. Las versiones exactas que instala `npm ci` están en los archivos `package-lock.json` de `apps/web` y `apps/game-server`.
+Los archivos package-lock.json de cada aplicación fijan las versiones instaladas por `npm ci`.
 
 ## Empezar
 
-Consulta el [manual técnico](DOCUMENTACION.md) para entender la arquitectura, el mapa de archivos y la lógica del juego.
+Ejecuta los comandos desde la raíz del repositorio. Cada aplicación tiene su propio package.json; la raíz no tiene un comando `npm run dev`.
 
-1. Leer las [reglas y decisiones iniciales](docs/decisiones-iniciales.md).
-2. Consultar el [contrato cliente-servidor](docs/contrato-cliente-servidor.md), el [plan del sprint](docs/semana-1.md) y la [distribución vigente con estimaciones y fechas](docs/planificacion-sprint-1.md).
-3. Revisar las dependencias y aceptación de la Issue en el Project antes de implementarla.
-4. [Ejecutar Colyseus y el cliente web en local](docs/prueba-sprint-1.md#prueba-local-de-s1-05).
-5. Para aprender Phaser, seguir el [README de la práctica](prueba-phaser/README.md). Sus comandos arrancan únicamente el ejercicio local.
+Preparar los archivos de configuración una sola vez, si aún no existen:
+
+```powershell
+Copy-Item apps/web/.env.example apps/web/.env.local
+Copy-Item apps/game-server/.env.example apps/game-server/.env
+```
+
+Completa Project URL y Publishable key en ambos archivos. Configura también el servidor de juego en VITE_GAME_SERVER_URL. Los archivos reales de entorno se ignoran en Git; los ejemplos no contienen credenciales.
+
+Sigue la [configuración de Supabase](docs/autenticacion-supabase.md) para preparar un proyecto nuevo y aplicar las migraciones en orden. No vuelvas a ejecutar migraciones ya aplicadas.
+
+En una terminal:
+
+```powershell
+npm --prefix apps/game-server ci
+npm --prefix apps/game-server run dev
+```
+
+En otra:
+
+```powershell
+npm --prefix apps/web ci
+npm --prefix apps/web run dev
+```
+
+Abre [http://localhost:5174](http://localhost:5174). Vite usa strictPort: si 5174 está ocupado, detén la otra instancia en lugar de cambiar de origen. Colyseus escucha en 127.0.0.1:2567 y su ruta /health devuelve `{"ok":true}`. Para probar dos cuentas, utiliza contextos de navegador independientes.
+
+## Verificar el cambio
+
+```powershell
+npm --prefix apps/web test
+npm --prefix apps/web run build
+npm --prefix apps/game-server test
+node apps/web/node_modules/typescript/bin/tsc -p apps/game-server
+```
+
+Consulta el [manual técnico](DOCUMENTACION.md) y el [contrato cliente-servidor](docs/contrato-cliente-servidor.md). La [planificación del sprint 1](docs/planificacion-sprint-1.md) y sus [pruebas](docs/prueba-sprint-1.md) conservan el historial del primer prototipo, no el alcance completo actual. La práctica Phaser tiene su propio [README](prueba-phaser/README.md).
 
 ## Equipo
 

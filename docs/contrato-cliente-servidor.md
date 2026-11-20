@@ -1,56 +1,45 @@
-# S1-03 — Contrato cliente-servidor
+# Contrato cliente-servidor actual
 
-Estado: borrador para revisión. Alcance: movimiento y apuntado de hasta cuatro jugadores en una arena 2D. Sin ataques, habilidades ni marcador en este sprint.
+Protocolo vigente de acceso, mensajes y estado de arena. La planificación y las pruebas del sprint 1 conservan el historial del prototipo.
 
-## Cliente → servidor
+## Entrada y salida
 
-### Entrada a la sala
+```ts
+joinById('arena-local', { accessToken, skin: 'fox', weapon: 'rifle' })
+```
 
-El cliente se une a `arena-local` con `joinById('arena-local', { name: 'Luna' })`. El servidor recorta espacios y acepta cadenas de 1 a 24 caracteres después del recorte. Rechaza valores ausentes, vacíos o fuera del rango. Los nombres pueden repetirse y se muestran como etiquetas. El identificador de cada participante sigue siendo el `sessionId` de Colyseus.
+El cliente recupera la sesión actual de Supabase antes de conectar. `ArenaRoom.onAuth` verifica el token mediante `auth.getUser(token)` y consulta `public.profiles` con ese JWT, sujeto a RLS. Rechaza token ausente, inválido o vencido, cuentas anónimas y perfiles sin username válido. El nombre de la arena procede del perfil; enviar `name` o `userId` no determina la identidad.
 
-### Movimiento y apuntado
+La cuenta se identifica por su UUID de Supabase en una asociación privada del servidor. `Player.id` continúa siendo `client.sessionId`. No se sincronizan UUID de cuenta, correos ni tokens en `ArenaState`. Las opciones de skin y arma se validan contra weapons.json; se usan fox/rifle como respaldo y el color se deriva de la skin.
 
-Mensaje de entrada, ejemplo: {"moveX":1,"moveY":-1,"aimAngle":0}.
+Sala de cuatro conexiones, sin reconexión automática. Salir de la arena vuelve al perfil/lobby y conserva la sesión de cuenta. Cerrar sesión desmonta la arena y cierra su conexión antes de cerrar la sesión local de Supabase. No se implementó una prohibición de múltiples conexiones de una misma cuenta.
 
-- WASD: cada eje acepta únicamente -1, 0 o 1. Derecha y abajo son positivos. Teclas opuestas se cancelan.
-- El cliente convierte el cursor a coordenadas del mundo y calcula el ángulo desde el centro del personaje. Puede apuntar estando quieto. Si cursor y centro coinciden, conserva el ángulo anterior.
-- El ángulo se expresa en radianes en [-π, π): 0 a la derecha, π/2 hacia abajo. Se exige un número finito.
-- Enviar el estado de entrada a intervalos acordados mientras se juega. Al soltar teclas, perder foco u ocultar la pestaña, limpiar las teclas activas y enviar ejes en cero si la conexión sigue abierta. El servidor detiene el movimiento si no recibe entradas válidas dentro del plazo acordado; conserva la última orientación.
-- Rechazar el mensaje completo si falta un campo requerido o hay valores inválidos. Ejemplos inválidos: {"moveX":2,"moveY":0,"aimAngle":0} y {"moveX":0,"moveY":0,"aimAngle":"0"}. La posición y la velocidad no forman parte del mensaje.
+## Mensajes
 
-## Servidor → cliente
+| Mensaje | Contenido | Uso |
+| --- | --- | --- |
+| input | { moveX, moveY, aimAngle, shoot? } | Movimiento, apuntado y ataque |
+| emote | dots o alert | Expresión temporal |
+| pause | Booleano | Pausa compartida |
+| rematch | Sin contenido requerido | Nueva ronda desde resultados |
+| auth_refresh | { accessToken } | Verificar un token renovado para la misma cuenta |
 
-Estado de ejemplo: {"id":"p1","name":"Luna","x":240,"y":160,"aimAngle":0}.
+Cada eje acepta -1, 0 o 1. aimAngle debe ser finito en [-π, π). shoot, si se incluye, debe ser booleano. Se rechazan entradas inválidas completas. Posiciones enviadas por el cliente no son autoridad. El servidor aplica cadencia, munición, daño, obstáculos, eliminaciones y reaparición. Los jugadores no se bloquean entre sí.
 
-- El servidor decide posición, velocidad y colisiones, normaliza el movimiento diagonal y publica la orientación recibida tras validarla. Apuntar no modifica la dirección de movimiento.
-- Al entrar se recibe el estado inicial de la sala. El estado contiene nombre, posición y orientación por participante. Los parches reflejan altas, bajas y cambios de estado. Al reingresar tras desconexión, se crea un ID nuevo y se usa un punto de aparición válido.
+## Sesión durante el juego
 
-### Implementación local de S1-05
+El servidor programa la desconexión al vencer el token verificado. Cuando Supabase renueva la sesión, el cliente envía auth_refresh. El servidor vuelve a verificar token y perfil, exige la misma cuenta y actualiza el vencimiento. Limita estas verificaciones a una en curso por conexión y una solicitud cada cinco segundos. Una renovación inválida o cambio de cuenta cierra con código 4001. Al salir o destruir la sala se cancelan los temporizadores.
 
-- El servidor crea la sala de prueba al arrancar. Todos los clientes web entran por ID a la misma sala, que conserva cuatro plazas y permanece disponible cuando queda vacía.
-- El ID del jugador es el identificador de sesión asignado por Colyseus. El servidor asigna un punto de aparición libre y publica el estado inicial con un ángulo de 0 radianes.
-- Al salir o cerrar la pestaña se elimina al jugador tras detectar la desconexión. Volver a entrar crea una nueva sesión. S1-06 añade el mensaje `input`, el movimiento y las colisiones del servidor. El [manual técnico](../DOCUMENTACION.md) describe cómo se aplican.
+La etiqueta de jugador conserva el username con el que entró a la ronda. Los cambios desde el perfil se aplican al siguiente ingreso. No se consulta Supabase en cada paso de simulación. El cierre de sesión desde otros dispositivos no invalida inmediatamente un JWT ya emitido; la conexión depende del vencimiento, la renovación y el cierre del cliente. Usar HTTPS/WSS al desplegar.
 
-## Datos compartidos
+## Estado y parámetros
 
-Origen arriba a la izquierda; x crece hacia la derecha e y hacia abajo. La posición representa el centro del cuerpo de colisión. Ambas aplicaciones leen dimensiones, radio, obstáculos y puntos de aparición de [arena.json](../packages/shared/arena.json). Los jugadores no se bloquean entre sí.
+- Player: ID de conexión, nombre, posición, ángulo, skin, equipo visual, arma inicial y actual, munición, vida, bajas, muertes, estado de muerte, emote y secuencia melé.
+- ArenaState: fase, pausa, nombre de quien pausa, tiempo restante, meta, ganador y mapas de jugadores, balas y pickups.
+- Fuentes: packages/shared/arena.json y packages/shared/weapons.json.
 
-## Configuración provisional para la primera prueba
+Simulación: 30 Hz. Publicación: 20 Hz. Entradas: 20 Hz. Caducidad: 300 ms. Velocidad: 220 unidades/s con diagonal normalizada. Mundo: 1024 × 768, radio 14 y cuatro apariciones. El mapa actual contiene varios obstáculos.
 
-| Parámetro | Valor |
-| --- | --- |
-| Arena | 1024 × 768 unidades |
-| Velocidad | 220 unidades/s, también en diagonal tras normalizar |
-| Cuerpo de colisión | Círculo de radio 14 unidades, independiente del sprite |
-| Simulación del servidor | 30 Hz (~33 ms por paso) |
-| Envío de entradas | 20 Hz (cada 50 ms), incluso sin cambios |
-| Publicación de estado | 20 Hz (~50 ms), independiente de la simulación |
-| Plazo sin entradas válidas | 300 ms desde la última entrada válida |
+## Evidencia y pendientes
 
-Al soltar WASD o perder el foco, enviar movimiento cero de inmediato si la conexión lo permite. Si pasan 300 ms sin entradas válidas, el servidor detiene el movimiento en el siguiente paso de simulación y conserva el último ángulo válido. Un mensaje inválido no reinicia el plazo.
-
-## Aceptación
-
-La [prueba local de S1-06](prueba-sprint-1.md#prueba-local-de-s1-06) comprueba con dos clientes: misma rapidez en diagonal y en línea recta, orientación visible al apuntar sin moverse, colisión resuelta por el servidor, rechazo de entradas inválidas y detención al perder el foco o vencer el plazo.
-
-Para la fase de combate quedan como propuestas: clic izquierdo para ataque básico, derecho para secundario, Espacio para definitiva, Q/E para habilidades y Tab para el marcador.
+Compilación web y TypeScript del servidor correctos. Nueve pruebas automatizadas de autenticación y ciclo de conexión, con respuestas simuladas de Supabase, pasan. Se comprobó contra Colyseus local que nombre/userId sin token se rechazan con AUTH_FAILED. La prueba completa con una cuenta real, la renovación en una sesión prolongada y dos jugadores independientes siguen pendientes. Ver [guía y estado de autenticación](autenticacion-supabase.md).

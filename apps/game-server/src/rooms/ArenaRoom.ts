@@ -9,6 +9,7 @@ import {
     type WeaponType,
 } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
+import { verifyArenaAccount, type VerifiedAccount } from '../auth.js'
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
 import weaponsConfig from '../../../../packages/shared/weapons.json' with { type: 'json' }
 import {
@@ -41,9 +42,45 @@ export class ArenaRoom extends Room {
     private nextBulletId = 0
     private nextPickupId = 0
     private nextPickupAt = 0
+    private accounts = new Map<string, { accountId: string; expiresAt: number; timer: ReturnType<typeof setTimeout> }>()
+    private refreshRequests = new Map<string, { pending: boolean; at: number }>()
+
+    private trackAccount(client: Client, account: VerifiedAccount) {
+        const current = this.accounts.get(client.sessionId)
+        if (current && current.expiresAt > account.expiresAt) return
+        if (current) clearTimeout(current.timer)
+        const timer = setTimeout(() => { void client.leave(4001) }, Math.max(0, account.expiresAt - Date.now()))
+        this.accounts.set(client.sessionId, { accountId: account.accountId, expiresAt: account.expiresAt, timer })
+    }
+
+    onDispose() {
+        for (const account of this.accounts.values()) clearTimeout(account.timer)
+        this.accounts.clear()
+        this.refreshRequests.clear()
+    }
 
     onCreate() {
         this.roomId = 'arena-local'
+
+        this.onMessage<unknown>('auth_refresh', async (client, message) => {
+            const existing = this.accounts.get(client.sessionId)
+            if (!existing) return
+            const request = this.refreshRequests.get(client.sessionId)
+            if (request && (request.pending || Date.now() - request.at < 5000)) return
+            this.refreshRequests.set(client.sessionId, { pending: true, at: Date.now() })
+            const token = typeof message === 'object' && message !== null && 'accessToken' in message
+                ? message.accessToken : undefined
+            try {
+                const account = await verifyArenaAccount(token)
+                if (!this.accounts.has(client.sessionId)) return
+                if (account.accountId !== existing.accountId) { void client.leave(4001); return }
+                this.trackAccount(client, account)
+            } catch { void client.leave(4001) }
+            finally {
+                const current = this.refreshRequests.get(client.sessionId)
+                if (current) current.pending = false
+            }
+        })
 
         this.onMessage<unknown>('input', (client, message) => {
             const input = parseArenaInput(message)
@@ -542,14 +579,19 @@ export class ArenaRoom extends Room {
         return bestSpawn
     }
 
-    onAuth(_client: Client, options?: { name?: unknown; skin?: unknown; weapon?: unknown }) {
-        const name = typeof options?.name === 'string' ? options.name.trim() : ''
-
-        if (name.length < 1 || name.length > 24) {
-            throw new ServerError(
-                ErrorCode.AUTH_FAILED,
-                'El nombre temporal debe tener entre 1 y 24 caracteres.',
-            )
+    async onAuth(_client: Client, options?: { accessToken?: unknown; skin?: unknown; weapon?: unknown }) {
+        let account: VerifiedAccount
+        try { account = await verifyArenaAccount(options?.accessToken) }
+        catch (error) {
+            // No exponer respuestas del proveedor ni incluir tokens en logs/errores.
+            const message = error instanceof Error && [
+                'Inicia sesión antes de entrar a la arena.',
+                'La sesión no es válida. Vuelve a iniciar sesión.',
+                'La sesión venció. Vuelve a iniciar sesión.',
+                'No se pudo verificar tu perfil. Inténtalo de nuevo.',
+                'Elige un username válido en tu perfil antes de jugar.',
+            ].includes(error.message) ? error.message : 'No se pudo verificar tu cuenta. Inténtalo de nuevo.'
+            throw new ServerError(ErrorCode.AUTH_FAILED, message)
         }
 
         const rawSkin = typeof options?.skin === 'string' ? options.skin : 'fox'
@@ -569,13 +611,13 @@ export class ArenaRoom extends Room {
             ? (rawWeapon as WeaponType)
             : 'rifle'
 
-        return { name, skin, teamColor, weapon }
+        return { ...account, skin, teamColor, weapon }
     }
 
     onJoin(
         client: Client,
         _options: unknown,
-        auth: { name: string; skin: PlayerSkin; teamColor: TeamColor; weapon: WeaponType },
+        auth: VerifiedAccount & { skin: PlayerSkin; teamColor: TeamColor; weapon: WeaponType },
     ) {
         const players = Array.from(this.state.players.values())
         const spawn = arena.spawnPoints.find(({ x, y }) =>
@@ -597,6 +639,7 @@ export class ArenaRoom extends Room {
         player.y = spawn.y
 
         this.state.players.set(player.id, player)
+        this.trackAccount(client, auth)
 
         if (this.state.phase === 'waiting' && this.state.players.size >= 2) {
             this.startMatch()
@@ -604,6 +647,10 @@ export class ArenaRoom extends Room {
     }
 
     onLeave(client: Client) {
+        const account = this.accounts.get(client.sessionId)
+        if (account) clearTimeout(account.timer)
+        this.accounts.delete(client.sessionId)
+        this.refreshRequests.delete(client.sessionId)
         const leavingPlayer = this.state.players.get(client.sessionId)
         this.inputs.delete(client.sessionId)
         this.state.players.delete(client.sessionId)
