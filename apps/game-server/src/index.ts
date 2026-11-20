@@ -1,5 +1,8 @@
 import { defineRoom, defineServer, matchMaker } from 'colyseus'
 import { ArenaRoom } from './rooms/ArenaRoom.js'
+import { authConfiguration } from './auth.js'
+
+authConfiguration()
 
 const server = defineServer({
     rooms: {

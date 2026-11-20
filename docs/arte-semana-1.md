@@ -1,5 +1,7 @@
 # Contrato de arte — primera prueba
 
+> Documento histórico del sprint 1. Para el alcance vigente, consultar el [estado actual](estado-actual.md) y la [configuración de autenticación](autenticacion-supabase.md).
+
 Prioridad: comprobar integración y escala antes del acabado. Responsable P4; P2 revisa carga y representación; P3 revisa geometría.
 
 ## Personaje

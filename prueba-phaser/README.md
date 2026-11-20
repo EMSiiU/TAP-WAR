@@ -19,10 +19,10 @@ sudo apt update
 sudo apt install python3
 ```
 
-Entra a esta carpeta desde Ubuntu y levanta el servidor:
+Desde la raíz del repositorio en Ubuntu, entra a la práctica y levanta el servidor:
 
 ```bash
-cd /mnt/c/Users/emizu/Documents/ChatGPT/TAP-WAR/prueba-phaser
+cd prueba-phaser
 python3 -m http.server 8000 --bind 0.0.0.0
 ```
 

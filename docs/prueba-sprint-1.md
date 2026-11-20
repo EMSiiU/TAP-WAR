@@ -1,5 +1,7 @@
 # Prueba de aceptación del sprint 1
 
+> Documento histórico del sprint 1. Para el alcance vigente, consultar el [estado actual](estado-actual.md) y la [configuración de autenticación](autenticacion-supabase.md).
+
 Completar con hechos; esta plantilla no indica pruebas ya ejecutadas.
 
 Versión/commit: pendiente. Fecha: pendiente. URL: pendiente. Participantes y redes: pendiente. Navegadores: pendiente.

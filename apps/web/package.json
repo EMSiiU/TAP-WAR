@@ -7,10 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --test tests/account.test.ts"
   },
   "dependencies": {
     "@colyseus/sdk": "0.17.43",
+    "@supabase/supabase-js": "^2.119.2",
     "phaser": "3.90.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

@@ -1,5 +1,7 @@
 # TAP-WAR — Sprint 1: base jugable en red
 
+> Documento histórico del sprint 1. Para el alcance vigente, consultar el [estado actual](estado-actual.md) y la [configuración de autenticación](autenticacion-supabase.md).
+
 Estado: planificación actualizada con EMSiiU el 27-oct-2026. Roles confirmados: P1 EMSiiU, P2 Rebobin0, P3 PatoHacker458 y P4 John-Hdz. Sprint del 27-oct al 04-nov-2026: siete días hábiles, excluyendo sábados y domingos. Revisión el 04-nov. Sin cuota fija de horas; las cifras por tarea son estimaciones iniciales, no mínimos garantizados. Microservicios no obligatorios por ahora. Reglas principales confirmadas por EMSiiU; reingreso simple autorizado. Consultar decisiones-iniciales.md.
 
 ## Objetivo y demostración

@@ -1,5 +1,7 @@
 # TAP-WAR — Reglas mínimas y restricciones (S1-01)
 
+> Documento histórico del sprint 1. Para el alcance vigente, consultar el [estado actual](estado-actual.md) y la [configuración de autenticación](autenticacion-supabase.md).
+
 Preparado el 27 de octubre de 2026. Estado: reglas principales confirmadas por EMSiiU; pendiente revisión técnica del equipo. Coordinación: EMSiiU. Revisor previsto: PatoHacker458.
 
 ## Contexto confirmado

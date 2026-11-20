@@ -2,7 +2,7 @@
 
 ## Repositorio y Project
 
-Usar inicialmente un repositorio para código, recursos y documentación. Nombre propuesto: TAP-WAR; propietario y visibilidad pendientes de decisión del usuario. Un único repositorio puede contener varios servicios.
+Repositorio: [EMSiiU/TAP-WAR](https://github.com/EMSiiU/TAP-WAR). Tablero: [Project 1](https://github.com/users/EMSiiU/projects/1). Esta guía describe la configuración y el flujo del equipo; comprobar permisos y estados vigentes en GitHub antes de modificarlos.
 
 1. Crear/elegir el repositorio con el mismo propietario que el Project cuando sea posible.
 2. En el repositorio, abrir Projects y seleccionar Link a project; elegir el Project existente.

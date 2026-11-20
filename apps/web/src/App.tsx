@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
+import { supabase, validUsername, profileError, type Profile } from './auth/supabase'
+import ProfileAvatar from './auth/ProfileAvatar'
 import PhaserView from './game/PhaserView'
 import weaponsConfig from '../../../packages/shared/weapons.json'
 import type {
@@ -72,7 +74,7 @@ function formatClock(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
-const client = new Client('http://127.0.0.1:2567')
+const client = new Client(import.meta.env.VITE_GAME_SERVER_URL || 'http://127.0.0.1:2567')
 
 function ArenaSession({
     playerName,
@@ -80,6 +82,7 @@ function ArenaSession({
     playerWeapon,
     crosshairStyle,
     onExit,
+    onSignOut,
     onEnd
   }: {
     playerName: string
@@ -87,6 +90,7 @@ function ArenaSession({
     playerWeapon: WeaponType
     crosshairStyle: CrosshairStyle
     onExit: () => void
+    onSignOut: () => void
     onEnd: (message: string) => void
   }) {
   const [players, setPlayers] = useState<PlayerState[]>([])
@@ -112,8 +116,14 @@ function ArenaSession({
 
     async function connect() {
       try {
+        if (!supabase) throw new Error('Supabase no está configurado')
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+        if (!active) return
+        if (sessionError || !session) {
+          onEnd('Tu sesión terminó. Vuelve a iniciar sesión.'); return
+        }
         const joined = await client.joinById<ArenaState>('arena-local', {
-          name: playerName,
+          accessToken: session.access_token,
           skin: playerSkin,
           weapon: playerWeapon,
         })
@@ -124,7 +134,12 @@ function ArenaSession({
           return
         }
 
-        disconnect = () => { void joined.leave() }
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, currentSession) => {
+          if (event === 'TOKEN_REFRESHED' && currentSession && joined.connection.isOpen) {
+            joined.send('auth_refresh', { accessToken: currentSession.access_token })
+          }
+        })
+        disconnect = () => { subscription.unsubscribe(); void joined.leave() }
         rematchRef.current = () => {
           if (joined.connection.isOpen) joined.send('rematch')
         }
@@ -152,8 +167,8 @@ function ArenaSession({
         }
 
         joined.onStateChange(syncState)
-        joined.onLeave(() => {
-          if (active) onEnd('Se perdió la conexión. Puedes volver a entrar.')
+        joined.onLeave((code) => {
+          if (active) onEnd(code === 4001 ? 'Tu sesión terminó. Vuelve a entrar con una sesión válida.' : 'Se perdió la conexión. Puedes volver a entrar.')
         })
         syncState(joined.state)
         setControls({
@@ -181,8 +196,8 @@ function ArenaSession({
           return
         }
 
-        if (error instanceof ServerError && error.code === ErrorCode.AUTH_FAILED) {
-          onEnd('El nombre temporal debe tener entre 1 y 24 caracteres.')
+        if ((error instanceof ServerError || error instanceof MatchMakeError) && error.code === ErrorCode.AUTH_FAILED) {
+          onEnd(error.message || 'No se pudo verificar tu cuenta. Revisa tu sesión y username.')
           return
         }
 
@@ -250,6 +265,7 @@ function ArenaSession({
           <button type="button" onClick={onExit} className="kenney-btn-secondary">
             Salir de la arena
           </button>
+          <button type="button" onClick={onSignOut} className="kenney-btn-secondary">Cerrar sesión</button>
         </div>
       </header>
 
@@ -381,11 +397,18 @@ function ArenaSession({
   )
 }
 
-export default function App() {
-  const [name, setName] = useState('')
-  const [skin, setSkin] = useState<PlayerSkin>('fox')
-  const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>('rifle')
-  const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>('outline')
+export default function App({ profile, onProfileSaved, onOpenProfile, onSignOut, accountNotice }: {
+  profile: Profile
+  onProfileSaved: (profile: Profile) => void
+  onOpenProfile: () => void
+  accountNotice?: string
+  onSignOut: () => void
+}) {
+  const [skin, setSkin] = useState<PlayerSkin>(profile.preferred_skin)
+  const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>(profile.preferred_weapon)
+  const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>(profile.crosshair_style)
+  const [saving, setSaving] = useState(false)
+  const [savedMessage, setSavedMessage] = useState('')
   const [playerName, setPlayerName] = useState<string | null>(null)
 
   const [entryMessage, setEntryMessage] = useState('')
@@ -395,6 +418,26 @@ export default function App() {
     setPlayerName(null)
   }, [])
 
+  async function saveProfile(enterArena: boolean) {
+    if (!supabase || saving) return
+    setEntryMessage(''); setSavedMessage('')
+    if (!validUsername(profile.username ?? '')) {
+      setEntryMessage('Usa de 3 a 20 letras sin acentos, números o guion bajo.'); return
+    }
+    setSaving(true)
+    try {
+      const { data, error } = await supabase.from('profiles').update({
+        preferred_skin: skin, preferred_weapon: selectedWeapon,
+        crosshair_style: crosshairStyle,
+      }).eq('id', profile.id).select('*').single()
+      if (error || !data) { setEntryMessage(profileError(error ?? {})); return }
+      onProfileSaved(data as Profile)
+      setSavedMessage('Perfil guardado.')
+      if (enterArena) setPlayerName(data.username)
+    } catch { setEntryMessage('No se pudo guardar el perfil. Comprueba tu conexión.') }
+    finally { setSaving(false) }
+  }
+
   if (playerName !== null) {
     return (
       <ArenaSession
@@ -403,6 +446,7 @@ export default function App() {
         playerWeapon={selectedWeapon}
         crosshairStyle={crosshairStyle}
         onExit={() => returnToForm('')}
+        onSignOut={onSignOut}
         onEnd={returnToForm}
       />
     )
@@ -416,16 +460,19 @@ export default function App() {
     <main className="lobby-page">
       <div className="lobby-card">
         <h1 className="lobby-title">TAP-WAR</h1>
-        <p className="lobby-subtitle">Duelo multijugador en la arena del desierto</p>
+        <div className="account-heading">
+          <div className="account-details">
+            <ProfileAvatar profile={profile} />
+            <p><strong>{profile.username}</strong><br />Listo para la arena</p>
+          </div>
+          <button type="button" className="auth-text-button" onClick={onOpenProfile}>Mi perfil</button>
+          <button type="button" className="auth-text-button" onClick={onSignOut}>Cerrar sesión</button>
+        </div>
 
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            const trimmedName = name.trim()
-            if (trimmedName) {
-              setEntryMessage('')
-              setPlayerName(trimmedName)
-            }
+            void saveProfile(false)
           }}
         >
           {entryMessage && (
@@ -434,6 +481,9 @@ export default function App() {
             </p>
           )}
 
+          {accountNotice && <p className="auth-notice" role="status">{accountNotice}</p>}
+          {savedMessage && <p className="auth-notice" role="status">{savedMessage}</p>}
+          <fieldset className="auth-fields" disabled={saving}>
           <span className="skin-grid-label">Elige tu personaje</span>
           <div className="skin-grid" role="radiogroup" aria-label="Selector de personaje">
             {SKIN_OPTIONS.map((option) => (
@@ -506,21 +556,12 @@ export default function App() {
             </button>
           </div>
 
-          <div className="lobby-field">
-            <label htmlFor="player-name">Nombre de jugador</label>
-            <input
-              id="player-name"
-              placeholder="Ej. Johnny"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={24}
-              required
-            />
+          <div className="profile-actions">
+            <button type="submit" disabled={!validUsername(profile.username ?? '') || saving}>{saving ? 'Guardando…' : 'Guardar preferencias'}</button>
+            <button type="button" className="lobby-submit" disabled={!validUsername(profile.username ?? '') || saving}
+              onClick={() => { void saveProfile(true) }}>Entrar a la arena</button>
           </div>
-
-          <button type="submit" className="lobby-submit" disabled={!name.trim()}>
-            Entrar a la arena
-          </button>
+          </fieldset>
         </form>
       </div>
     </main>
