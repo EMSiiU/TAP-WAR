@@ -46,6 +46,7 @@ Las pruebas SQL usan ROLLBACK. La prueba visual de foto utilizó un archivo de p
 
 ## Trabajo pendiente de implementación
 
+- Salas por código, inicio manual, persistencia de partidas y ranking por puntos: ver [próximos pasos](proximos-pasos.md) para acuerdos, reglas pendientes y criterios de aceptación.
 - SMTP y recuperación de contraseña.
 - Configuración y prueba de GitHub OAuth.
 - Pantalla de seguridad para establecer/cambiar contraseña.

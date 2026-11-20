@@ -16,6 +16,8 @@ Videojuego multijugador para navegador desarrollado para Tópicos Avanzados de D
 
 SMTP y recuperación de contraseña quedan para una etapa posterior. El despliegue en Ubuntu y los resultados persistentes también están pendientes. El [estado de validación](docs/estado-actual.md) distingue implementación, pruebas realizadas y casos por verificar.
 
+El [plan de próximos pasos](docs/proximos-pasos.md) define salas por código, inicio manual, estadísticas persistentes, ranking por puntos y despliegue de prueba. Distingue acuerdos confirmados de reglas propuestas; estas funciones todavía no están implementadas.
+
 ## Organización del repositorio
 
 ```text
