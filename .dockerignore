@@ -1,4 +1,6 @@
 .git
+.data
+**/.data
 **/node_modules
 **/dist
 Pack-recursos

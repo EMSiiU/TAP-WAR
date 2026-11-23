@@ -1,6 +1,6 @@
 # Próximos pasos: salas, partidas, estadísticas y rankings
 
-Fecha de definición: 20 de noviembre de 2026. Estado: planificación; este documento no acredita implementación, pruebas ni tareas creadas en el Project.
+Definición inicial: 20 de noviembre de 2026. Actualizado el 23 de noviembre de 2026. Estado: rankings y persistencia implementados localmente, pendientes de activación remota; salas por código y reconexión pendientes.
 
 ## Objetivo
 
@@ -15,43 +15,25 @@ El [estado actual](estado-actual.md) registra la funcionalidad y las pruebas exi
 | Acceso a salas | Crear sala y compartir un código; otro usuario introduce ese código para unirse |
 | Inicio | El creador inicia manualmente con un mínimo de dos jugadores |
 | Ranking principal | Puntos acumulados: 3 por victoria, 1 por empate y 0 por derrota |
+| Visibilidad | Ranking, fotos y estadísticas globales visibles solo para usuarios autenticados |
+| Final normal de ronda | Cinco minutos o victoria inmediata al llegar a 20 kills, lo que ocurra primero |
+| Igualdad de puntos globales | Compartir posición; el username puede ordenar visualmente sin modificar el puesto |
+| Estadísticas propias | Incluir una sección Mis estadísticas para la cuenta con sesión iniciada |
 | Abandono | Cuenta como derrota; si solo queda un participante, ese jugador gana |
 | Persistencia | Guardar resultados por cuenta para acumular estadísticas entre partidas |
 | Presentación | Mostrar ganador y estadísticas finales; ofrecer ranking global con tablas y gráficas |
 
 Una cuenta se identifica por su UUID de Supabase. Cambiar username no debe borrar estadísticas ni crear otro jugador. Una participación abandonada debe conservarse en el resultado aunque desaparezca su conexión.
 
-## Reglas propuestas pendientes de confirmar
+## Avance del bloque de rankings
 
-| Regla | Propuesta |
-| --- | --- |
-| Capacidad | Mantener de 2 a 4 jugadores |
-| Duración normal | Cinco minutos de juego, eliminando el final anticipado por 10 kills |
-| Ganador por tiempo | Más kills; ante igualdad, menos muertes; si ambos coinciden, empate entre quienes comparten el primer puesto |
-| Reconexión | Reservar la participación durante 30 segundos ante una desconexión involuntaria |
-| Salida voluntaria | Salir de la arena o cerrar sesión durante la ronda supone abandono inmediato |
-| Pausa | ESC abre el menú personal; las partidas que cuentan para estadísticas no se pausan globalmente |
-| Anfitrión ausente en espera | Transferir el rol a otro participante conectado |
-| Incorporación durante ronda | Bloquear nuevos participantes; permitir reconexión de quienes ya estaban |
-| Revancha | Conservar sala/código, volver a espera y crear un identificador de partida nuevo al iniciar |
-| Cuenta repetida | Una cuenta ocupa una sola plaza por partida |
-| Sala vacía | Eliminarla e invalidar su código |
-| Caída del servidor | Marcar partida interrumpida, sin asignar puntos ni resultados competitivos |
-| Perfiles sin partidas | Mostrar los perfiles con username al final, con estadísticas en cero y sin clasificación |
+Ver [rankings.md](rankings.md) para activar la migración, configurar la clave privada y comprobar resultados. El código aplica 300 segundos/20 kills, inicio manual, cuenta única, transferencia de anfitrión, bloqueo de entradas durante ronda y cierre por abandono. Conserva participantes retirados y guarda resultados idempotentes con reintentos en disco. El empate por tiempo usa kills y después menos muertes. La numeración global es densa: 1, 1, 2.
 
-Estas propuestas no se consideran aprobadas por haber confirmado las tres preguntas de inicio, puntos y abandono. Antes de implementar partidas y rankings, cerrar también: cómo computan las estadísticas de quienes abandonan, cómo se registran empates compartidos y el desempate del ranking cuando dos cuentas tienen los mismos puntos.
+Ya están implementados el ranking con fotos, tabla/búsqueda/paginación, top diez y Mis estadísticas con tarjetas, dos gráficas e historial. Los perfiles completos sin partidas aparecen sin clasificar; los incompletos no se incluyen. ESC abre un menú local y no pausa la simulación.
 
-Un jugador muerto que espera reaparecer sigue participando. La victoria por abandono se refiere al último participante que permanece en la partida, no al último personaje con vida. Si se aprueba la reconexión, no se declarará ganador mientras el rival conserve su plazo para volver. Si todos abandonan, hace falta definir el estado final y si se conservan estadísticas; no se puede asignar un ganador inexistente.
+Se mantiene una sola sala fija de cuatro plazas. Salir o perder la conexión supone abandono inmediato; la reconexión con treinta segundos de reserva requiere otro bloque. Las salas por código tampoco están implementadas. Al reiniciar se recuperan cierres pendientes y las rondas abiertas se marcan interrumpidas sin estadísticas competitivas.
 
-## Punto de partida del código
-
-- Hay una única sala fija, arena-local, creada al arrancar el servidor.
-- El inicio ocurre automáticamente al alcanzar dos jugadores.
-- La ronda dura 180 segundos o termina con 10 kills.
-- Ya existe pantalla de ganador, kills, muertes, empate y revancha.
-- Las estadísticas de ronda están en memoria; se reinician y no alimentan un ranking.
-- Al bajar de dos conexiones durante una ronda, el servidor vuelve a espera. Ese comportamiento debe reemplazarse por las reglas de desconexión y abandono.
-- La reconexión automática está desactivada. Todavía no se recupera una participación con sus kills, muertes y posición.
+Las etapas y garantías siguientes sirven como lista de verificación. Implementación local no equivale a configuración remota ni a prueba de aceptación con dos cuentas reales.
 
 ## Experiencia propuesta
 
@@ -86,20 +68,42 @@ La pantalla final incluye a todos los participantes, incluso abandonos: posició
 - Conservar estadísticas de abandonos antes de retirar conexiones. Clasificar interrupciones de infraestructura separadamente de derrotas.
 - No presentar un guardado como exitoso antes de confirmarlo. Los reintentos en memoria no garantizan recuperación después de una caída del proceso; habrá que definir almacenamiento duradero de pendientes o tratar la partida como interrumpida.
 - Mantener las políticas privadas de profiles. El ranking necesita una consulta o proyección autorizada que exponga usernames y estadísticas permitidas, sin ampliar indiscriminadamente el acceso a los perfiles.
-- La foto actual es privada. Mostrar fotos de otros usuarios en rankings requeriría una decisión adicional de visibilidad y permisos.
+- La foto actual es privada. Se aprobó mostrarla en rankings a usuarios autenticados; preparar acceso controlado a las fotos actuales sin convertir todo el bucket en público. Las operaciones de modificación seguirán restringidas al propietario.
 
-## Ranking y gráficas
+## Ranking y Mis estadísticas
 
-El ranking principal confirmado usa puntos 3/1/0. La fórmula propuesta es puntos = victorias × 3 + empates. El significado de empate y la validez de una partida deben cerrarse antes de implementarla. La victoria por abandono otorgará 3 puntos y el abandono 0, de acuerdo con el resultado confirmado.
+La ventana tendrá dos secciones: Ranking global y Mis estadísticas. La inclusión de ambas y su acceso solo para usuarios autenticados están confirmados; la distribución visual y las métricas siguientes se implementaron en la primera versión local.
 
-Tabla propuesta: posición, username actual, puntos, partidas, victorias, empates, derrotas, kills y muertes. El orden secundario ante igualdad de puntos sigue pendiente. Es una clasificación acumulativa, no un sistema de habilidad Elo.
+### Ranking global
 
-Gráficas iniciales propuestas:
+- Jugadores destacados con foto, username, puesto y puntos. Mostrar el mismo puesto cuando haya igualdad, sin inventar un desempate competitivo.
+- Tabla con posición global, foto/username, puntos, partidas, victorias, kills, muertes y porcentaje de victorias.
+- Búsqueda por username, paginación y resaltado de la fila de la cuenta actual. Filtrar o cambiar de página no recalcula la posición global.
+- Gráfica de barras de los diez jugadores con más puntos.
+- Los perfiles completos sin partidas aparecerían al final con valores en cero y Sin clasificar; las cuentas sin username completarían primero el perfil. Esta regla de inclusión está implementada.
 
-- Global: barras de los diez jugadores con más puntos.
-- Mi actividad: kills y muertes de las últimas diez partidas válidas.
+El ranking principal usa puntos 3/1/0: puntos = victorias × 3 + empates. La victoria por abandono otorga 3 puntos y el abandono 0. Con igual puntuación se comparte puesto; el orden alfabético solo sirve para presentación. Es una clasificación acumulativa, no un sistema Elo. La numeración implementada es densa: 1, 1, 2.
 
-Actualizar al cargar la página y al terminar una partida. Las actualizaciones en tiempo real, temporadas, filtros semanales y métricas adicionales pueden añadirse después. Paginación y búsqueda por username evitarán cargar todos los jugadores a la vez.
+Las fotos se obtendrán con acceso controlado y enlaces temporales. Si falta una imagen o falla su carga, se mostrará el personaje de respaldo. El ranking consultará datos autorizados, sin ampliar la lectura completa de profiles.
+
+### Mis estadísticas
+
+La cuenta se obtiene de la sesión validada, no de un UUID arbitrario enviado desde el navegador. Esta sección mostrará únicamente las estadísticas personales del usuario actual.
+
+Tarjetas propuestas: puesto global, puntos, partidas, victorias, porcentaje de victorias, kills, muertes y relación K/D. El porcentaje será victorias / partidas válidas × 100; sin partidas se mostrará un guion. Si no hay muertes, K/D mostrará un guion en lugar de dividir entre cero. Los abandonos se incluirán como derrotas y podrán indicarse como dato adicional, sin contarlos dos veces en la distribución de resultados.
+
+Gráficas propuestas:
+
+- Rendimiento: barras agrupadas de kills y muertes en las últimas diez partidas válidas.
+- Resultados: distribución de victorias, empates y derrotas, con cantidades y porcentajes.
+
+Tabla de historial: fecha, resultado, kills, muertes, puntos obtenidos y motivo del final (tiempo, 20 kills o abandono). Cada fila representa una partida persistida. Las partidas anuladas/interrumpidas no sumarán puntos; se conservan separadamente en el registro de la partida y se excluyen de las consultas competitivas.
+
+### Actualización y alcance inicial
+
+Actualizar al cargar la ventana y al confirmar el guardado de una partida. Las temporadas, filtros semanales, actualizaciones en tiempo real y gráficas adicionales quedan para después. El historial comienza con las primeras partidas guardadas: las rondas anteriores que solo estuvieron en memoria no se pueden reconstruir.
+
+Se puede implementar persistencia y ranking con la sala actual; las salas por código no son una dependencia técnica obligatoria. Sí es necesario resolver antes el cierre de ronda, conservar participantes retirados, evitar dos plazas de una misma cuenta por partida y garantizar guardado idempotente desde el servidor.
 
 ## Etapas y criterios de aceptación
 
@@ -118,7 +122,7 @@ Actualizar al cargar la página y al terminar una partida. Las actualizaciones e
 
 ### 3. Ciclo de partida
 
-- Aplicar duración, límite de kills, desempates y pausa una vez confirmados.
+- Aplicar los cinco minutos y el umbral de 20 kills ya confirmados; cerrar desempates por tiempo y política de pausa antes de implementar.
 - Comprobar victoria por abandono y conservación de participantes retirados.
 - Si se aprueba reconexión, recuperar la misma participación y estadísticas dentro del plazo; fuera de él, aplicar abandono.
 - Una revancha crea otra partida y no altera el resultado anterior.

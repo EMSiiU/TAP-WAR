@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import { getResultStore, resolveResults, type Participant, type ResultStore } from '../results.js'
 import { ErrorCode, Room, ServerError, type Client } from 'colyseus'
 import {
     ArenaState,
@@ -27,8 +29,8 @@ const MUZZLE_OFFSET = 38
 const MUZZLE_OFFSET_Y = -12
 const PLAYER_HIT_RADIUS = 30
 const RESPAWN_DELAY_MS = 3000
-const MATCH_DURATION_SECONDS = 180
-const KILLS_TO_WIN = 10
+const MATCH_DURATION_SECONDS = 300
+const KILLS_TO_WIN = 20
 const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper', 'smg', 'launcher', 'plasma', 'axe']
 
 export class ArenaRoom extends Room {
@@ -37,6 +39,11 @@ export class ArenaRoom extends Room {
     state = new ArenaState()
 
     patchRate = 50
+    private matchId = ''
+    private startedAt = ''
+    private starting = false
+    private resultStore?: ResultStore
+    private participants = new Map<string, Participant>()
     private inputs = new Map<string, ArenaInput & { receivedAt: number }>()
     private bulletCreatedAt = new Map<string, number>()
     private nextBulletId = 0
@@ -44,6 +51,8 @@ export class ArenaRoom extends Room {
     private nextPickupAt = 0
     private accounts = new Map<string, { accountId: string; expiresAt: number; timer: ReturnType<typeof setTimeout> }>()
     private refreshRequests = new Map<string, { pending: boolean; at: number }>()
+
+    constructor(resultStore?: ResultStore) { super(); this.resultStore = resultStore }
 
     private trackAccount(client: Client, account: VerifiedAccount) {
         const current = this.accounts.get(client.sessionId)
@@ -117,13 +126,14 @@ export class ArenaRoom extends Room {
             }
         })
 
-        this.onMessage('rematch', () => {
-            if (this.state.phase !== 'finished') return
-            if (this.state.players.size >= 2) {
-                this.startMatch()
-            } else {
-                this.resetToWaiting()
+        this.onMessage('start', client => {
+            if (client.sessionId === this.state.hostId && this.state.phase === 'waiting' && this.state.players.size >= 2 && !this.starting) {
+                void this.startMatch()
             }
+        })
+        this.onMessage('rematch', client => {
+            if (client.sessionId !== this.state.hostId || this.state.phase !== 'finished' || ['saving', 'failed'].includes(this.state.saveStatus)) return
+            this.resetToWaiting()
         })
 
         this.onMessage<unknown>('emote', (client, message) => {
@@ -135,19 +145,7 @@ export class ArenaRoom extends Room {
             player.emoteUntil = Date.now() + 2000
         })
 
-        this.onMessage<unknown>('pause', (client, message) => {
-            if (typeof message !== 'boolean' || this.state.phase === 'finished') return
-            if (message) {
-                const player = this.state.players.get(client.sessionId)
-                this.state.isPaused = true
-                this.state.pausedByName = player?.name ?? ''
-                this.inputs.clear()
-            } else {
-                this.state.isPaused = false
-                this.state.pausedByName = ''
-            }
-        })
-
+        // ESC is a personal menu: it never freezes a competitive round.
         this.setSimulationInterval((deltaMs) => this.simulate(deltaMs), STEP_MS)
     }
 
@@ -178,7 +176,31 @@ export class ArenaRoom extends Room {
         this.equipWeapon(player, player.startingWeapon, true)
     }
 
-    private startMatch() {
+    private async startMatch() {
+        this.starting = true
+        const id = randomUUID()
+        const startedAt = new Date().toISOString()
+        try {
+            await this.lock()
+            const initialPlayers = [...this.state.players].map(([sessionId, player]) => ({ sessionId,
+                accountId: this.accounts.get(sessionId)!.accountId, name: player.name, kills: 0, deaths: 0, abandoned: false }))
+            await (this.resultStore ?? getResultStore()).begin(id, startedAt, initialPlayers)
+            if (this.state.players.size < 2) { await this.unlock(); return }
+            this.matchId = id
+            this.startedAt = startedAt
+            this.participants.clear()
+            for (const [sessionId, player] of this.state.players) {
+                this.participants.set(sessionId, { sessionId, accountId: this.accounts.get(sessionId)!.accountId,
+                    name: player.name, kills: 0, deaths: 0, abandoned: false })
+            }
+            this.state.saveStatus = ''
+            this.state.resultSummary = ''
+            this.state.notice = ''
+        } catch {
+            this.state.notice = 'No se pudo preparar la partida. Revisa SUPABASE_SECRET_KEY y el directorio MATCH_DATA_DIR del servidor.'
+            await this.unlock()
+            return
+        } finally { this.starting = false }
         const now = performance.now()
         this.clearCombatEntities()
         this.state.phase = 'playing'
@@ -212,6 +234,7 @@ export class ArenaRoom extends Room {
 
     private resetToWaiting() {
         this.clearCombatEntities()
+        void this.unlock()
         this.state.phase = 'waiting'
         this.state.isPaused = false
         this.state.pausedByName = ''
@@ -235,31 +258,34 @@ export class ArenaRoom extends Room {
         }
     }
 
-    private finishMatch(winnerId: string, winnerName: string) {
+    private snapshotPlayers() {
+        for (const [id, player] of this.state.players) {
+            const participant = this.participants.get(id)
+            if (participant) { participant.kills = player.kills; participant.deaths = player.deaths }
+        }
+    }
+
+    private finishMatch(winnerId: string, _winnerName: string, reason: 'time' | 'kills' | 'abandon' | 'interrupted' = 'kills') {
+        if (this.state.phase !== 'playing') return
+        this.snapshotPlayers()
+        const result = { id: this.matchId, startedAt: this.startedAt, endedAt: new Date().toISOString(), reason,
+            players: resolveResults([...this.participants.values()], reason, winnerId || undefined) }
+        const winners = result.players.filter(p => p.outcome === 'win' || p.outcome === 'draw')
         this.clearCombatEntities()
         this.state.phase = 'finished'
-        this.state.winnerId = winnerId
-        this.state.winnerName = winnerName
+        this.state.finishReason = reason
+        this.state.winnerId = winners.length === 1 ? winners[0].sessionId : ''
+        this.state.winnerName = winners.map(p => p.name).join(', ')
+        this.state.resultSummary = JSON.stringify(result.players.map(({ accountId: _accountId, ...p }) => p))
+        this.state.saveStatus = 'saving'
+        const id = this.matchId
+        void (this.resultStore ?? getResultStore()).finish(result, status => {
+            if (this.matchId === id) this.state.saveStatus = status
+        })
     }
 
     private finishMatchByTime() {
-        let topKills = -1
-        let leaders: Player[] = []
-
-        for (const player of this.state.players.values()) {
-            if (player.kills > topKills) {
-                topKills = player.kills
-                leaders = [player]
-            } else if (player.kills === topKills) {
-                leaders.push(player)
-            }
-        }
-
-        if (leaders.length === 1) {
-            this.finishMatch(leaders[0].id, leaders[0].name)
-        } else {
-            this.finishMatch('', '')
-        }
+        this.finishMatch('', '', 'time')
     }
 
     private performMeleeAttack(
@@ -619,6 +645,8 @@ export class ArenaRoom extends Room {
         _options: unknown,
         auth: VerifiedAccount & { skin: PlayerSkin; teamColor: TeamColor; weapon: WeaponType },
     ) {
+        if (this.state.phase !== 'waiting' || this.starting) throw new ServerError(400, 'La partida ya inició; espera la siguiente ronda.')
+        if ([...this.accounts.values()].some(a => a.accountId === auth.accountId)) throw new ServerError(400, 'Esta cuenta ya ocupa una plaza.')
         const players = Array.from(this.state.players.values())
         const spawn = arena.spawnPoints.find(({ x, y }) =>
             players.every((player) => player.x !== x || player.y !== y),
@@ -641,12 +669,13 @@ export class ArenaRoom extends Room {
         this.state.players.set(player.id, player)
         this.trackAccount(client, auth)
 
-        if (this.state.phase === 'waiting' && this.state.players.size >= 2) {
-            this.startMatch()
-        }
+        if (!this.state.hostId) this.state.hostId = client.sessionId
     }
 
     onLeave(client: Client) {
+        this.snapshotPlayers()
+        const participant = this.participants.get(client.sessionId)
+        if (participant && this.state.phase === 'playing') participant.abandoned = true
         const account = this.accounts.get(client.sessionId)
         if (account) clearTimeout(account.timer)
         this.accounts.delete(client.sessionId)
@@ -660,10 +689,11 @@ export class ArenaRoom extends Room {
             this.state.pausedByName = ''
         }
 
+        if (this.state.hostId === client.sessionId) this.state.hostId = this.state.players.keys().next().value ?? ''
         if (this.state.players.size < 2 && this.state.phase === 'playing') {
-            this.resetToWaiting()
-        } else if (this.state.players.size === 0) {
-            this.resetToWaiting()
+            const remaining = this.state.players.values().next().value
+            this.finishMatch(remaining?.id ?? '', remaining?.name ?? '', remaining ? 'abandon' : 'interrupted')
         }
+        if (this.state.players.size === 0) this.resetToWaiting()
     }
 }

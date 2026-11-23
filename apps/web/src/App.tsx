@@ -1,3 +1,4 @@
+import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
@@ -19,6 +20,11 @@ import type {
 } from './game/ArenaScene'
 
 type ArenaState = {
+  hostId: string
+  notice: string
+  saveStatus: string
+  resultSummary: string
+  finishReason: string
   phase: MatchPhase
   isPaused: boolean
   pausedByName: string
@@ -59,6 +65,11 @@ const WEAPON_BY_ID = Object.fromEntries(WEAPON_OPTIONS.map((w) => [w.id, w])) as
 >
 
 type MatchMeta = {
+  hostId: string
+  notice: string
+  saveStatus: string
+  resultSummary: string
+  finishReason: string
   phase: MatchPhase
   isPaused: boolean
   pausedByName: string
@@ -103,13 +114,16 @@ function ArenaSession({
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [bullets, setBullets] = useState<BulletState[]>([])
   const [pickups, setPickups] = useState<PickupState[]>([])
+  const [localPaused, setLocalPaused] = useState(false)
+  const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
+    hostId: '', notice: '', saveStatus: '', resultSummary: '', finishReason: '',
     phase: 'waiting',
     isPaused: false,
     pausedByName: '',
-    timeRemaining: 180,
-    killsToWin: 10,
+    timeRemaining: 300,
+    killsToWin: 20,
     winnerId: '',
     winnerName: '',
   })
@@ -155,6 +169,7 @@ function ArenaSession({
           }
         })
         disconnect = () => { subscription.unsubscribe(); void joined.leave() }
+        startRef.current = () => { if (joined.connection.isOpen) joined.send('start') }
         rematchRef.current = () => {
           if (joined.connection.isOpen) joined.send('rematch')
         }
@@ -171,11 +186,13 @@ function ArenaSession({
             setPickups(Array.from(state.pickups.values()))
           }
           setMatchMeta({
+            hostId: state.hostId ?? '', notice: state.notice ?? '', saveStatus: state.saveStatus ?? '',
+            resultSummary: state.resultSummary ?? '', finishReason: state.finishReason ?? '',
             phase: state.phase ?? 'waiting',
             isPaused: Boolean(state.isPaused),
             pausedByName: state.pausedByName ?? '',
-            timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 180,
-            killsToWin: typeof state.killsToWin === 'number' ? state.killsToWin : 10,
+            timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 300,
+            killsToWin: typeof state.killsToWin === 'number' ? state.killsToWin : 20,
             winnerId: state.winnerId ?? '',
             winnerName: state.winnerName ?? '',
           })
@@ -195,7 +212,7 @@ function ArenaSession({
             if (joined.connection.isOpen) joined.send('emote', emote)
           },
           sendPause: (paused) => {
-            if (joined.connection.isOpen) joined.send('pause', paused)
+            setLocalPaused(paused)
           },
         })
         setStatus('Conectado')
@@ -239,7 +256,8 @@ function ArenaSession({
     }
   }, [matchMeta.phase, matchMeta.winnerId, controls?.playerId])
 
-  const sortedPlayers = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+  const finalPlayers: { sessionId: string; name: string; kills: number; deaths: number; abandoned: boolean; outcome: string; points: number }[] = matchMeta.resultSummary ? JSON.parse(matchMeta.resultSummary) : []
+  const sortedPlayers = [...finalPlayers].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
   const scoreLine = players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
   const localPlayer = players.find((p) => p.id === controls?.playerId)
   const localWeaponSpec = localPlayer ? WEAPON_BY_ID[localPlayer.weaponType] : undefined
@@ -255,10 +273,9 @@ function ArenaSession({
   const isLowAmmo = isLocalFirearm && localAmmo <= Math.ceil(localMaxAmmo * 0.25)
   const ammoIconSrc =
     localPlayer?.weaponType === 'shotgun' ? '/assets/ui/icon-shell.png' : '/assets/ui/icon-bullet.png'
-  const finishReason =
-    matchMeta.timeRemaining <= 0
-      ? 'Tiempo agotado'
-      : `Meta de ${matchMeta.killsToWin} bajas alcanzada`
+  const finishReason = ({ time: 'Tiempo agotado', kills: 'Meta de 20 kills alcanzada', abandon: 'Victoria por abandono', interrupted: 'Partida interrumpida' } as Record<string,string>)[matchMeta.finishReason] || ''
+  const saveMessage = ({ saving: 'Guardando resultado…', saved: 'Resultado guardado. Ya cuenta para el ranking.', pending: 'Guardado pendiente. El servidor reintentará automáticamente.', failed: 'No se pudo guardar el archivo de resultados. Revisa el disco del servidor; la revancha está bloqueada.' } as Record<string,string>)[matchMeta.saveStatus]
+
 
   return (
     <div className="arena-shell">
@@ -276,7 +293,7 @@ function ArenaSession({
           <span>{controls ? status : `${status}`}</span>
         </div>
         <div className="arena-header-actions">
-          <span style={{ fontSize: '0.78rem', opacity: 0.85 }}>[ESC] Pausa</span>
+          <span style={{ fontSize: '0.78rem', opacity: 0.85 }}>[ESC] Menú</span>
           <button type="button" onClick={onExit} className="kenney-btn-secondary">
             Salir de la arena
           </button>
@@ -287,7 +304,9 @@ function ArenaSession({
       <div className="arena-stage">
         {controls && matchMeta.phase === 'waiting' && (
           <div className="arena-waiting-banner" role="status">
-            Esperando al segundo jugador para iniciar la partida...
+            {players.length < 2 ? 'Se necesitan al menos dos jugadores.' : 'Esperando al anfitrión para iniciar.'}
+            {controls.playerId === matchMeta.hostId && <button disabled={players.length < 2} onClick={() => startRef.current?.()}>Iniciar partida</button>}
+            {matchMeta.notice && <p role="alert">{matchMeta.notice}</p>}
           </div>
         )}
 
@@ -324,7 +343,7 @@ function ArenaSession({
               bullets={bullets}
               pickups={pickups}
               phase={matchMeta.phase}
-              isPaused={matchMeta.isPaused}
+              isPaused={localPaused}
               crosshairStyle={crosshairStyle}
               resumeSignal={resumeSignal}
               controls={controls}
@@ -332,20 +351,18 @@ function ArenaSession({
           )}
         </div>
 
-        {matchMeta.isPaused && matchMeta.phase !== 'finished' && (
-          <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Pausa">
+        {localPaused && matchMeta.phase !== 'finished' && (
+          <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Menú personal">
             <div className="arena-pause-modal">
-              <h2 className="arena-pause-title">PAUSA</h2>
+              <h2 className="arena-pause-title">MENÚ</h2>
               <p className="arena-pause-hint">
-                {matchMeta.pausedByName
-                  ? `Partida pausada por ${matchMeta.pausedByName}.`
-                  : 'Partida en pausa.'}
+                La partida continúa mientras este menú está abierto.
               </p>
               <div className="arena-pause-actions">
                 <button
                   type="button"
                   className="kenney-btn-primary"
-                  onClick={() => setResumeSignal((n) => n + 1)}
+                  onClick={() => { setLocalPaused(false); setResumeSignal((n) => n + 1) }}
                 >
                   Continuar
                 </button>
@@ -365,33 +382,34 @@ function ArenaSession({
           <div className="arena-results-overlay" role="dialog" aria-modal="true">
             <div className="arena-results-modal">
               <h2>
-                {matchMeta.winnerName ? `Ganador: ${matchMeta.winnerName}` : 'Empate'}
+                {finalPlayers.filter(p => p.outcome === 'draw').length > 1 ? `Empate: ${matchMeta.winnerName}` : matchMeta.winnerName ? `Ganador: ${matchMeta.winnerName}` : 'Partida interrumpida'}
               </h2>
-              <p className="arena-results-subtitle">{finishReason}</p>
+              <p className="arena-results-subtitle">{finishReason}</p><p role="status">{saveMessage}</p>
 
-              <table className="arena-results-table">
+              <div className="arena-results-scroll"><table className="arena-results-table">
                 <thead>
                   <tr>
                     <th>Jugador</th>
                     <th>Eliminaciones</th>
-                    <th>Muertes</th>
+                    <th>Muertes</th><th>Resultado</th><th>Puntos</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedPlayers.map((player) => (
-                    <tr key={player.id}>
-                      <td>{player.name}</td>
+                    <tr key={player.sessionId}>
+                      <td>{player.name}{player.abandoned ? " (abandono)" : ""}</td>
                       <td>{player.kills}</td>
-                      <td>{player.deaths}</td>
+                      <td>{player.deaths}</td><td>{({ win: "Victoria", draw: "Empate", loss: "Derrota" } as Record<string,string>)[player.outcome]}</td><td>+{player.points}</td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
 
               <div className="arena-results-actions">
                 <button
                   type="button"
                   className="arena-btn-primary"
+                  disabled={controls?.playerId !== matchMeta.hostId || ['saving','failed'].includes(matchMeta.saveStatus)}
                   onClick={() => rematchRef.current?.()}
                 >
                   Jugar revancha
@@ -422,6 +440,7 @@ export default function App({ profile, onProfileSaved, onOpenProfile, onSignOut,
   const [skin, setSkin] = useState<PlayerSkin>(profile.preferred_skin)
   const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>(profile.preferred_weapon)
   const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>(profile.crosshair_style)
+  const [rankingsOpen, setRankingsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
   const [playerName, setPlayerName] = useState<string | null>(null)
@@ -459,6 +478,8 @@ export default function App({ profile, onProfileSaved, onOpenProfile, onSignOut,
     finally { setSaving(false) }
   }
 
+  if (rankingsOpen) return <Rankings onBack={() => setRankingsOpen(false)} />
+
   if (playerName !== null) {
     return (
       <ArenaSession
@@ -486,6 +507,7 @@ export default function App({ profile, onProfileSaved, onOpenProfile, onSignOut,
             <ProfileAvatar profile={profile} />
             <p><strong>{profile.username}</strong><br />Listo para la arena</p>
           </div>
+          <button type="button" className="auth-text-button" onClick={() => setRankingsOpen(true)}>Rankings y estadísticas</button>
           <button type="button" className="auth-text-button" onClick={onOpenProfile}>Mi perfil</button>
           <button type="button" className="auth-text-button" onClick={onSignOut}>Cerrar sesión</button>
         </div>

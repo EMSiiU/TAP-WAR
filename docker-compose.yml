@@ -21,3 +21,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://mcserver.tailda19bf.ts.net}
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY}
+      MATCH_DATA_DIR: /app/.data/matches
+    volumes:
+      - match-results:/app/.data
+
+volumes:
+  match-results:
