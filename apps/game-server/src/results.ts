@@ -91,7 +91,14 @@ export async function initializeResults() {
   })
   store = new ResultStore(process.env.MATCH_DATA_DIR || '.data/matches', async result => {
     const { error } = await client.rpc('record_match_result', { payload: result })
-    if (error) throw new Error('No se pudo persistir el resultado')
+    if (error) {
+      console.error(
+        'Rankings: error al persistir resultado en Supabase:',
+        error.code ?? 'sin-codigo',
+        error.message,
+      )
+      throw new Error('No se pudo persistir el resultado')
+    }
   })
   await store.initialize()
 }

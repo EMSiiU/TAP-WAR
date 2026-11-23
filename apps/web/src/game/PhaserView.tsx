@@ -45,8 +45,13 @@ export default function PhaserView({
 }: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
-  const initialMapSizeRef = useRef(mapSize)
-  const initialTouchModeRef = useRef(touchMode)
+  const latestPlayersRef = useRef(players)
+  const latestBulletsRef = useRef(bullets)
+  const latestPickupsRef = useRef(pickups)
+  const latestPhaseRef = useRef(phase)
+  const latestPausedRef = useRef(isPaused)
+  const latestCrosshairRef = useRef(crosshairStyle)
+  const latestTouchModeRef = useRef(touchMode)
   const onMenuToggleRef = useRef(onMenuToggle)
   const onGamepadChangeRef = useRef(onGamepadChange)
 
@@ -59,17 +64,58 @@ export default function PhaserView({
   }, [onGamepadChange])
 
   useEffect(() => {
+    latestPlayersRef.current = players
+    sceneRef.current?.setPlayers(players)
+  }, [players])
+
+  useEffect(() => {
+    latestBulletsRef.current = bullets
+    sceneRef.current?.setBullets(bullets)
+  }, [bullets])
+
+  useEffect(() => {
+    latestPickupsRef.current = pickups
+    sceneRef.current?.setPickups(pickups)
+  }, [pickups])
+
+  useEffect(() => {
+    latestPhaseRef.current = phase
+    sceneRef.current?.setPhase(phase)
+  }, [phase])
+
+  useEffect(() => {
+    latestPausedRef.current = isPaused
+    sceneRef.current?.setPaused(isPaused)
+  }, [isPaused])
+
+  useEffect(() => {
+    latestCrosshairRef.current = crosshairStyle
+    sceneRef.current?.setCrosshairStyle(crosshairStyle)
+  }, [crosshairStyle])
+
+  useEffect(() => {
+    latestTouchModeRef.current = touchMode
+    sceneRef.current?.setTouchMode(touchMode)
+  }, [touchMode])
+
+  useEffect(() => {
     const parent = hostRef.current
     if (!parent) return
 
     const scene = new ArenaScene(
       controls,
-      initialMapSizeRef.current,
-      initialTouchModeRef.current,
+      mapSize,
+      latestTouchModeRef.current,
       () => touchInputRef.current,
       () => onMenuToggleRef.current?.(),
       (connected) => onGamepadChangeRef.current?.(connected),
     )
+    scene.setPlayers(latestPlayersRef.current)
+    scene.setBullets(latestBulletsRef.current)
+    scene.setPickups(latestPickupsRef.current)
+    scene.setPhase(latestPhaseRef.current)
+    scene.setPaused(latestPausedRef.current)
+    scene.setCrosshairStyle(latestCrosshairRef.current)
     sceneRef.current = scene
     let game: Phaser.Game | undefined
 
@@ -101,39 +147,6 @@ export default function PhaserView({
       game?.destroy(true)
     }
   }, [controls, mapSize, touchInputRef])
-
-  useEffect(() => {
-    initialMapSizeRef.current = mapSize
-  }, [mapSize])
-
-  useEffect(() => {
-    sceneRef.current?.setPlayers(players)
-  }, [players])
-
-  useEffect(() => {
-    sceneRef.current?.setBullets(bullets)
-  }, [bullets])
-
-  useEffect(() => {
-    sceneRef.current?.setPickups(pickups)
-  }, [pickups])
-
-  useEffect(() => {
-    sceneRef.current?.setPhase(phase)
-  }, [phase])
-
-  useEffect(() => {
-    sceneRef.current?.setPaused(isPaused)
-  }, [isPaused])
-
-  useEffect(() => {
-    sceneRef.current?.setCrosshairStyle(crosshairStyle)
-  }, [crosshairStyle])
-
-  useEffect(() => {
-    initialTouchModeRef.current = touchMode
-    sceneRef.current?.setTouchMode(touchMode)
-  }, [touchMode])
 
   useEffect(() => {
     if (resumeSignal > 0) {
