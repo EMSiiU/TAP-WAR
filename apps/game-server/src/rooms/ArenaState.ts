@@ -65,11 +65,16 @@ export class WeaponPickup extends Schema {
 }
 
 export class ArenaState extends Schema {
+    @type('string') hostId = ''
+    @type('string') notice = ''
+    @type('string') saveStatus = ''
+    @type('string') resultSummary = ''
+    @type('string') finishReason = ''
     @type('string') phase: MatchPhase = 'waiting'
     @type('boolean') isPaused = false
     @type('string') pausedByName = ''
-    @type('number') timeRemaining = 180
-    @type('number') killsToWin = 10
+    @type('number') timeRemaining = 300
+    @type('number') killsToWin = 20
     @type('string') winnerId = ''
     @type('string') winnerName = ''
     @type({ map: Player }) players = new MapSchema<Player>()

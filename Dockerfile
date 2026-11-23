@@ -32,7 +32,7 @@ COPY apps/game-server/tsconfig.json ./apps/game-server/tsconfig.json
 COPY apps/game-server/src ./apps/game-server/src
 COPY --from=web-builder /app/apps/web/dist ./apps/web/dist
 
-RUN chown -R node:node /app
+RUN mkdir -p /app/.data && chown -R node:node /app
 USER node
 
 ENV NODE_ENV=production \

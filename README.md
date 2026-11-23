@@ -106,3 +106,7 @@ Las mismas Issues avanzan por **Backlog → Ready → In progress → In review 
 - [Prueba de aceptación del primer sprint](docs/prueba-sprint-1.md)
 
 Guardar configuración privada fuera del repositorio. Cuando sea necesaria, documentar sus variables con ejemplos sin credenciales.
+
+## Rankings y estadísticas
+
+Ranking global con fotos, tabla y gráfica; estadísticas propias e historial para usuarios autenticados. Requiere aplicar la nueva migración y configurar SUPABASE_SECRET_KEY solo en el servidor. Ver [activación y pruebas](docs/rankings.md).

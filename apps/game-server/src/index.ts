@@ -1,3 +1,4 @@
+import { initializeResults } from './results.js'
 import { defineRoom, defineServer, matchMaker } from 'colyseus'
 import { ArenaRoom } from './rooms/ArenaRoom.js'
 import { authConfiguration } from './auth.js'
@@ -13,6 +14,7 @@ import { createStaticMiddleware } from './static.js'
 
 const auth = authConfiguration()
 const config = parseServerConfig()
+await initializeResults()
 
 matchMaker.controller.DEFAULT_CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Origin, X-Requested-With, Content-Type, Accept, Authorization',

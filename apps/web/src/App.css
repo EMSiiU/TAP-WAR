@@ -328,13 +328,19 @@
   transform: translateX(-50%);
   z-index: 10;
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: 12px;
+  max-width: calc(100% - 48px);
   background: rgba(16, 24, 39, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: #f8fafc;
   font-size: 0.9rem;
-  pointer-events: none;
+  pointer-events: auto;
 }
+
+.arena-waiting-banner button { margin-left: 12px; cursor: pointer; }
+.arena-results-scroll { max-width: 100%; overflow-x: auto; }
+.lobby-card .account-heading { flex-wrap: wrap; }
+.lobby-card .account-details { flex: 1 1 200px; }
 
 .arena-results-overlay {
   position: absolute;
