@@ -7,16 +7,17 @@ Videojuego multijugador para navegador desarrollado para Tópicos Avanzados de D
 
 ## Estado del proyecto
 
-- Arena para hasta cuatro conexiones, con movimiento, apuntado, colisiones y combate autoritativos.
-- Cuatro personajes, diez armas, dos estilos de mira, munición, pickups, reaparición, pausa, resultados y revancha.
+- Salas públicas (listadas en `/api/rooms`) o privadas por código de 6 caracteres, con capacidades de **4, 10 o 20 jugadores** y mapas dinámicos (**Pequeño** `1024×768`, **Mediano** `1600×1152`, **Grande** `2240×1600`) con cámara seguidora y minimapa.
+- Controles adaptables: PC (WASD + ratón/ESPACIO), dispositivos móviles/tablets (joysticks táctiles gemelos + botón de pantalla completa) y mandos por cable o Bluetooth (Gamepad API).
+- Cuatro personajes, diez armas, dos estilos de mira, munición, pickups, reaparición, menú personal, resultados persistentes, rankings y revancha.
 - Acceso con correo/contraseña o Google mediante Supabase. GitHub está preparado como opción de configuración, pendiente de habilitación y prueba.
 - Username obligatorio antes del lobby, editable desde Mi perfil; de 3 a 20 caracteres ASCII, números o guion bajo, único sin distinguir mayúsculas.
 - Foto de perfil opcional: subida, reemplazo y eliminación con Supabase Storage privado. No sustituye al personaje de la arena.
 - Preferencias de personaje, arma y mira guardadas por cuenta. Colyseus verifica el token y obtiene el username del perfil.
 
-SMTP y recuperación de contraseña quedan para una etapa posterior. El despliegue en Ubuntu y los resultados persistentes también están pendientes. El [estado de validación](docs/estado-actual.md) distingue implementación, pruebas realizadas y casos por verificar.
+El despliegue en Ubuntu (Docker + Tailscale Funnel) y el respaldo en Render están listos; SMTP, recuperación de contraseña y reconexión de 30 s quedan pendientes. El [estado de validación](docs/estado-actual.md) distingue implementación, pruebas realizadas y casos por verificar.
 
-El [plan de próximos pasos](docs/proximos-pasos.md) define salas por código, inicio manual, estadísticas persistentes, ranking por puntos y despliegue de prueba. Distingue acuerdos confirmados de reglas propuestas; estas funciones todavía no están implementadas.
+El [plan de próximos pasos](docs/proximos-pasos.md) detalla las decisiones del proyecto y los pendientes restantes.
 
 ## Organización del repositorio
 
@@ -109,4 +110,4 @@ Guardar configuración privada fuera del repositorio. Cuando sea necesaria, docu
 
 ## Rankings y estadísticas
 
-Ranking global con fotos, tabla y gráfica; estadísticas propias e historial para usuarios autenticados. Requiere aplicar la nueva migración y configurar SUPABASE_SECRET_KEY solo en el servidor. Ver [activación y pruebas](docs/rankings.md).
+Ranking global con fotos, tabla y gráfica; estadísticas propias e historial para usuarios autenticados. Requiere aplicar las migraciones [`20261123000100_match_rankings.sql`](supabase/migrations/20261123000100_match_rankings.sql) y [`20261123000200_expand_match_capacity.sql`](supabase/migrations/20261123000200_expand_match_capacity.sql) y configurar `SUPABASE_SECRET_KEY` solo en el servidor. Ver [activación y pruebas](docs/rankings.md).

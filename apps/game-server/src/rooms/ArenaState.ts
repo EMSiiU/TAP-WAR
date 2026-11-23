@@ -1,4 +1,5 @@
 import { MapSchema, Schema, type } from '@colyseus/schema'
+import type { MapSize } from './ArenaMaps.js'
 
 export type MatchPhase = 'waiting' | 'playing' | 'finished'
 export type PlayerSkin = 'fox' | 'squirrel' | 'mouse' | 'rabbit'
@@ -65,6 +66,11 @@ export class WeaponPickup extends Schema {
 }
 
 export class ArenaState extends Schema {
+    @type('string') roomCode = ''
+    @type('string') roomName = ''
+    @type('string') mapSize: MapSize = 'small'
+    @type('number') maxPlayers = 4
+    @type('boolean') isPrivate = false
     @type('string') hostId = ''
     @type('string') notice = ''
     @type('string') saveStatus = ''

@@ -1,15 +1,19 @@
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
+import type { ArenaMapConfig } from './ArenaMaps.js'
 
 type Position = { x: number; y: number }
 
-const radius = arena.playerRadius
+export type CollisionMap = Pick<ArenaMapConfig, 'width' | 'height' | 'playerRadius' | 'obstacles'>
+
+const DEFAULT_ARENA_MAP: CollisionMap = arena
 
 function clamp(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(value, max))
 }
 
-function overlapsObstacle(x: number, y: number): boolean {
-    return arena.obstacles.some((obstacle) => {
+function overlapsObstacle(x: number, y: number, arenaMap: CollisionMap): boolean {
+    const radius = arenaMap.playerRadius
+    return arenaMap.obstacles.some((obstacle) => {
         const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.width)
         const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.height)
         const dx = x - closestX
@@ -23,18 +27,20 @@ export function moveInsideArena(
     position: Position,
     dx: number,
     dy: number,
+    arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): Position {
+    const radius = arenaMap.playerRadius
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (radius / 2)))
     const stepX = dx / steps
     const stepY = dy / steps
     let { x, y } = position
 
     for (let i = 0; i < steps; i++) {
-        const nextX = clamp(x + stepX, radius, arena.width - radius)
-        if (!overlapsObstacle(nextX, y)) x = nextX
+        const nextX = clamp(x + stepX, radius, arenaMap.width - radius)
+        if (!overlapsObstacle(nextX, y, arenaMap)) x = nextX
 
-        const nextY = clamp(y + stepY, radius, arena.height - radius)
-        if (!overlapsObstacle(x, nextY)) y = nextY
+        const nextY = clamp(y + stepY, radius, arenaMap.height - radius)
+        if (!overlapsObstacle(x, nextY, arenaMap)) y = nextY
     }
 
     return { x, y }
@@ -44,8 +50,9 @@ export function isBulletHittingObstacle(
     x: number,
     y: number,
     halfSize = 4,
+    arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): boolean {
-    return arena.obstacles.some(
+    return arenaMap.obstacles.some(
         (obstacle) =>
             x + halfSize > obstacle.x &&
             x - halfSize < obstacle.x + obstacle.width &&
@@ -95,6 +102,7 @@ export function segmentBlockedByObstacle(
     y1: number,
     x2: number,
     y2: number,
+    arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): boolean {
     const dist = Math.hypot(x2 - x1, y2 - y1)
     const steps = Math.max(1, Math.ceil(dist / 4))
@@ -102,7 +110,7 @@ export function segmentBlockedByObstacle(
         const t = i / steps
         const px = x1 + (x2 - x1) * t
         const py = y1 + (y2 - y1) * t
-        if (isBulletHittingObstacle(px, py, 2)) {
+        if (isBulletHittingObstacle(px, py, 2, arenaMap)) {
             return true
         }
     }

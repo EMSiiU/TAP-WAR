@@ -8,6 +8,8 @@ function isBackendPath(pathname: string): boolean {
   return (
     pathname === '/health' ||
     pathname === '/__healthcheck' ||
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
     pathname === '/matchmake' ||
     pathname.startsWith('/matchmake/')
   )

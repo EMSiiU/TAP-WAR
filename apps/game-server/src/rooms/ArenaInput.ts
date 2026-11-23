@@ -1,14 +1,12 @@
-type MoveAxis = -1 | 0 | 1
-
 export type ArenaInput = {
-    moveX: MoveAxis
-    moveY: MoveAxis
+    moveX: number
+    moveY: number
     aimAngle: number
     shoot?: boolean
 }
 
-function isMoveAxis(value: unknown): value is MoveAxis {
-    return value === -1 || value === 0 || value === 1
+function isMoveAxis(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value >= -1 && value <= 1
 }
 
 export function parseArenaInput(value: unknown): ArenaInput | null {

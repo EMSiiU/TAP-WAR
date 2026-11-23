@@ -17,6 +17,10 @@ export function resolveGameServerUrl(
 }
 
 export function toHealthCheckUrl(serverUrl: string): string {
+  return toApiUrl(serverUrl, '/health')
+}
+
+export function toApiUrl(serverUrl: string, path: string): string {
   const httpUrl = serverUrl.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:')
-  return new URL('/health', httpUrl).toString()
+  return new URL(path, httpUrl).toString()
 }

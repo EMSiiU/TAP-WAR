@@ -246,6 +246,9 @@ test('createStaticMiddleware sirve archivos, SPA fallback, 404 de assets y bloqu
     const healthSkip = await runRequest('GET', '/health')
     assert.equal(healthSkip.nextCalled, true)
 
+    const apiSkip = await runRequest('GET', '/api/rooms')
+    assert.equal(apiSkip.nextCalled, true)
+
     const matchmakeSkip = await runRequest('GET', '/matchmake/joinById/arena-local')
     assert.equal(matchmakeSkip.nextCalled, true)
   } finally {

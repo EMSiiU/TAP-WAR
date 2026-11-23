@@ -8,6 +8,8 @@ import ArenaScene, {
   type PickupState,
   type PlayerState,
 } from './ArenaScene'
+import type { MapSize } from './arenaMaps'
+import type { TouchInputState } from './TouchControls'
 import arena from '../../../../packages/shared/arena.json'
 
 type PhaserViewProps = {
@@ -17,6 +19,11 @@ type PhaserViewProps = {
   phase: MatchPhase
   isPaused: boolean
   crosshairStyle: CrosshairStyle
+  mapSize: MapSize
+  touchMode: boolean
+  touchInputRef: React.RefObject<TouchInputState>
+  onMenuToggle?: () => void
+  onGamepadChange?: (connected: boolean) => void
   resumeSignal: number
   controls: ArenaControls
 }
@@ -28,17 +35,41 @@ export default function PhaserView({
   phase,
   isPaused,
   crosshairStyle,
+  mapSize,
+  touchMode,
+  touchInputRef,
+  onMenuToggle,
+  onGamepadChange,
   resumeSignal,
   controls,
 }: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
+  const initialMapSizeRef = useRef(mapSize)
+  const initialTouchModeRef = useRef(touchMode)
+  const onMenuToggleRef = useRef(onMenuToggle)
+  const onGamepadChangeRef = useRef(onGamepadChange)
+
+  useEffect(() => {
+    onMenuToggleRef.current = onMenuToggle
+  }, [onMenuToggle])
+
+  useEffect(() => {
+    onGamepadChangeRef.current = onGamepadChange
+  }, [onGamepadChange])
 
   useEffect(() => {
     const parent = hostRef.current
     if (!parent) return
 
-    const scene = new ArenaScene(controls)
+    const scene = new ArenaScene(
+      controls,
+      initialMapSizeRef.current,
+      initialTouchModeRef.current,
+      () => touchInputRef.current,
+      () => onMenuToggleRef.current?.(),
+      (connected) => onGamepadChangeRef.current?.(connected),
+    )
     sceneRef.current = scene
     let game: Phaser.Game | undefined
 
@@ -69,7 +100,11 @@ export default function PhaserView({
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls])
+  }, [controls, mapSize, touchInputRef])
+
+  useEffect(() => {
+    initialMapSizeRef.current = mapSize
+  }, [mapSize])
 
   useEffect(() => {
     sceneRef.current?.setPlayers(players)
@@ -94,6 +129,11 @@ export default function PhaserView({
   useEffect(() => {
     sceneRef.current?.setCrosshairStyle(crosshairStyle)
   }, [crosshairStyle])
+
+  useEffect(() => {
+    initialTouchModeRef.current = touchMode
+    sceneRef.current?.setTouchMode(touchMode)
+  }, [touchMode])
 
   useEffect(() => {
     if (resumeSignal > 0) {
