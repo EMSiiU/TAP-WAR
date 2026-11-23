@@ -40,6 +40,35 @@ const server = defineServer({
       response.json({ ok: true })
     })
 
+    app.get('/api/rooms', async (_request, response) => {
+      response.setHeader('Cache-Control', 'no-store')
+      try {
+        const listings = await matchMaker.query({
+          name: 'arena',
+          private: false,
+          locked: false,
+        })
+        const rooms = listings
+          .filter((room) => room.clients < room.maxClients)
+          .map((room) => {
+            const meta = (room.metadata ?? {}) as Record<string, unknown>
+            return {
+              code: typeof meta.code === 'string' && meta.code ? meta.code : room.roomId,
+              name: typeof meta.name === 'string' && meta.name ? meta.name : `Sala ${room.roomId}`,
+              mapSize:
+                meta.mapSize === 'medium' || meta.mapSize === 'large' ? meta.mapSize : 'small',
+              clients: room.clients,
+              maxClients: room.maxClients,
+              phase: meta.phase === 'playing' || meta.phase === 'finished' ? meta.phase : 'waiting',
+              hostName: typeof meta.hostName === 'string' ? meta.hostName : '',
+            }
+          })
+        response.json({ rooms })
+      } catch {
+        response.status(500).json({ error: 'No se pudieron consultar las salas activas.' })
+      }
+    })
+
     if (config.staticDir) {
       app.use(createStaticMiddleware(config.staticDir))
     }
@@ -57,9 +86,8 @@ wrapHttpServer(httpServer, {
   securityHeaders: buildSecurityHeaders(auth.url, config.isProduction),
   trustProxy: config.trustProxy,
   matchmakeRateLimiter: createRateLimiter({ windowMs: 60_000, maxRequests: 60 }),
+  apiRateLimiter: createRateLimiter({ windowMs: 60_000, maxRequests: 120 }),
 })
-
-await matchMaker.createRoom('arena', {})
 
 console.log(
   `TAP-WAR game-server escuchando en http://${config.host}:${config.port}${

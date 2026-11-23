@@ -1,6 +1,6 @@
 # Próximos pasos: salas, partidas, estadísticas y rankings
 
-Definición inicial: 20 de noviembre de 2026. Actualizado el 23 de noviembre de 2026. Estado: rankings y persistencia implementados localmente, pendientes de activación remota; salas por código y reconexión pendientes.
+Definición inicial: 20 de noviembre de 2026. Actualizado el 23 de noviembre de 2026. Estado: rankings, persistencia, salas públicas/privadas por código, capacidades 4/10/20 con mapas pequeño/mediano/grande, controles táctiles y soporte para mandos implementados; reconexión con reserva de 30 s pendiente.
 
 ## Objetivo
 
@@ -31,7 +31,7 @@ Ver [rankings.md](rankings.md) para activar la migración, configurar la clave p
 
 Ya están implementados el ranking con fotos, tabla/búsqueda/paginación, top diez y Mis estadísticas con tarjetas, dos gráficas e historial. Los perfiles completos sin partidas aparecen sin clasificar; los incompletos no se incluyen. ESC abre un menú local y no pausa la simulación.
 
-Se mantiene una sola sala fija de cuatro plazas. Salir o perder la conexión supone abandono inmediato; la reconexión con treinta segundos de reserva requiere otro bloque. Las salas por código tampoco están implementadas. Al reiniciar se recuperan cierres pendientes y las rondas abiertas se marcan interrumpidas sin estadísticas competitivas.
+El sistema ya soporta múltiples salas simultáneas (públicas y privadas con código de 6 caracteres), selección de capacidad (`4`, `10` o `20` jugadores) acoplada al tamaño del mapa (`Pequeño`, `Mediano`, `Grande`), controles táctiles para móvil/tablet, pantalla completa y mandos USB/Bluetooth. Salir o perder la conexión supone abandono inmediato; la reconexión con treinta segundos de reserva requiere otro bloque. Al reiniciar se recuperan cierres pendientes y las rondas abiertas se marcan interrumpidas sin estadísticas competitivas.
 
 Las etapas y garantías siguientes sirven como lista de verificación. Implementación local no equivale a configuración remota ni a prueba de aceptación con dos cuentas reales.
 

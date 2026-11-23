@@ -1,8 +1,12 @@
 import Phaser from 'phaser'
+import { getArenaMap, type ArenaMapConfig, type MapSize } from './arenaMaps'
+import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
+import type { TouchInputState } from './TouchControls'
 
 export type MatchPhase = 'waiting' | 'playing' | 'finished'
 export type PlayerSkin = 'fox' | 'squirrel' | 'mouse' | 'rabbit'
 export type TeamColor = 'orange' | 'blue'
+export type MeleeWeaponType = 'knife' | 'axe'
 export type WeaponType =
     | 'pistol'
     | 'revolver'
@@ -71,7 +75,7 @@ const WALK_ANIM_TIMEOUT_MS = 120
 const PLAYER_DISPLAY_SIZE = 80
 const WEAPON_DISPLAY_SIZE = 68 // ~85% del tamaño del personaje (68 / 80)
 const WEAPON_BASE_Y = -10 // Altura de cintura/manos proporcional al nuevo tamaño
-const WEAPON_RADIAL_OFFSET = 15 // Desplazamiento radial en dirección de aimAngle
+const WEAPON_RADIAL_OFFSET = 15 // Desplamiento radial en dirección de aimAngle
 const SMALL_BULLET_BASE_SIZE = 18
 const HEAVY_BULLET_BASE_SIZE = 16
 const SHELL_SMALL_SIZE = 14
@@ -135,6 +139,11 @@ export default class ArenaScene extends Phaser.Scene {
     private currentPhase: MatchPhase = 'waiting'
     private crosshairStyle: CrosshairStyle = 'outline'
     private isPaused = false
+    private touchMode = false
+    private arenaMap: ArenaMapConfig
+    private getTouchInput?: () => TouchInputState
+    private onMenuToggle?: () => void
+    private onGamepadChange?: (connected: boolean) => void
     private aimOffsetX = 120
     private aimOffsetY = 0
     private playerViews = new Map<string, PlayerView>()
@@ -142,18 +151,32 @@ export default class ArenaScene extends Phaser.Scene {
     private pickupViews = new Map<string, PickupView>()
     private lastShellAtByOwner = new Map<string, number>()
     private aimCrosshair?: Phaser.GameObjects.Image
+    private minimapGraphics?: Phaser.GameObjects.Graphics
     private isReady = false
 
     private controls: ArenaControls
     private cleanupControls?: () => void
 
-    constructor(controls: ArenaControls) {
+    constructor(
+        controls: ArenaControls,
+        mapSize: MapSize = 'small',
+        touchMode = false,
+        getTouchInput?: () => TouchInputState,
+        onMenuToggle?: () => void,
+        onGamepadChange?: (connected: boolean) => void,
+    ) {
         super('arena')
         this.controls = controls
+        this.arenaMap = getArenaMap(mapSize)
+        this.touchMode = touchMode
+        this.getTouchInput = getTouchInput
+        this.onMenuToggle = onMenuToggle
+        this.onGamepadChange = onGamepadChange
     }
 
     preload() {
         this.load.image('arena-desert', '/assets/maps/arena-desert.png')
+        this.load.image('tilemap-desert', '/assets/maps/tilemap-desert.png')
         for (const skin of SKINS) {
             this.load.image(`player-${skin}-idle`, `/assets/characters/player-${skin}-idle.png`)
             this.load.image(`player-${skin}-dead`, `/assets/characters/player-${skin}-dead.png`)
@@ -203,7 +226,8 @@ export default class ArenaScene extends Phaser.Scene {
 
     create() {
         this.isReady = true
-        this.input.setDefaultCursor('none')
+        this.input.setDefaultCursor(this.touchMode ? 'default' : 'none')
+        this.cameras.main.setBounds(0, 0, this.arenaMap.width, this.arenaMap.height)
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
             this.isReady = false
@@ -214,13 +238,19 @@ export default class ArenaScene extends Phaser.Scene {
             this.stopControls()
             this.aimCrosshair?.destroy()
             this.aimCrosshair = undefined
+            this.minimapGraphics?.destroy()
+            this.minimapGraphics = undefined
             this.playerViews.clear()
             this.bulletViews.clear()
             this.pickupViews.clear()
             this.lastShellAtByOwner.clear()
         })
 
-        this.add.image(0, 0, 'arena-desert').setOrigin(0, 0)
+        this.renderArenaMap()
+
+        if (this.arenaMap.id !== 'small') {
+            this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(9500)
+        }
 
         for (const skin of SKINS) {
             const animKey = `walk-${skin}`
@@ -245,6 +275,93 @@ export default class ArenaScene extends Phaser.Scene {
         this.applyBullets(this.bullets)
         this.applyPickups(this.pickups)
         this.startControls()
+    }
+
+    private renderArenaMap() {
+        if (this.arenaMap.id === 'small') {
+            this.add.image(0, 0, 'arena-desert').setOrigin(0, 0)
+            return
+        }
+
+        const tilePx = 32
+        const cols = Math.floor(this.arenaMap.width / tilePx)
+        const rows = Math.floor(this.arenaMap.height / tilePx)
+
+        const groundData: number[][] = []
+        const obstacleData: number[][] = []
+
+        for (let y = 0; y < rows; y++) {
+            const gRow: number[] = []
+            const oRow: number[] = []
+            for (let x = 0; x < cols; x++) {
+                const hash = (x * 73856093) ^ (y * 19349663)
+                let groundTile = Math.abs(hash) % 5 === 0 ? 65 : 64
+                if (Math.abs(hash) % 29 === 0) groundTile = 103
+                else if (Math.abs(hash) % 41 === 0) groundTile = 121
+                gRow.push(groundTile)
+                oRow.push(-1)
+            }
+            groundData.push(gRow)
+            obstacleData.push(oRow)
+        }
+
+        // Borde exterior de la arena (1 celda de grosor = 32 px).
+        for (let x = 0; x < cols; x++) {
+            obstacleData[0][x] = x === 0 ? 46 : x === cols - 1 ? 48 : 47
+            obstacleData[rows - 1][x] = x === 0 ? 10 : x === cols - 1 ? 12 : 11
+        }
+        for (let y = 1; y < rows - 1; y++) {
+            obstacleData[y][0] = 28
+            obstacleData[y][cols - 1] = 30
+        }
+
+        // Obstáculos interiores alineados con arena.json.
+        for (const obs of this.arenaMap.obstacles) {
+            if (
+                obs.x === 0 ||
+                obs.y === 0 ||
+                obs.x + obs.width >= this.arenaMap.width ||
+                obs.y + obs.height >= this.arenaMap.height
+            ) {
+                continue
+            }
+            const c0 = Math.floor(obs.x / tilePx)
+            const r0 = Math.floor(obs.y / tilePx)
+            const cCount = Math.max(1, Math.round(obs.width / tilePx))
+            const rCount = Math.max(1, Math.round(obs.height / tilePx))
+
+            if (cCount === 2 && rCount === 2) {
+                obstacleData[r0][c0] = 211
+                obstacleData[r0][c0 + 1] = 212
+                obstacleData[r0 + 1][c0] = 229
+                obstacleData[r0 + 1][c0 + 1] = 230
+                continue
+            }
+
+            for (let dy = 0; dy < rCount; dy++) {
+                for (let dx = 0; dx < cCount; dx++) {
+                    const rowBase = dy === 0 ? 100 : dy === rCount - 1 ? 136 : 118
+                    const colOffset = dx === 0 ? 0 : dx === cCount - 1 ? 2 : 1
+                    const r = r0 + dy
+                    const c = c0 + dx
+                    if (r >= 0 && r < rows && c >= 0 && c < cols) {
+                        obstacleData[r][c] = rowBase + colOffset
+                    }
+                }
+            }
+        }
+
+        const groundMap = this.make.tilemap({ data: groundData, tileWidth: 16, tileHeight: 16 })
+        const groundTiles = groundMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
+        if (groundTiles) {
+            groundMap.createLayer(0, groundTiles, 0, 0)?.setScale(2)
+        }
+
+        const obsMap = this.make.tilemap({ data: obstacleData, tileWidth: 16, tileHeight: 16 })
+        const obsTiles = obsMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
+        if (obsTiles) {
+            obsMap.createLayer(0, obsTiles, 0, 0)?.setScale(2)
+        }
     }
 
     update(time: number, delta: number) {
@@ -281,11 +398,69 @@ export default class ArenaScene extends Phaser.Scene {
             }
         }
 
+        if (this.arenaMap.id !== 'small') {
+            const localView = this.playerViews.get(this.controls.playerId)
+            if (localView) {
+                this.cameras.main.centerOn(localView.root.x, localView.root.y)
+            }
+            this.renderMinimap()
+        }
+
         this.updateCrosshair()
+    }
+
+    private renderMinimap() {
+        const g = this.minimapGraphics
+        if (!g) return
+
+        const mmW = 156
+        const mmH = Math.round((mmW * this.arenaMap.height) / this.arenaMap.width)
+        const mmX = 1024 - mmW - 12
+        const mmY = 12
+        const scaleX = mmW / this.arenaMap.width
+        const scaleY = mmH / this.arenaMap.height
+
+        g.clear()
+        g.fillStyle(0x1e1629, 0.78)
+        g.fillRoundedRect(mmX, mmY, mmW, mmH, 6)
+        g.lineStyle(2, 0xf5e2cb, 0.7)
+        g.strokeRoundedRect(mmX, mmY, mmW, mmH, 6)
+
+        g.fillStyle(0x8d6e63, 0.9)
+        for (const obs of this.arenaMap.obstacles) {
+            g.fillRect(
+                mmX + obs.x * scaleX,
+                mmY + obs.y * scaleY,
+                Math.max(2, obs.width * scaleX),
+                Math.max(2, obs.height * scaleY),
+            )
+        }
+
+        g.fillStyle(0xfbbf24, 0.95)
+        for (const pickup of this.pickups) {
+            g.fillCircle(mmX + pickup.x * scaleX, mmY + pickup.y * scaleY, 2.5)
+        }
+
+        for (const player of this.players) {
+            if (player.isDead) continue
+            const isLocal = player.id === this.controls.playerId
+            g.fillStyle(isLocal ? 0x38bdf8 : 0xf87171, 1)
+            g.fillCircle(mmX + player.x * scaleX, mmY + player.y * scaleY, isLocal ? 3.5 : 2.5)
+        }
     }
 
     setCrosshairStyle(style: CrosshairStyle) {
         this.crosshairStyle = style
+    }
+
+    setTouchMode(enabled: boolean) {
+        this.touchMode = enabled
+        if (this.isReady) {
+            this.input.setDefaultCursor(enabled ? 'default' : 'none')
+            if (enabled && this.game?.canvas && document.pointerLockElement === this.game.canvas) {
+                document.exitPointerLock?.()
+            }
+        }
     }
 
     setPaused(paused: boolean) {
@@ -298,7 +473,7 @@ export default class ArenaScene extends Phaser.Scene {
     resume() {
         this.isPaused = false
         this.controls.sendPause?.(false)
-        if (this.currentPhase !== 'finished') {
+        if (!this.touchMode && this.currentPhase !== 'finished') {
             this.game.canvas.requestPointerLock?.()
         }
     }
@@ -372,34 +547,90 @@ export default class ArenaScene extends Phaser.Scene {
         let spaceDown = false
         let pendingShot = false
         let aimAngle = 0
+        const detectGamepadEdges = createGamepadEdgeDetector()
+        let lastReportedGamepad = false
 
-        const hasFocus = () => !document.hidden && document.hasFocus()
+        const reportGamepadState = (connected: boolean) => {
+            if (connected !== lastReportedGamepad) {
+                lastReportedGamepad = connected
+                this.onGamepadChange?.(connected)
+            }
+        }
+
+        reportGamepadState(Boolean(pickActiveGamepad(navigator.getGamepads?.())))
+
+        const hasFocus = () => !document.hidden && (this.touchMode || document.hasFocus())
 
         const sendInput = () => {
+            const pad = pickActiveGamepad(navigator.getGamepads?.())
+            reportGamepadState(Boolean(pad))
+            const padSample = pad ? readGamepadInput(pad) : null
+            const edges = detectGamepadEdges(padSample)
+
+            if (edges.pausePressed && this.currentPhase !== 'finished') {
+                this.onMenuToggle?.()
+                return
+            }
+
             if (this.isPaused || this.currentPhase === 'finished') return
+
+            if (edges.emoteDotsPressed) {
+                this.controls.sendEmote?.('dots')
+            }
+            if (edges.emoteAlertPressed) {
+                this.controls.sendEmote?.('alert')
+            }
+
             const player = this.players.find(({ id }) => id === this.controls.playerId)
             if (!player) return
 
-            const aimDy = this.aimOffsetY - WEAPON_BASE_Y
-            if (this.aimOffsetX !== 0 || aimDy !== 0) {
-                const angle = Math.atan2(aimDy, this.aimOffsetX)
-                aimAngle = angle === Math.PI ? -Math.PI : angle
+            const touch = this.getTouchInput?.()
+
+            if (touch?.aimActive) {
+                const aimRadius = Math.max(90, touch.aimMagnitude * MAX_AIM_RADIUS)
+                this.aimOffsetX = Math.cos(touch.aimAngle) * aimRadius
+                this.aimOffsetY = WEAPON_BASE_Y + Math.sin(touch.aimAngle) * aimRadius
+                aimAngle = touch.aimAngle
+            } else if (padSample?.aimActive) {
+                const aimRadius = Math.max(110, padSample.aimMagnitude * MAX_AIM_RADIUS)
+                this.aimOffsetX = Math.cos(padSample.aimAngle) * aimRadius
+                this.aimOffsetY = WEAPON_BASE_Y + Math.sin(padSample.aimAngle) * aimRadius
+                aimAngle = padSample.aimAngle
+            } else {
+                const aimDy = this.aimOffsetY - WEAPON_BASE_Y
+                if (this.aimOffsetX !== 0 || aimDy !== 0) {
+                    const angle = Math.atan2(aimDy, this.aimOffsetX)
+                    aimAngle = angle === Math.PI ? -Math.PI : angle
+                }
             }
 
-            const isPointerDown = pointerDown || this.input.activePointer.leftButtonDown()
-            const shoot = isPointerDown || spaceDown || pendingShot
+            const kbX = Number(keys.has('KeyD')) - Number(keys.has('KeyA'))
+            const kbY = Number(keys.has('KeyS')) - Number(keys.has('KeyW'))
+            let moveX = kbX
+            let moveY = kbY
+
+            if (touch && (touch.moveX !== 0 || touch.moveY !== 0)) {
+                moveX = touch.moveX
+                moveY = touch.moveY
+            } else if (padSample && (padSample.moveX !== 0 || padSample.moveY !== 0)) {
+                moveX = padSample.moveX
+                moveY = padSample.moveY
+            }
+
+            const isPointerDown = !this.touchMode && (pointerDown || this.input.activePointer.leftButtonDown())
+            const shoot = isPointerDown || spaceDown || pendingShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
             pendingShot = false
 
             this.controls.send({
-                moveX: Number(keys.has('KeyD')) - Number(keys.has('KeyA')),
-                moveY: Number(keys.has('KeyS')) - Number(keys.has('KeyW')),
+                moveX,
+                moveY,
                 aimAngle,
                 shoot,
             })
         }
 
         const onPointerMove = (next: Phaser.Input.Pointer) => {
-            if (this.isPaused || this.currentPhase === 'finished') return
+            if (this.touchMode || this.isPaused || this.currentPhase === 'finished') return
             if (document.pointerLockElement === this.game.canvas) return
             const player = this.players.find(({ id }) => id === this.controls.playerId)
             if (!player) return
@@ -409,7 +640,7 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         const onLockedMouseMove = (event: MouseEvent) => {
-            if (this.isPaused || this.currentPhase === 'finished') return
+            if (this.touchMode || this.isPaused || this.currentPhase === 'finished') return
             if (document.pointerLockElement !== this.game.canvas) return
 
             const rect = this.game.canvas.getBoundingClientRect()
@@ -422,7 +653,7 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         const onPointerDown = (next: Phaser.Input.Pointer) => {
-            if (this.isPaused || this.currentPhase === 'finished') return
+            if (this.touchMode || this.isPaused || this.currentPhase === 'finished') return
             if (document.pointerLockElement !== this.game.canvas) {
                 this.game.canvas.requestPointerLock?.()
             }
@@ -454,6 +685,7 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         const onPointerLockChange = () => {
+            if (this.touchMode) return
             const locked = document.pointerLockElement === this.game.canvas
             if (locked) {
                 if (this.isPaused) {
@@ -507,6 +739,10 @@ export default class ArenaScene extends Phaser.Scene {
             if (document.hidden) stopMovement()
         }
 
+        const onGamepadConnected = () => reportGamepadState(true)
+        const onGamepadDisconnected = () =>
+            reportGamepadState(Boolean(pickActiveGamepad(navigator.getGamepads?.())))
+
         this.input.on('pointermove', onPointerMove)
         this.input.on('pointerdown', onPointerDown)
         this.input.on('pointerup', onPointerUp)
@@ -517,9 +753,11 @@ export default class ArenaScene extends Phaser.Scene {
         window.addEventListener('keyup', onKeyUp)
         window.addEventListener('blur', stopMovement)
         document.addEventListener('visibilitychange', onVisibilityChange)
+        window.addEventListener('gamepadconnected', onGamepadConnected)
+        window.addEventListener('gamepaddisconnected', onGamepadDisconnected)
 
         const timer = window.setInterval(() => {
-            if (hasFocus() && !this.isPaused) sendInput()
+            if (hasFocus()) sendInput()
         }, INPUT_INTERVAL_MS)
 
         this.cleanupControls = () => {
@@ -534,6 +772,8 @@ export default class ArenaScene extends Phaser.Scene {
             window.removeEventListener('keyup', onKeyUp)
             window.removeEventListener('blur', stopMovement)
             document.removeEventListener('visibilitychange', onVisibilityChange)
+            window.removeEventListener('gamepadconnected', onGamepadConnected)
+            window.removeEventListener('gamepaddisconnected', onGamepadDisconnected)
         }
     }
 

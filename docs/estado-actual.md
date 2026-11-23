@@ -6,7 +6,10 @@ Actualizado el 23 de noviembre de 2026. Este documento resume el alcance impleme
 
 | Área | Comportamiento |
 | --- | --- |
-| Arena | Cuatro conexiones; movimiento, colisiones y combate autoritativos |
+| Salas múltiples | Creación dinámica de salas públicas (listadas en `GET /api/rooms`) o privadas por código de 6 caracteres, con limpieza automática al vaciarse |
+| Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa |
+| Controles | PC (WASD + ratón/ESPACIO), móvil/tablet (joysticks táctiles gemelos + botón de pantalla completa) y mandos USB/Bluetooth (Gamepad API) |
+| Arena | Movimiento analógico/digital, colisiones, pickups y combate autoritativos por mapa |
 | Combate | Diez armas de fuego/melé, munición, pickups, daño, bajas y reaparición |
 | Partida | Inicio manual del anfitrión con dos participantes, 300 segundos o 20 kills; empate, abandono, resultados y revancha; menú personal sin pausa global |
 | Acceso | Registro/login por correo y contraseña, Google y restauración de sesión; contraseña de al menos 8 caracteres |
@@ -26,9 +29,9 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 15 pruebas correctas de perfil/foto y URL del servidor; gateways simulados |
+| Cliente: npm test | 18 pruebas correctas de perfil/foto, URL del servidor, Gamepad y códigos/mapas; gateways simulados |
 | Cliente: npm run build | TypeScript y compilación de producción correctos |
-| Servidor: npm test | 26 pruebas correctas de autenticación, infraestructura, puntuación y recuperación de resultados; servicios simulados |
+| Servidor: npm test | 30 pruebas correctas de autenticación, infraestructura, salas, mapas, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
 | Colyseus real en desarrollo | /health respondió 200; name/userId inventados sin token fueron rechazados con AUTH_FAILED |
 | Perfiles en Supabase | Tabla, RLS, dos políticas, trigger e índice único comprobados; creación automática de perfil confirmada |
@@ -46,12 +49,13 @@ La nueva migración de rankings se verificó en PostgreSQL 18 local con Auth/Sto
 - Vinculación por el mismo correo y establecimiento de contraseña en una cuenta creada por OAuth.
 - Guardado y recarga de perfil/preferencias mediante la interfaz, y username ocupado desde dos sesiones.
 - Subida, reemplazo, eliminación y persistencia real de fotos; permisos de Storage entre dos cuentas.
-- Partida completa con dos cuentas independientes, logout y renovación prolongada del token.
-- Despliegue en Ubuntu y prueba desde redes distintas.
+- Partida completa con dos o más cuentas independientes en salas públicas/privadas (4, 10 y 20 jugadores), logout y renovación prolongada del token.
+- Pruebas en dispositivos móviles (controles táctiles y pantalla completa) y mandos físicos USB/Bluetooth.
+- Aplicar la migración [`20261123000200_expand_match_capacity.sql`](../supabase/migrations/20261123000200_expand_match_capacity.sql) en Supabase remoto para persistir partidas de 5 a 20 jugadores.
 
 ## Trabajo pendiente de implementación
 
-- Salas por código y reconexión con reserva de participación: ver [próximos pasos](proximos-pasos.md).
+- Reconexión con reserva de participación durante 30 segundos: ver [próximos pasos](proximos-pasos.md).
 - SMTP y recuperación de contraseña.
 - Configuración y prueba de GitHub OAuth.
 - Pantalla de seguridad para establecer/cambiar contraseña.

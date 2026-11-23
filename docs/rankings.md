@@ -4,7 +4,7 @@ Implementación local del bloque, 23 de noviembre de 2026. Falta aplicar la migr
 
 ## Activación
 
-1. En Supabase → SQL Editor, ejecutar **completo** `supabase/migrations/20261123000100_match_rankings.sql`. Requiere las dos migraciones anteriores de perfiles y fotos. No volver a ejecutar las anteriores si ya están aplicadas.
+1. En Supabase → SQL Editor, ejecutar **completo** `supabase/migrations/20261123000100_match_rankings.sql` y después `supabase/migrations/20261123000200_expand_match_capacity.sql` (necesaria para permitir partidas de 5 a 20 jugadores en salas medianas/grandes). Requiere las dos migraciones anteriores de perfiles y fotos. No volver a ejecutar las anteriores si ya están aplicadas.
 2. En Settings → API Keys, obtener una clave **secret** del proyecto. Agregar `SUPABASE_SECRET_KEY=...` a `apps/game-server/.env` en desarrollo, o al `.env` raíz usado por Docker Compose. Mantener las variables existentes `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY`. La clave secret solo pertenece al servidor: nunca usar `VITE_`, pegarla en el chat ni incluirla en Git.
 3. Configurar `MATCH_DATA_DIR` en un disco persistente. En desarrollo el valor predeterminado es `.data/matches`, relativo al directorio desde el que se ejecuta el servidor. Docker Compose monta automáticamente el volumen `match-results` en `/app/.data`. Ejecutar un solo proceso de Colyseus por directorio.
 4. Reiniciar ambos servicios. Desde la raíz, desarrollo usa dos terminales:

@@ -1,18 +1,37 @@
 # Contrato cliente-servidor actual
 
-Protocolo vigente de acceso, mensajes y estado de arena. La planificación y las pruebas del sprint 1 conservan el historial del prototipo.
+Protocolo vigente de acceso, salas múltiples, controles, mensajes y estado de arena. La planificación y las pruebas del sprint 1 conservan el historial del prototipo.
 
-## Entrada y salida
+## Entrada, salas públicas/privadas y salida
 
 ```ts
-joinById('arena-local', { accessToken, skin: 'fox', weapon: 'rifle' })
+// Crear sala nueva (pública o privada, capacidad 4, 10 o 20 jugadores)
+create('arena', {
+  accessToken,
+  skin: 'fox',
+  weapon: 'rifle',
+  maxPlayers: 10,
+  isPrivate: false,
+  roomName: 'Duelo del desierto',
+})
+
+// Unirse a una sala existente por su código de 6 caracteres
+joinById('K7MP2A', { accessToken, skin: 'mouse', weapon: 'smg' })
 ```
 
 El cliente recupera la sesión actual de Supabase antes de conectar. `ArenaRoom.onAuth` verifica el token mediante `auth.getUser(token)` y consulta `public.profiles` con ese JWT, sujeto a RLS. Rechaza token ausente, inválido o vencido, cuentas anónimas y perfiles sin username válido. El nombre de la arena procede del perfil; enviar `name` o `userId` no determina la identidad.
 
 La cuenta se identifica por su UUID de Supabase en una asociación privada del servidor. `Player.id` continúa siendo `client.sessionId`. No se sincronizan UUID de cuenta, correos ni tokens en `ArenaState`. Las opciones de skin y arma se validan contra weapons.json; se usan fox/rifle como respaldo y el color se deriva de la skin.
 
-Sala de cuatro conexiones, sin reconexión automática. Salir de la arena vuelve al perfil/lobby y conserva la sesión de cuenta. Cerrar sesión desmonta la arena y cierra su conexión antes de cerrar la sesión local de Supabase. Una cuenta no puede ocupar varias plazas. El anfitrión inicia manualmente con dos participantes; la sala se bloquea durante la ronda y resultados. La desconexión durante la ronda supone abandono inmediato.
+### Salas múltiples y consulta pública
+
+- Cada sala creada recibe un código único de 6 caracteres (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`) asignado en `roomId` y publicado en `ArenaState.roomCode`. Se aplica un límite global de 50 salas activas simultáneas (`autoDispose = true` al quedar vacías).
+- La capacidad y el mapa se emparejan automáticamente en el servidor:
+  - `4` jugadores → mapa **Pequeño** (`small`, `1024 × 768`, `4` apariciones, `2` pickups cada `15 s`).
+  - `10` jugadores → mapa **Mediano** (`medium`, `1600 × 1152`, `10` apariciones, `4` pickups cada `11 s`).
+  - `20` jugadores → mapa **Grande** (`large`, `2240 × 1600`, `20` apariciones, `8` pickups cada `8 s`).
+- `GET /api/rooms` devuelve `{ rooms }` con las salas **públicas** (`isPrivate = false`), desbloqueadas y con plazas disponibles (`code`, `name`, `mapSize`, `clients`, `maxClients`, `phase`, `hostName`).
+- Una cuenta no puede ocupar varias plazas dentro de la misma sala. El anfitrión inicia manualmente con dos participantes; la sala se bloquea durante la ronda y resultados. La desconexión durante la ronda supone abandono inmediato, sin reconexión automática.
 
 ## Mensajes
 
@@ -24,7 +43,9 @@ Sala de cuatro conexiones, sin reconexión automática. Salir de la arena vuelve
 | rematch | Sin contenido | Solo anfitrión; vuelve de resultados a espera, salvo guardado en curso o fallo de disco |
 | auth_refresh | { accessToken } | Verificar un token renovado para la misma cuenta |
 
-Cada eje acepta -1, 0 o 1. aimAngle debe ser finito en [-π, π). shoot, si se incluye, debe ser booleano. Se rechazan entradas inválidas completas. Posiciones enviadas por el cliente no son autoridad. El servidor aplica cadencia, munición, daño, obstáculos, eliminaciones y reaparición. Los jugadores no se bloquean entre sí.
+Cada eje `moveX`/`moveY` acepta números finitos continuos en `[-1, 1]` (teclado `-1`/`0`/`1`, sticks analógicos o joystick táctil en cualquier ángulo). El servidor limita la magnitud del vector de desplazamiento a `1.0` para mantener el tope de `220 unidades/s`. `aimAngle` debe ser finito en `[-π, π)`. `shoot`, si se incluye, debe ser booleano. Se rechazan entradas inválidas completas. Posiciones enviadas por el cliente no son autoridad. El servidor aplica cadencia, munición, daño, obstáculos, eliminaciones y reaparición. Los jugadores no se bloquean entre sí.
+
+En el cliente se admiten tres modos de entrada con la misma frecuencia de envío (`20 Hz`): teclado/ratón con *Pointer Lock*, controles táctiles gemelos en móvil/tablet (con botón de pantalla completa) y mandos USB/Bluetooth mediante Gamepad API.
 
 ## Sesión durante el juego
 
@@ -35,13 +56,13 @@ La etiqueta de jugador conserva el username con el que entró a la ronda. Los ca
 ## Estado y parámetros
 
 - Player: ID de conexión, nombre, posición, ángulo, skin, equipo visual, arma inicial y actual, munición, vida, bajas, muertes, estado de muerte, emote y secuencia melé.
-- ArenaState: fase, hostId (conexión), tiempo restante, meta, ganador, finishReason, notice, saveStatus y resultSummary (JSON de resultados sin UUID de cuenta), además de mapas de jugadores, balas y pickups. Los campos isPaused/pausedByName permanecen en el esquema por compatibilidad y no pausan partidas.
-- Fuentes: packages/shared/arena.json y packages/shared/weapons.json.
+- ArenaState: `roomCode`, `roomName`, `mapSize`, `maxPlayers`, `isPrivate`, `phase`, `hostId` (conexión), `timeRemaining`, `killsToWin`, `winnerId`, `winnerName`, `finishReason`, `notice`, `saveStatus` y `resultSummary` (JSON de resultados sin UUID de cuenta), además de mapas de jugadores, balas y pickups. Los campos `isPaused`/`pausedByName` permanecen en el esquema por compatibilidad y no pausan partidas.
+- Fuentes: `packages/shared/arena.json` y `packages/shared/weapons.json`.
 
-Simulación: 30 Hz. Publicación: 20 Hz. Entradas: 20 Hz. Caducidad: 300 ms. Velocidad: 220 unidades/s con diagonal normalizada. Mundo: 1024 × 768, radio 14 y cuatro apariciones. El mapa actual contiene varios obstáculos.
+Simulación: 30 Hz. Publicación: 20 Hz. Entradas: 20 Hz. Caducidad: 300 ms. Velocidad máxima: 220 unidades/s. Mundo: `1024 × 768` (pequeño), `1600 × 1152` (mediano) o `2240 × 1600` (grande), radio 14 y obstáculos por tamaño.
 
-Ronda: 300 segundos o 20 kills. Tiempo: más kills, luego menos muertes, empate entre líderes iguales. Victoria/empate/derrota: 3/1/0. ESC es un menú local sin detener el servidor. Los resultados incluyen abandonos aunque su conexión ya no exista. saveStatus puede ser saving, pending, saved o failed; una revancha crea un nuevo UUID al iniciar. Ver [persistencia, RPC y activación](rankings.md).
+Ronda: 300 segundos o 20 kills. Tiempo: más kills, luego menos muertes, empate entre líderes iguales. Victoria/empate/derrota: 3/1/0. ESC (o Start en mando / botón Menú en móvil) abre un menú local sin detener el servidor. Los resultados incluyen abandonos aunque su conexión ya no exista. `saveStatus` puede ser `saving`, `pending`, `saved` o `failed`; una revancha crea un nuevo UUID al iniciar. Ver [persistencia, RPC y activación](rankings.md).
 
 ## Evidencia y pendientes
 
-Compilación web y TypeScript del servidor correctos. Veintiséis pruebas automatizadas de autenticación, infraestructura, puntuación y recuperación de resultados pasan, con servicios simulados. Se comprobó contra Colyseus local que nombre/userId sin token se rechazan con AUTH_FAILED. La prueba completa con una cuenta real, la renovación en una sesión prolongada y dos jugadores independientes siguen pendientes. Ver [guía y estado de autenticación](autenticacion-supabase.md).
+Compilación web y TypeScript del servidor correctos. Las pruebas unitarias de cliente y servidor pasan con gateways/servicios simulados. Se comprobó contra Colyseus en producción que nombre/userId sin token se rechazan con `AUTH_FAILED` y que `GET /api/rooms` responde con `Cache-Control: no-store`. La prueba completa con múltiples jugadores reales en mapas mediano/grande y controles táctiles/mando queda lista para validación en dispositivos. Ver [guía y estado de autenticación](autenticacion-supabase.md) y [estado actual](estado-actual.md).

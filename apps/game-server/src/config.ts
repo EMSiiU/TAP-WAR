@@ -232,6 +232,7 @@ export function wrapHttpServer(
     securityHeaders: Record<string, string>
     trustProxy: boolean
     matchmakeRateLimiter: (key: string) => boolean
+    apiRateLimiter?: (key: string) => boolean
   },
 ): void {
   const existingListeners = httpServer.listeners('request')
@@ -278,6 +279,19 @@ export function wrapHttpServer(
     if (normalizedPath === '/matchmake' || normalizedPath.startsWith('/matchmake/')) {
       const ip = extractClientIp(req, options.trustProxy)
       if (!options.matchmakeRateLimiter(ip)) {
+        res.writeHead(429, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store',
+        })
+        res.end(JSON.stringify({ error: 'Too many requests' }))
+        return
+      }
+    } else if (
+      options.apiRateLimiter &&
+      (normalizedPath === '/api' || normalizedPath.startsWith('/api/'))
+    ) {
+      const ip = extractClientIp(req, options.trustProxy)
+      if (!options.apiRateLimiter(ip)) {
         res.writeHead(429, {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store',

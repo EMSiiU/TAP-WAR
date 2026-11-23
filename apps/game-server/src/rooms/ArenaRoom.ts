@@ -12,7 +12,6 @@ import {
 } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
 import { verifyArenaAccount, type VerifiedAccount } from '../auth.js'
-import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
 import weaponsConfig from '../../../../packages/shared/weapons.json' with { type: 'json' }
 import {
     isBulletHittingObstacle,
@@ -20,6 +19,16 @@ import {
     segmentBlockedByObstacle,
     segmentIntersectsPlayerHitbox,
 } from './ArenaCollision.js'
+import {
+    MAX_ACTIVE_ROOMS,
+    activeRoomCount,
+    allocateRoomCode,
+    getArenaMap,
+    mapSizeForCapacity,
+    releaseRoomCode,
+    sanitizeRoomName,
+    type ArenaMapConfig,
+} from './ArenaMaps.js'
 
 const STEP_MS = 1000 / 30
 const INPUT_TIMEOUT_MS = 300
@@ -33,12 +42,19 @@ const MATCH_DURATION_SECONDS = 300
 const KILLS_TO_WIN = 20
 const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper', 'smg', 'launcher', 'plasma', 'axe']
 
+export type ArenaRoomOptions = {
+    maxPlayers?: unknown
+    isPrivate?: unknown
+    roomName?: unknown
+}
+
 export class ArenaRoom extends Room {
-    maxClients = arena.spawnPoints.length
-    autoDispose = false
+    maxClients = 4
+    autoDispose = true
     state = new ArenaState()
 
     patchRate = 50
+    private arenaMap: ArenaMapConfig = getArenaMap('small')
     private matchId = ''
     private startedAt = ''
     private starting = false
@@ -54,6 +70,19 @@ export class ArenaRoom extends Room {
 
     constructor(resultStore?: ResultStore) { super(); this.resultStore = resultStore }
 
+    private syncMetadata() {
+        const hostName = this.state.players.get(this.state.hostId)?.name ?? ''
+        void this.setMetadata?.({
+            code: this.state.roomCode,
+            name: this.state.roomName,
+            mapSize: this.state.mapSize,
+            maxPlayers: this.state.maxPlayers,
+            isPrivate: this.state.isPrivate,
+            phase: this.state.phase,
+            hostName,
+        })?.catch?.(() => {})
+    }
+
     private trackAccount(client: Client, account: VerifiedAccount) {
         const current = this.accounts.get(client.sessionId)
         if (current && current.expiresAt > account.expiresAt) return
@@ -63,13 +92,33 @@ export class ArenaRoom extends Room {
     }
 
     onDispose() {
+        releaseRoomCode(this.roomId)
         for (const account of this.accounts.values()) clearTimeout(account.timer)
         this.accounts.clear()
         this.refreshRequests.clear()
     }
 
-    onCreate() {
-        this.roomId = 'arena-local'
+    async onCreate(options?: ArenaRoomOptions) {
+        if (activeRoomCount() >= MAX_ACTIVE_ROOMS) {
+            throw new ServerError(503, 'Se alcanzó el límite de salas activas. Inténtalo más tarde.')
+        }
+
+        const { maxPlayers, mapSize } = mapSizeForCapacity(options?.maxPlayers)
+        const isPrivate = options?.isPrivate === true
+        const code = allocateRoomCode()
+
+        this.roomId = code
+        this.arenaMap = getArenaMap(mapSize)
+        this.maxClients = maxPlayers
+
+        this.state.roomCode = code
+        this.state.roomName = sanitizeRoomName(options?.roomName, code)
+        this.state.mapSize = mapSize
+        this.state.maxPlayers = maxPlayers
+        this.state.isPrivate = isPrivate
+
+        await this.setPrivate?.(isPrivate)?.catch?.(() => {})
+        this.syncMetadata()
 
         this.onMessage<unknown>('auth_refresh', async (client, message) => {
             const existing = this.accounts.get(client.sessionId)
@@ -210,11 +259,12 @@ export class ArenaRoom extends Room {
         this.state.killsToWin = KILLS_TO_WIN
         this.state.winnerId = ''
         this.state.winnerName = ''
-        this.nextPickupAt = now + weaponsConfig.pickupIntervalMs
+        this.nextPickupAt = now + this.arenaMap.pickupIntervalMs
+        this.syncMetadata()
 
         let index = 0
         for (const player of this.state.players.values()) {
-            const spawn = arena.spawnPoints[index % arena.spawnPoints.length]
+            const spawn = this.arenaMap.spawnPoints[index % this.arenaMap.spawnPoints.length]
             player.x = spawn.x
             player.y = spawn.y
             player.hp = 100
@@ -242,6 +292,7 @@ export class ArenaRoom extends Room {
         this.state.winnerId = ''
         this.state.winnerName = ''
         this.nextPickupAt = 0
+        this.syncMetadata()
 
         for (const player of this.state.players.values()) {
             player.hp = 100
@@ -278,6 +329,7 @@ export class ArenaRoom extends Room {
         this.state.winnerName = winners.map(p => p.name).join(', ')
         this.state.resultSummary = JSON.stringify(result.players.map(({ accountId: _accountId, ...p }) => p))
         this.state.saveStatus = 'saving'
+        this.syncMetadata()
         const id = this.matchId
         void (this.resultStore ?? getResultStore()).finish(result, status => {
             if (this.matchId === id) this.state.saveStatus = status
@@ -320,7 +372,7 @@ export class ArenaRoom extends Room {
             )
             if (Math.abs(angleDiff) > halfArcRad) continue
 
-            if (segmentBlockedByObstacle(attacker.x, attacker.y, target.x, target.y)) continue
+            if (segmentBlockedByObstacle(attacker.x, attacker.y, target.x, target.y, this.arenaMap)) continue
 
             if (this.applyDamageToPlayer(targetId, target, attackerId, spec.damage, now)) {
                 return
@@ -397,7 +449,10 @@ export class ArenaRoom extends Room {
         const spawnX = originX + Math.cos(angle) * MUZZLE_OFFSET
         const spawnY = originY + Math.sin(angle) * MUZZLE_OFFSET
 
-        if (segmentBlockedByObstacle(originX, originY, spawnX, spawnY) || isBulletHittingObstacle(spawnX, spawnY)) {
+        if (
+            segmentBlockedByObstacle(originX, originY, spawnX, spawnY, this.arenaMap) ||
+            isBulletHittingObstacle(spawnX, spawnY, 4, this.arenaMap)
+        ) {
             return
         }
 
@@ -466,11 +521,13 @@ export class ArenaRoom extends Room {
             const length = Math.hypot(input.moveX, input.moveY)
             if (length === 0) continue
 
+            const scale = length > 1 ? 1 / length : 1
             const distance = SPEED * dt
             const next = moveInsideArena(
                 player,
-                (input.moveX / length) * distance,
-                (input.moveY / length) * distance,
+                input.moveX * scale * distance,
+                input.moveY * scale * distance,
+                this.arenaMap,
             )
 
             player.x = next.x
@@ -490,12 +547,12 @@ export class ArenaRoom extends Room {
             const createdAt = this.bulletCreatedAt.get(bulletId) ?? now
             const outOfBounds =
                 bullet.x < 0 ||
-                bullet.x > arena.width ||
+                bullet.x > this.arenaMap.width ||
                 bullet.y < 0 ||
-                bullet.y > arena.height
+                bullet.y > this.arenaMap.height
             const expired = now - createdAt >= BULLET_LIFETIME_MS
 
-            if (outOfBounds || expired || isBulletHittingObstacle(bullet.x, bullet.y)) {
+            if (outOfBounds || expired || isBulletHittingObstacle(bullet.x, bullet.y, 4, this.arenaMap)) {
                 this.state.bullets.delete(bulletId)
                 this.bulletCreatedAt.delete(bulletId)
                 continue
@@ -527,7 +584,7 @@ export class ArenaRoom extends Room {
         }
 
         if (now >= this.nextPickupAt) {
-            this.nextPickupAt = now + weaponsConfig.pickupIntervalMs
+            this.nextPickupAt = now + this.arenaMap.pickupIntervalMs
             this.spawnWeaponPickup()
         }
 
@@ -562,7 +619,7 @@ export class ArenaRoom extends Room {
 
     private spawnWeaponPickup() {
         const existingPickups = Array.from(this.state.pickups.values())
-        const availableSpots = weaponsConfig.pickupSpawnPoints.filter((spot) =>
+        const availableSpots = this.arenaMap.pickupSpawnPoints.filter((spot) =>
             existingPickups.every((p) => p.x !== spot.x || p.y !== spot.y),
         )
         if (availableSpots.length === 0) return
@@ -584,13 +641,13 @@ export class ArenaRoom extends Room {
         )
 
         if (livingRivals.length === 0) {
-            return arena.spawnPoints[0]
+            return this.arenaMap.spawnPoints[0]
         }
 
-        let bestSpawn = arena.spawnPoints[0]
+        let bestSpawn = this.arenaMap.spawnPoints[0]
         let bestMinDist = -1
 
-        for (const candidate of arena.spawnPoints) {
+        for (const candidate of this.arenaMap.spawnPoints) {
             let minDist = Infinity
             for (const rival of livingRivals) {
                 const dist = Math.hypot(candidate.x - rival.x, candidate.y - rival.y)
@@ -646,15 +703,13 @@ export class ArenaRoom extends Room {
         auth: VerifiedAccount & { skin: PlayerSkin; teamColor: TeamColor; weapon: WeaponType },
     ) {
         if (this.state.phase !== 'waiting' || this.starting) throw new ServerError(400, 'La partida ya inició; espera la siguiente ronda.')
+        if (this.state.players.size >= this.maxClients) throw new ServerError(400, 'La sala está llena.')
         if ([...this.accounts.values()].some(a => a.accountId === auth.accountId)) throw new ServerError(400, 'Esta cuenta ya ocupa una plaza.')
         const players = Array.from(this.state.players.values())
-        const spawn = arena.spawnPoints.find(({ x, y }) =>
-            players.every((player) => player.x !== x || player.y !== y),
-        )
-
-        if (!spawn) {
-            throw new Error('No hay un punto de aparición disponible')
-        }
+        const spawn =
+            this.arenaMap.spawnPoints.find(({ x, y }) =>
+                players.every((player) => player.x !== x || player.y !== y),
+            ) ?? this.selectSafestSpawnPoint(client.sessionId)
 
         const player = new Player()
         player.id = client.sessionId
@@ -670,6 +725,7 @@ export class ArenaRoom extends Room {
         this.trackAccount(client, auth)
 
         if (!this.state.hostId) this.state.hostId = client.sessionId
+        this.syncMetadata()
     }
 
     onLeave(client: Client) {
@@ -695,5 +751,6 @@ export class ArenaRoom extends Room {
             this.finishMatch(remaining?.id ?? '', remaining?.name ?? '', remaining ? 'abandon' : 'interrupted')
         }
         if (this.state.players.size === 0) this.resetToWaiting()
+        else this.syncMetadata()
     }
 }
