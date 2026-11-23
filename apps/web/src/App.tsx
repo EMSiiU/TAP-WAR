@@ -4,6 +4,7 @@ import './App.css'
 import { supabase, validUsername, profileError, type Profile } from './auth/supabase'
 import ProfileAvatar from './auth/ProfileAvatar'
 import PhaserView from './game/PhaserView'
+import { resolveGameServerUrl, toHealthCheckUrl } from './game/serverUrl'
 import weaponsConfig from '../../../packages/shared/weapons.json'
 import type {
   ArenaControls,
@@ -74,7 +75,13 @@ function formatClock(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
-const client = new Client(import.meta.env.VITE_GAME_SERVER_URL || 'http://127.0.0.1:2567')
+const GAME_SERVER_URL = resolveGameServerUrl(
+  import.meta.env.VITE_GAME_SERVER_URL,
+  import.meta.env.DEV,
+  typeof window !== 'undefined' ? window.location.origin : undefined,
+)
+
+const client = new Client(GAME_SERVER_URL)
 
 function ArenaSession({
     playerName,
@@ -109,6 +116,14 @@ function ArenaSession({
   const [status, setStatus] = useState('Conectando…')
   const [controls, setControls] = useState<ArenaControls | null>(null)
   const rematchRef = useRef<(() => void) | null>(null)
+
+  useEffect(() => {
+    if (controls !== null) return
+    const timer = window.setTimeout(() => {
+      setStatus('Conectando… (si el servidor estaba en reposo puede tardar hasta 1 min)')
+    }, 4000)
+    return () => window.clearTimeout(timer)
+  }, [controls])
 
   useEffect(() => {
     let active = true
@@ -412,6 +427,12 @@ export default function App({ profile, onProfileSaved, onOpenProfile, onSignOut,
   const [playerName, setPlayerName] = useState<string | null>(null)
 
   const [entryMessage, setEntryMessage] = useState('')
+
+  useEffect(() => {
+    const controller = new AbortController()
+    void fetch(toHealthCheckUrl(GAME_SERVER_URL), { signal: controller.signal }).catch(() => {})
+    return () => controller.abort()
+  }, [])
 
   const returnToForm = useCallback((message: string) => {
     setEntryMessage(message)

@@ -84,7 +84,7 @@ npm --prefix apps/game-server test
 node apps/web/node_modules/typescript/bin/tsc -p apps/game-server
 ```
 
-Consulta el [manual técnico](DOCUMENTACION.md) y el [contrato cliente-servidor](docs/contrato-cliente-servidor.md). La [planificación del sprint 1](docs/planificacion-sprint-1.md) y sus [pruebas](docs/prueba-sprint-1.md) conservan el historial del primer prototipo, no el alcance completo actual. La práctica Phaser tiene su propio [README](prueba-phaser/README.md).
+Consulta el [manual técnico](DOCUMENTACION.md), la [guía de despliegue](docs/despliegue.md) y el [contrato cliente-servidor](docs/contrato-cliente-servidor.md). La [planificación del sprint 1](docs/planificacion-sprint-1.md) y sus [pruebas](docs/prueba-sprint-1.md) conservan el historial del primer prototipo, no el alcance completo actual. La práctica Phaser tiene su propio [README](prueba-phaser/README.md).
 
 ## Equipo
 
