@@ -274,6 +274,12 @@ export default class ArenaScene extends Phaser.Scene {
         this.applyPlayers(this.players)
         this.applyBullets(this.bullets)
         this.applyPickups(this.pickups)
+        if (this.arenaMap.id !== 'small') {
+            const localView = this.playerViews.get(this.controls.playerId)
+            if (localView) {
+                this.cameras.main.centerOn(localView.root.x, localView.root.y)
+            }
+        }
         this.startControls()
     }
 
@@ -354,13 +360,13 @@ export default class ArenaScene extends Phaser.Scene {
         const groundMap = this.make.tilemap({ data: groundData, tileWidth: 16, tileHeight: 16 })
         const groundTiles = groundMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
         if (groundTiles) {
-            groundMap.createLayer(0, groundTiles, 0, 0)?.setScale(2)
+            groundMap.createLayer(0, groundTiles, 0, 0)?.setScale(2).setCullPadding(2, 2)
         }
 
         const obsMap = this.make.tilemap({ data: obstacleData, tileWidth: 16, tileHeight: 16 })
         const obsTiles = obsMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
         if (obsTiles) {
-            obsMap.createLayer(0, obsTiles, 0, 0)?.setScale(2)
+            obsMap.createLayer(0, obsTiles, 0, 0)?.setScale(2).setCullPadding(2, 2)
         }
     }
 
