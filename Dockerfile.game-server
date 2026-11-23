@@ -1,0 +1,24 @@
+FROM node:24-alpine
+
+WORKDIR /app
+
+COPY apps/game-server/package.json apps/game-server/package-lock.json ./apps/game-server/
+RUN npm --prefix apps/game-server ci
+
+COPY packages/shared ./packages/shared
+COPY apps/game-server/tsconfig.json ./apps/game-server/tsconfig.json
+COPY apps/game-server/src ./apps/game-server/src
+
+RUN chown -R node:node /app
+USER node
+
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=2567
+
+EXPOSE 2567
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 2567) + '/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+
+CMD ["npm", "--prefix", "apps/game-server", "run", "start"]

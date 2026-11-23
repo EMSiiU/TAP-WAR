@@ -1,0 +1,57 @@
+services:
+  - type: web
+    name: tap-war-server
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile.game-server
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: TRUST_PROXY
+        value: "true"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false # URL HTTPS final del servicio tap-war-web, p. ej. https://tap-war-web.onrender.com
+
+  - type: web
+    name: tap-war-web
+    runtime: static
+    buildCommand: npm --prefix apps/web ci && npm --prefix apps/web run build
+    staticPublishPath: apps/web/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' blob: data:; font-src 'self'; connect-src 'self' https://*.supabase.co https://*.onrender.com wss://*.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: VITE_GAME_SERVER_URL
+        sync: false # URL HTTPS del servicio tap-war-server, p. ej. https://tap-war-server.onrender.com
+      - key: VITE_GITHUB_AUTH_ENABLED
+        value: "false"

@@ -4,8 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node --import tsx --test src/auth.test.ts",
-    "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts"
+    "test": "node --import tsx --test src/*.test.ts",
+    "dev": "node --env-file-if-exists=.env --import tsx --watch src/index.ts",
+    "start": "node --env-file-if-exists=.env --import tsx src/index.ts"
   },
   "keywords": [],
   "author": "",

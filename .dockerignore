@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/dist
+Pack-recursos
+docs
+prueba-phaser
+supabase
+.env
+.env.*
+apps/web/.env*
+apps/game-server/.env*
