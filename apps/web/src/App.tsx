@@ -184,6 +184,7 @@ function ArenaSession({
     winnerName: '',
   })
   const [status, setStatus] = useState('Conectando…')
+  const [stateReady, setStateReady] = useState(false)
   const [controls, setControls] = useState<ArenaControls | null>(null)
   const rematchRef = useRef<(() => void) | null>(null)
 
@@ -262,7 +263,7 @@ function ArenaSession({
         }
 
         function syncState(state: ArenaState) {
-          if (!active || !state) return
+          if (!active || !state || !state.roomCode) return
           if (state.players) {
             setPlayers(Array.from(state.players.values()))
           }
@@ -292,8 +293,10 @@ function ArenaSession({
             winnerId: state.winnerId ?? '',
             winnerName: state.winnerName ?? '',
           })
+          setStateReady(true)
         }
 
+        setStateReady(false)
         joined.onStateChange(syncState)
         joined.onLeave((code) => {
           if (active) {
@@ -562,7 +565,7 @@ function ArenaSession({
             </div>
           )}
 
-          {controls && (
+          {controls && stateReady && (
             <PhaserView
               players={players}
               bullets={bullets}

@@ -447,7 +447,7 @@
 }
 
 .arena-results-modal {
-  width: min(92vw, 480px);
+  width: min(94vw, 620px);
   padding: 24px;
   border-radius: 12px;
   background: var(--bg);
@@ -476,7 +476,7 @@
 
 .arena-results-table th,
 .arena-results-table td {
-  padding: 8px 10px;
+  padding: 8px 8px;
   border-bottom: 1px solid var(--border);
   text-align: left;
 }
@@ -485,6 +485,7 @@
 .arena-results-table td:not(:first-child) {
   text-align: right;
   font-family: var(--mono);
+  white-space: nowrap;
 }
 
 .arena-results-actions {
