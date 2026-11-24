@@ -118,6 +118,13 @@ export default function PhaserView({
     scene.setCrosshairStyle(latestCrosshairRef.current)
     sceneRef.current = scene
     let game: Phaser.Game | undefined
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            game?.scale.refresh()
+          })
+        : undefined
+    resizeObserver?.observe(parent)
 
     let active = true
     queueMicrotask(() => {
@@ -143,6 +150,7 @@ export default function PhaserView({
     return () => {
       sceneRef.current = null
       active = false
+      resizeObserver?.disconnect()
       scene.stopControls()
       game?.destroy(true)
     }
