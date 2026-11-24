@@ -1,33 +1,7 @@
 import { randomInt } from 'node:crypto'
-import arenaData from '../../../../packages/shared/arena.json' with { type: 'json' }
-
-export type MapSize = 'small' | 'medium' | 'large'
-export type RoomCapacity = 4 | 10 | 20
-
-export type ArenaObstacle = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export type ArenaPoint = {
-  x: number
-  y: number
-}
-
-export type ArenaMapConfig = {
-  id: MapSize
-  label: string
-  maxPlayers: RoomCapacity
-  width: number
-  height: number
-  playerRadius: number
-  pickupIntervalMs: number
-  pickupSpawnPoints: ArenaPoint[]
-  spawnPoints: ArenaPoint[]
-  obstacles: ArenaObstacle[]
-}
+export { getArenaMap, normalizeEnvironment } from '../../../../packages/shared/mapCatalog.js'
+export type { ArenaMapConfig, ArenaObstacle, ArenaPoint, MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.js'
+import type { MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.js'
 
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 export const ROOM_CODE_LENGTH = 6
@@ -46,11 +20,6 @@ export function mapSizeForCapacity(maxPlayers: unknown): {
     return { maxPlayers: 20, mapSize: 'large' }
   }
   return { maxPlayers: 4, mapSize: 'small' }
-}
-
-export function getArenaMap(mapSize: MapSize): ArenaMapConfig {
-  const maps = arenaData.maps as Record<MapSize, ArenaMapConfig>
-  return maps[mapSize] ?? maps.small
 }
 
 export function allocateRoomCode(): string {

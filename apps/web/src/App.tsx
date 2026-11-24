@@ -1,13 +1,22 @@
+import MatchResults from './game/MatchResults'
+import ArenaHeader from './game/ArenaHeader'
+import MapPreview from './game/MapPreview'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
+import './game/arena-layout.css'
+import { neutralTouchInput } from './game/touchInput'
 import { supabase, validUsername, profileError, type Profile } from './auth/supabase'
 import ProfileAvatar from './auth/ProfileAvatar'
 import PhaserView from './game/PhaserView'
 import TouchControls, { type TouchInputState } from './game/TouchControls'
 import {
   MAP_LABEL_BY_SIZE,
+  ENVIRONMENT_OPTIONS,
+  normalizeEnvironment,
+  getArenaMap,
+  type MapEnvironment,
   MAP_OPTIONS,
   normalizeRoomCode,
   type MapSize,
@@ -33,6 +42,7 @@ type ArenaState = {
   roomCode: string
   roomName: string
   mapSize: MapSize
+  environment: MapEnvironment
   maxPlayers: number
   isPrivate: boolean
   hostId: string
@@ -83,6 +93,7 @@ type MatchMeta = {
   roomCode: string
   roomName: string
   mapSize: MapSize
+  environment: MapEnvironment
   maxPlayers: number
   isPrivate: boolean
   hostId: string
@@ -147,14 +158,7 @@ function ArenaSession({
   const [gamepadConnected, setGamepadConnected] = useState(false)
   const [copiedCode, setCopiedCode] = useState(false)
   const shellRef = useRef<HTMLDivElement>(null)
-  const touchInputRef = useRef<TouchInputState>({
-    moveX: 0,
-    moveY: 0,
-    aimActive: false,
-    aimAngle: 0,
-    aimMagnitude: 0,
-    shoot: false,
-  })
+  const touchInputRef = useRef<TouchInputState>(neutralTouchInput())
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
@@ -168,6 +172,7 @@ function ArenaSession({
             ? 'medium'
             : 'small'
         : 'small',
+    environment: roomRequest.mode === 'create' ? normalizeEnvironment(roomRequest.environment) : 'desert',
     maxPlayers: roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
     isPrivate: roomRequest.mode === 'create' ? roomRequest.isPrivate : false,
     hostId: '',
@@ -187,6 +192,17 @@ function ArenaSession({
   const [stateReady, setStateReady] = useState(false)
   const [controls, setControls] = useState<ArenaControls | null>(null)
   const rematchRef = useRef<(() => void) | null>(null)
+  const receiveTouchInput = useCallback((input: TouchInputState) => {
+    touchInputRef.current = input
+    if (!input.moveX && !input.moveY && !input.shoot) {
+      controls?.send({ moveX: 0, moveY: 0, aimAngle: input.aimAngle, shoot: false })
+    }
+  }, [controls])
+  const resetTouchInput = useCallback(() => receiveTouchInput(neutralTouchInput()), [receiveTouchInput])
+  useEffect(() => {
+    if (!touchMode || localPaused || matchMeta.phase === 'finished') resetTouchInput()
+  }, [touchMode, localPaused, matchMeta.phase, resetTouchInput])
+
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -228,6 +244,7 @@ function ArenaSession({
                 skin: playerSkin,
                 weapon: playerWeapon,
                 maxPlayers: roomRequest.maxPlayers,
+                environment: roomRequest.environment,
                 isPrivate: roomRequest.isPrivate,
                 roomName: roomRequest.roomName,
               })
@@ -278,6 +295,7 @@ function ArenaSession({
             roomName: state.roomName ?? '',
             mapSize:
               state.mapSize === 'medium' || state.mapSize === 'large' ? state.mapSize : 'small',
+            environment: normalizeEnvironment(state.environment),
             maxPlayers: typeof state.maxPlayers === 'number' ? state.maxPlayers : 4,
             isPrivate: Boolean(state.isPrivate),
             hostId: state.hostId ?? '',
@@ -317,6 +335,8 @@ function ArenaSession({
             if (joined.connection.isOpen) joined.send('emote', emote)
           },
           sendPause: (paused) => {
+            touchInputRef.current = neutralTouchInput()
+            if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
             setLocalPaused(paused)
           },
         })
@@ -459,63 +479,17 @@ function ArenaSession({
   )
 
   return (
-    <div ref={shellRef} className="arena-shell">
-      <header className="arena-header">
-        <div className="arena-room-meta">
-          <strong style={{ fontSize: '1.05rem', color: '#ffffff', letterSpacing: '1px' }}>
-            TAP-WAR
-          </strong>
-          {matchMeta.roomCode && (
-            <span className="arena-pill-badge">
-              {matchMeta.isPrivate ? 'Privada' : 'Pública'} · {matchMeta.roomCode}
-            </span>
-          )}
-          <span className="arena-pill-badge">
-            {MAP_LABEL_BY_SIZE[matchMeta.mapSize]} · {players.length}/{matchMeta.maxPlayers}
-          </span>
-          {matchMeta.roomCode && (
-            <button type="button" onClick={() => void copyRoomCode()} className="arena-mini-btn">
-              {copiedCode ? 'Copiado' : 'Copiar código'}
-            </button>
-          )}
-        </div>
-
-        <div className="arena-scoreboard" role="status">
-          <span className="arena-clock">{formatClock(matchMeta.timeRemaining)}</span>
-          {players.length > 0 && (
-            <span>
-              {scoreLine} | Meta: {matchMeta.killsToWin}
-            </span>
-          )}
-          <span>{controls ? status : `${status}`}</span>
-          {gamepadConnected && <span className="arena-pill-badge is-active">Mando conectado</span>}
-        </div>
-
-        <div className="arena-header-actions">
-          <button
-            type="button"
-            onClick={() => setTouchMode((v) => !v)}
-            className="kenney-btn-secondary"
-          >
-            {touchMode ? 'Táctil: ON' : 'Táctil: OFF'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void toggleFullscreen()
-            }}
-            className="kenney-btn-secondary"
-          >
-            {isFullscreen ? 'Salir pantalla' : 'Pantalla completa'}
-          </button>
-          <button type="button" onClick={onExit} className="kenney-btn-secondary">
-            Salir de la arena
-          </button>
-          <button type="button" onClick={onSignOut} className="kenney-btn-secondary">
-            Cerrar sesión
-          </button>
-        </div>
-      </header>
+    <div ref={shellRef} className={`arena-shell${touchMode ? ' is-touch-mode' : ''}`}>
+      <ArenaHeader
+        roomCode={matchMeta.roomCode} roomName={matchMeta.roomName} isPrivate={matchMeta.isPrivate}
+        environmentLabel={ENVIRONMENT_OPTIONS.find(option => option.id === matchMeta.environment)?.label || ''}
+        sizeLabel={MAP_LABEL_BY_SIZE[matchMeta.mapSize]} playerCount={players.length} maxPlayers={matchMeta.maxPlayers}
+        clock={formatClock(matchMeta.timeRemaining)} scoreLine={scoreLine} killsToWin={matchMeta.killsToWin}
+        status={status} connected={Boolean(controls)} gamepadConnected={gamepadConnected}
+        touchMode={touchMode} fullscreen={isFullscreen} copied={copiedCode}
+        onCopy={() => { void copyRoomCode() }} onTouchToggle={() => { resetTouchInput(); setTouchMode(value => !value) }}
+        onFullscreen={() => { void toggleFullscreen() }} onExit={onExit} onSignOut={onSignOut}
+      />
 
       <div className={`arena-stage${showTouchControls ? ' has-touch-controls' : ''}`}>
         {controls && matchMeta.phase === 'waiting' && (
@@ -541,7 +515,7 @@ function ArenaSession({
           </div>
         )}
 
-        <div className="arena-canvas-wrap">
+        <div className="arena-viewport"><div className="arena-canvas-wrap">
           {controls && localWeaponSpec && localPlayer && (
             <div className={`arena-ammo-badge${isLowAmmo ? ' is-low' : ''}`} role="status">
               {isLocalFirearm ? (
@@ -577,23 +551,22 @@ function ArenaSession({
               isPaused={localPaused}
               crosshairStyle={crosshairStyle}
               mapSize={matchMeta.mapSize}
+              environment={matchMeta.environment}
               touchMode={touchMode}
               touchInputRef={touchInputRef}
-              onMenuToggle={() => setLocalPaused((prev) => !prev)}
+              onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
               onGamepadChange={setGamepadConnected}
               resumeSignal={resumeSignal}
               controls={controls}
             />
           )}
-        </div>
+        </div></div>
 
         {showTouchControls && controls && (
           <TouchControls
-            onTouchInput={(next) => {
-              touchInputRef.current = next
-            }}
+            onTouchInput={receiveTouchInput}
             onEmote={(emote) => controls.sendEmote?.(emote)}
-            onMenu={() => setLocalPaused(true)}
+            onMenu={() => { resetTouchInput(); setLocalPaused(true) }}
           />
         )}
 
@@ -624,74 +597,12 @@ function ArenaSession({
         )}
 
         {matchMeta.phase === 'finished' && (
-          <div className="arena-results-overlay" role="dialog" aria-modal="true">
-            <div className="arena-results-modal">
-              <h2>
-                {finalPlayers.filter((p) => p.outcome === 'draw').length > 1
-                  ? `Empate: ${matchMeta.winnerName}`
-                  : matchMeta.winnerName
-                    ? `Ganador: ${matchMeta.winnerName}`
-                    : 'Partida interrumpida'}
-              </h2>
-              <p className="arena-results-subtitle">{finishReason}</p>
-              <p role="status">{saveMessage}</p>
-
-              <div className="arena-results-scroll">
-                <table className="arena-results-table">
-                  <thead>
-                    <tr>
-                      <th>Jugador</th>
-                      <th>Eliminaciones</th>
-                      <th>Muertes</th>
-                      <th>Resultado</th>
-                      <th>Puntos</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedPlayers.map((player) => (
-                      <tr key={player.sessionId}>
-                        <td>
-                          {player.name}
-                          {player.abandoned ? ' (abandono)' : ''}
-                        </td>
-                        <td>{player.kills}</td>
-                        <td>{player.deaths}</td>
-                        <td>
-                          {
-                            (
-                              {
-                                win: 'Victoria',
-                                draw: 'Empate',
-                                loss: 'Derrota',
-                              } as Record<string, string>
-                            )[player.outcome]
-                          }
-                        </td>
-                        <td>+{player.points}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="arena-results-actions">
-                <button
-                  type="button"
-                  className="arena-btn-primary"
-                  disabled={
-                    controls?.playerId !== matchMeta.hostId ||
-                    ['saving', 'failed'].includes(matchMeta.saveStatus)
-                  }
-                  onClick={() => rematchRef.current?.()}
-                >
-                  Jugar revancha
-                </button>
-                <button type="button" className="arena-btn-secondary" onClick={onExit}>
-                  Salir de la arena
-                </button>
-              </div>
-            </div>
-          </div>
+          <MatchResults
+            title={finalPlayers.filter(p => p.outcome === 'draw').length > 1 ? `Empate: ${matchMeta.winnerName}` : matchMeta.winnerName ? `Ganador: ${matchMeta.winnerName}` : 'Partida interrumpida'}
+            reason={finishReason} saveMessage={saveMessage} players={sortedPlayers}
+            rematchDisabled={controls?.playerId !== matchMeta.hostId || ['saving', 'failed'].includes(matchMeta.saveStatus)}
+            onRematch={() => rematchRef.current?.()} onExit={onExit}
+          />
         )}
       </div>
     </div>
@@ -720,6 +631,7 @@ export default function App({
   const [playerName, setPlayerName] = useState<string | null>(null)
   const [roomRequest, setRoomRequest] = useState<RoomJoinRequest | null>(null)
 
+  const [createEnvironment, setCreateEnvironment] = useState<MapEnvironment>('desert')
   const [createMaxPlayers, setCreateMaxPlayers] = useState<RoomCapacity>(4)
   const [createPrivate, setCreatePrivate] = useState(false)
   const [createRoomName, setCreateRoomName] = useState('')
@@ -989,6 +901,17 @@ export default function App({
               </button>
             </div>
 
+            <span className="skin-grid-label">Escenario</span>
+            <div className="room-environment-grid" role="radiogroup" aria-label="Escenario de la sala">
+              {ENVIRONMENT_OPTIONS.map(option => (
+                <button type="button" key={option.id} role="radio" aria-checked={createEnvironment === option.id}
+                  className={`room-environment-option${createEnvironment === option.id ? ' is-selected' : ''}`}
+                  onClick={() => setCreateEnvironment(option.id)}>
+                  <MapPreview map={getArenaMap(createMaxPlayers === 20 ? 'large' : createMaxPlayers === 10 ? 'medium' : 'small', option.id)} />
+                  <strong>{option.label}</strong><span>{option.description}</span>
+                </button>
+              ))}
+            </div>
             <span className="skin-grid-label">Capacidad y tamaño de mapa</span>
             <div className="room-capacity-grid" role="radiogroup" aria-label="Capacidad y mapa">
               {MAP_OPTIONS.map((opt) => (
@@ -1026,6 +949,7 @@ export default function App({
                 void saveProfile({
                   mode: 'create',
                   maxPlayers: createMaxPlayers,
+                  environment: createEnvironment,
                   isPrivate: createPrivate,
                   roomName: createRoomName,
                 })
@@ -1091,7 +1015,7 @@ export default function App({
                     <div className="public-room-info">
                       <strong>{room.name}</strong>
                       <span>
-                        Código: {room.code} · {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/
+                        Código: {room.code} · {ENVIRONMENT_OPTIONS.find(option => option.id === normalizeEnvironment(room.environment))?.label} · {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/
                         {room.maxClients}
                         {room.hostName ? ` · Anfitrión: ${room.hostName}` : ''}
                       </span>

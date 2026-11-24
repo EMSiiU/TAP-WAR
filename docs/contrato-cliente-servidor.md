@@ -11,6 +11,7 @@ create('arena', {
   skin: 'fox',
   weapon: 'rifle',
   maxPlayers: 10,
+  environment: 'industrial',
   isPrivate: false,
   roomName: 'Duelo del desierto',
 })
@@ -26,11 +27,12 @@ La cuenta se identifica por su UUID de Supabase en una asociación privada del s
 ### Salas múltiples y consulta pública
 
 - Cada sala creada recibe un código único de 6 caracteres (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`) asignado en `roomId` y publicado en `ArenaState.roomCode`. Se aplica un límite global de 50 salas activas simultáneas (`autoDispose = true` al quedar vacías).
-- La capacidad y el mapa se emparejan automáticamente en el servidor:
+- El escenario se elige independientemente de la capacidad: `environment` acepta `desert` o `industrial` (predeterminado `desert`). El servidor sincroniza esa elección en estado y metadatos. Ver [mapas y geometría](mapas.md).
+- La capacidad y el tamaño se emparejan automáticamente en el servidor:
   - `4` jugadores → mapa **Pequeño** (`small`, `1024 × 768`, `4` apariciones, `2` pickups cada `15 s`).
   - `10` jugadores → mapa **Mediano** (`medium`, `1600 × 1152`, `10` apariciones, `4` pickups cada `11 s`).
   - `20` jugadores → mapa **Grande** (`large`, `2240 × 1600`, `20` apariciones, `8` pickups cada `8 s`).
-- `GET /api/rooms` devuelve `{ rooms }` con las salas **públicas** (`isPrivate = false`), desbloqueadas y con plazas disponibles (`code`, `name`, `mapSize`, `clients`, `maxClients`, `phase`, `hostName`).
+- `GET /api/rooms` devuelve `{ rooms }` con las salas **públicas** (`isPrivate = false`), desbloqueadas y con plazas disponibles (`code`, `name`, `mapSize`, `environment`, `clients`, `maxClients`, `phase`, `hostName`).
 - Una cuenta no puede ocupar varias plazas dentro de la misma sala. El anfitrión inicia manualmente con dos participantes; la sala se bloquea durante la ronda y resultados. La desconexión durante la ronda supone abandono inmediato, sin reconexión automática.
 
 ## Mensajes
@@ -38,7 +40,7 @@ La cuenta se identifica por su UUID de Supabase en una asociación privada del s
 | Mensaje | Contenido | Uso |
 | --- | --- | --- |
 | input | { moveX, moveY, aimAngle, shoot? } | Movimiento, apuntado y ataque |
-| emote | dots o alert | Expresión temporal |
+| emote | dots o alert | Expresión temporal de 2 segundos: `dots` muestra risa (tecla 1) y `alert` un corazón (tecla 2). Se conservan los identificadores del protocolo. |
 | start | Sin contenido | Solo anfitrión, en espera y con al menos dos jugadores |
 | rematch | Sin contenido | Solo anfitrión; vuelve de resultados a espera, salvo guardado en curso o fallo de disco |
 | auth_refresh | { accessToken } | Verificar un token renovado para la misma cuenta |

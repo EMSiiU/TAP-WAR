@@ -1084,3 +1084,28 @@
     gap: 12px;
   }
 }
+
+/* Scenario selection uses the same geometry as the arena. */
+.room-environment-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.room-environment-option { min-width: 0; padding: 12px; border: 3px solid #bca28e; border-radius: 9px; background: #fff9ef; color: #3d2e4f; font: inherit; cursor: pointer; text-align: left; }
+.room-environment-option.is-selected { border-color: #c85a3f; box-shadow: 0 0 0 2px #3d2e4f; }
+.room-environment-option strong { display: block; margin: 10px 0 6px; }
+.room-environment-option > span { display: block; font-size: .875rem; line-height: 1.5; }
+.map-preview { width: 100%; aspect-ratio: 4 / 3; display: block; border-radius: 5px; background: #3d2e4f; }
+.map-preview-ground { fill: #dca573; }.map-preview-route { fill: #ebbf8b; }.map-preview-solid { fill: #78565b; stroke: #4b3848; stroke-width: 6; }
+.map-preview.is-industrial .map-preview-ground { fill: #595d77; }.map-preview.is-industrial .map-preview-route { fill: #8e98a8; }.map-preview.is-industrial .map-preview-solid { fill: #bc654f; stroke: #303244; }
+.map-preview-spawn { fill: #81d8c4; stroke: #283c46; stroke-width: 5; }.map-preview-pickup { fill: #ffdd78; stroke: #68494b; stroke-width: 5; }
+@media (max-width: 480px) { .room-environment-grid { grid-template-columns: 1fr; } }
+
+/* Size the viewport from the space left by the actual header, including zoom. */
+@supports (width: 1cqh) {
+  .arena-stage { container-type: size; }
+  .arena-canvas-wrap { width: min(100%, calc((100cqh - 8px) * 1024 / 768)); }
+  .arena-stage.has-touch-controls .arena-canvas-wrap { width: min(calc(100cqw - 268px), calc((100cqh - 8px) * 1024 / 768)); }
+  @media (max-height: 540px) and (orientation: landscape) {
+    .arena-stage.has-touch-controls .arena-canvas-wrap { width: min(calc(100cqw - 224px), calc((100cqh - 8px) * 1024 / 768)); }
+  }
+  @media (orientation: portrait) {
+    .arena-stage.has-touch-controls .arena-canvas-wrap { width: min(100%, calc((100cqh - 240px) * 1024 / 768)); }
+  }
+}

@@ -68,6 +68,7 @@ export class WeaponPickup extends Schema {
 export class ArenaState extends Schema {
     @type('string') roomCode = ''
     @type('string') roomName = ''
+    @type('string') environment = 'desert'
     @type('string') mapSize: MapSize = 'small'
     @type('number') maxPlayers = 4
     @type('boolean') isPrivate = false

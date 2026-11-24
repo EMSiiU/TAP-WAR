@@ -8,7 +8,7 @@ import ArenaScene, {
   type PickupState,
   type PlayerState,
 } from './ArenaScene'
-import type { MapSize } from './arenaMaps'
+import type { MapEnvironment, MapSize } from './arenaMaps'
 import type { TouchInputState } from './TouchControls'
 import arena from '../../../../packages/shared/arena.json'
 
@@ -20,6 +20,7 @@ type PhaserViewProps = {
   isPaused: boolean
   crosshairStyle: CrosshairStyle
   mapSize: MapSize
+  environment: MapEnvironment
   touchMode: boolean
   touchInputRef: React.RefObject<TouchInputState>
   onMenuToggle?: () => void
@@ -36,6 +37,7 @@ export default function PhaserView({
   isPaused,
   crosshairStyle,
   mapSize,
+  environment,
   touchMode,
   touchInputRef,
   onMenuToggle,
@@ -109,6 +111,7 @@ export default function PhaserView({
       () => touchInputRef.current,
       () => onMenuToggleRef.current?.(),
       (connected) => onGamepadChangeRef.current?.(connected),
+      environment,
     )
     scene.setPlayers(latestPlayersRef.current)
     scene.setBullets(latestBulletsRef.current)
@@ -154,7 +157,7 @@ export default function PhaserView({
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls, mapSize, touchInputRef])
+  }, [controls, mapSize, environment, touchInputRef])
 
   useEffect(() => {
     if (resumeSignal > 0) {
