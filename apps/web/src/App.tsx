@@ -454,6 +454,9 @@ function ArenaSession({
         'No se pudo guardar el archivo de resultados. Revisa el disco del servidor; la revancha está bloqueada.',
     } as Record<string, string>
   )[matchMeta.saveStatus]
+  const showTouchControls = Boolean(
+    controls && touchMode && !localPaused && matchMeta.phase !== 'finished',
+  )
 
   return (
     <div ref={shellRef} className="arena-shell">
@@ -514,7 +517,7 @@ function ArenaSession({
         </div>
       </header>
 
-      <div className="arena-stage">
+      <div className={`arena-stage${showTouchControls ? ' has-touch-controls' : ''}`}>
         {controls && matchMeta.phase === 'waiting' && (
           <div className="arena-waiting-banner" role="status">
             <span>
@@ -582,17 +585,17 @@ function ArenaSession({
               controls={controls}
             />
           )}
-
-          {controls && touchMode && !localPaused && matchMeta.phase !== 'finished' && (
-            <TouchControls
-              onTouchInput={(next) => {
-                touchInputRef.current = next
-              }}
-              onEmote={(emote) => controls.sendEmote?.(emote)}
-              onMenu={() => setLocalPaused(true)}
-            />
-          )}
         </div>
+
+        {showTouchControls && controls && (
+          <TouchControls
+            onTouchInput={(next) => {
+              touchInputRef.current = next
+            }}
+            onEmote={(emote) => controls.sendEmote?.(emote)}
+            onMenu={() => setLocalPaused(true)}
+          />
+        )}
 
         {localPaused && matchMeta.phase !== 'finished' && (
           <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Menú personal">
