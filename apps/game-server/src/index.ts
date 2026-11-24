@@ -57,6 +57,7 @@ const server = defineServer({
               name: typeof meta.name === 'string' && meta.name ? meta.name : `Sala ${room.roomId}`,
               mapSize:
                 meta.mapSize === 'medium' || meta.mapSize === 'large' ? meta.mapSize : 'small',
+              environment: meta.environment === 'industrial' ? 'industrial' : 'desert',
               clients: room.clients,
               maxClients: room.maxClients,
               phase: meta.phase === 'playing' || meta.phase === 'finished' ? meta.phase : 'waiting',

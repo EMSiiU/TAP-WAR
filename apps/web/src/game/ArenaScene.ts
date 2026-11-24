@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { getArenaMap, type ArenaMapConfig, type MapSize } from './arenaMaps'
+import { getArenaMap, buildMapLayers, type MapEnvironment, type ArenaMapConfig, type MapSize } from './arenaMaps'
 import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
 import type { TouchInputState } from './TouchControls'
 
@@ -164,10 +164,11 @@ export default class ArenaScene extends Phaser.Scene {
         getTouchInput?: () => TouchInputState,
         onMenuToggle?: () => void,
         onGamepadChange?: (connected: boolean) => void,
+        environment: MapEnvironment = 'desert',
     ) {
         super('arena')
         this.controls = controls
-        this.arenaMap = getArenaMap(mapSize)
+        this.arenaMap = getArenaMap(mapSize, environment)
         this.touchMode = touchMode
         this.getTouchInput = getTouchInput
         this.onMenuToggle = onMenuToggle
@@ -175,7 +176,6 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('arena-desert', '/assets/maps/arena-desert.png')
         this.load.image('tilemap-desert', '/assets/maps/tilemap-desert.png')
         for (const skin of SKINS) {
             this.load.image(`player-${skin}-idle`, `/assets/characters/player-${skin}-idle.png`)
@@ -207,8 +207,9 @@ export default class ArenaScene extends Phaser.Scene {
         this.load.image('hp-bar-frame', '/assets/ui/hp-bar-frame.png')
         this.load.image('hp-bar-fill', '/assets/ui/hp-bar-fill.png')
         this.load.image('hp-bar-fill-blue', '/assets/ui/hp-bar-fill-blue.png')
-        this.load.image('emote-dots', '/assets/ui/emote-dots.png')
-        this.load.image('emote-alert', '/assets/ui/emote-alert.png')
+        // Keep the wire IDs compatible with existing game servers.
+        this.load.svg('emote-dots', '/assets/ui/emote-laugh.svg', { width: 32, height: 32 })
+        this.load.svg('emote-alert', '/assets/ui/emote-heart.svg', { width: 32, height: 32 })
         this.load.image('emote-skull', '/assets/ui/emote-skull.png')
         this.load.audio('shoot-a', '/assets/sounds/shoot-a.ogg')
         this.load.audio('shoot-b', '/assets/sounds/shoot-b.ogg')
@@ -284,78 +285,7 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private renderArenaMap() {
-        if (this.arenaMap.id === 'small') {
-            this.add.image(0, 0, 'arena-desert').setOrigin(0, 0)
-            return
-        }
-
-        const tilePx = 32
-        const cols = Math.floor(this.arenaMap.width / tilePx)
-        const rows = Math.floor(this.arenaMap.height / tilePx)
-
-        const groundData: number[][] = []
-        const obstacleData: number[][] = []
-
-        for (let y = 0; y < rows; y++) {
-            const gRow: number[] = []
-            const oRow: number[] = []
-            for (let x = 0; x < cols; x++) {
-                const hash = (x * 73856093) ^ (y * 19349663)
-                let groundTile = Math.abs(hash) % 5 === 0 ? 65 : 64
-                if (Math.abs(hash) % 29 === 0) groundTile = 103
-                else if (Math.abs(hash) % 41 === 0) groundTile = 121
-                gRow.push(groundTile)
-                oRow.push(-1)
-            }
-            groundData.push(gRow)
-            obstacleData.push(oRow)
-        }
-
-        // Borde exterior de la arena (1 celda de grosor = 32 px).
-        for (let x = 0; x < cols; x++) {
-            obstacleData[0][x] = x === 0 ? 46 : x === cols - 1 ? 48 : 47
-            obstacleData[rows - 1][x] = x === 0 ? 10 : x === cols - 1 ? 12 : 11
-        }
-        for (let y = 1; y < rows - 1; y++) {
-            obstacleData[y][0] = 28
-            obstacleData[y][cols - 1] = 30
-        }
-
-        // Obstáculos interiores alineados con arena.json.
-        for (const obs of this.arenaMap.obstacles) {
-            if (
-                obs.x === 0 ||
-                obs.y === 0 ||
-                obs.x + obs.width >= this.arenaMap.width ||
-                obs.y + obs.height >= this.arenaMap.height
-            ) {
-                continue
-            }
-            const c0 = Math.floor(obs.x / tilePx)
-            const r0 = Math.floor(obs.y / tilePx)
-            const cCount = Math.max(1, Math.round(obs.width / tilePx))
-            const rCount = Math.max(1, Math.round(obs.height / tilePx))
-
-            if (cCount === 2 && rCount === 2) {
-                obstacleData[r0][c0] = 211
-                obstacleData[r0][c0 + 1] = 212
-                obstacleData[r0 + 1][c0] = 229
-                obstacleData[r0 + 1][c0 + 1] = 230
-                continue
-            }
-
-            for (let dy = 0; dy < rCount; dy++) {
-                for (let dx = 0; dx < cCount; dx++) {
-                    const rowBase = dy === 0 ? 100 : dy === rCount - 1 ? 136 : 118
-                    const colOffset = dx === 0 ? 0 : dx === cCount - 1 ? 2 : 1
-                    const r = r0 + dy
-                    const c = c0 + dx
-                    if (r >= 0 && r < rows && c >= 0 && c < cols) {
-                        obstacleData[r][c] = rowBase + colOffset
-                    }
-                }
-            }
-        }
+        const { ground: groundData, solids: obstacleData } = buildMapLayers(this.arenaMap)
 
         const groundMap = this.make.tilemap({ data: groundData, tileWidth: 16, tileHeight: 16 })
         const groundTiles = groundMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
@@ -367,6 +297,35 @@ export default class ArenaScene extends Phaser.Scene {
         const obsTiles = obsMap.addTilesetImage('tilemap-desert', 'tilemap-desert', 16, 16, 0, 0)
         if (obsTiles) {
             obsMap.createLayer(0, obsTiles, 0, 0)?.setScale(2).setCullPadding(2, 2)
+        }
+
+        // Raised edges stay inside the authoritative rectangle. Ground routes
+        // have no such edges, so players can distinguish floor paint from cover.
+        const edges = this.add.graphics().setDepth(1)
+        const industrial = this.arenaMap.environment === 'industrial'
+        for (const obstacle of this.arenaMap.obstacles) {
+            edges.lineStyle(4, industrial ? 0x303244 : 0x624653, 0.95)
+            edges.strokeRect(obstacle.x + 2, obstacle.y + 2, obstacle.width - 4, obstacle.height - 4)
+            edges.lineStyle(6, industrial ? 0x36364c : 0x624653, 0.7)
+            edges.lineBetween(obstacle.x + 5, obstacle.y + obstacle.height - 5,
+                obstacle.x + obstacle.width - 5, obstacle.y + obstacle.height - 5)
+            if (industrial && obstacle.width > 32 && obstacle.height > 32) {
+                // Safety paint on the machine itself; no non-solid props.
+                for (let x = obstacle.x + 8; x < obstacle.x + obstacle.width - 8; x += 24) {
+                    edges.fillStyle(0xf2c46d, 0.9)
+                    edges.fillRect(x, obstacle.y + obstacle.height - 12, 12, 4)
+                }
+            }
+        }
+
+        const labelY = this.arenaMap.height * 0.12
+        const names = industrial ? ['ALMACÉN OESTE', 'ALMACÉN ESTE'] : ['CANTERA OESTE', 'CANTERA ESTE']
+        for (let index = 0; index < names.length; index++) {
+            this.add.text(this.arenaMap.width * (index ? 0.75 : 0.25), labelY, names[index], {
+                fontFamily: 'monospace', fontSize: '20px',
+                color: industrial ? '#e3d9bf' : '#6d4850',
+                backgroundColor: industrial ? '#55516b' : '#e4b88e', padding: { x: 10, y: 5 },
+            }).setOrigin(0.5).setDepth(1)
         }
     }
 
@@ -590,7 +549,7 @@ export default class ArenaScene extends Phaser.Scene {
             const player = this.players.find(({ id }) => id === this.controls.playerId)
             if (!player) return
 
-            const touch = this.getTouchInput?.()
+            const touch = this.touchMode ? this.getTouchInput?.() : undefined
 
             if (touch?.aimActive) {
                 const aimRadius = Math.max(90, touch.aimMagnitude * MAX_AIM_RADIUS)

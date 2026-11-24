@@ -25,6 +25,7 @@ import {
     allocateRoomCode,
     getArenaMap,
     mapSizeForCapacity,
+    normalizeEnvironment,
     releaseRoomCode,
     sanitizeRoomName,
     type ArenaMapConfig,
@@ -43,6 +44,7 @@ const KILLS_TO_WIN = 20
 const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper', 'smg', 'launcher', 'plasma', 'axe']
 
 export type ArenaRoomOptions = {
+    environment?: unknown
     maxPlayers?: unknown
     isPrivate?: unknown
     roomName?: unknown
@@ -76,6 +78,7 @@ export class ArenaRoom extends Room {
             code: this.state.roomCode,
             name: this.state.roomName,
             mapSize: this.state.mapSize,
+            environment: this.state.environment,
             maxPlayers: this.state.maxPlayers,
             isPrivate: this.state.isPrivate,
             phase: this.state.phase,
@@ -108,11 +111,12 @@ export class ArenaRoom extends Room {
         const code = allocateRoomCode()
 
         this.roomId = code
-        this.arenaMap = getArenaMap(mapSize)
+        this.arenaMap = getArenaMap(mapSize, options?.environment)
         this.maxClients = maxPlayers
 
         this.state.roomCode = code
         this.state.roomName = sanitizeRoomName(options?.roomName, code)
+        this.state.environment = normalizeEnvironment(options?.environment)
         this.state.mapSize = mapSize
         this.state.maxPlayers = maxPlayers
         this.state.isPrivate = isPrivate

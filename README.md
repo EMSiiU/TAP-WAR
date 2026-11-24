@@ -111,3 +111,7 @@ Guardar configuración privada fuera del repositorio. Cuando sea necesaria, docu
 ## Rankings y estadísticas
 
 Ranking global con fotos, tabla y gráfica; estadísticas propias e historial para usuarios autenticados. Requiere aplicar las migraciones [`20261123000100_match_rankings.sql`](supabase/migrations/20261123000100_match_rankings.sql) y [`20261123000200_expand_match_capacity.sql`](supabase/migrations/20261123000200_expand_match_capacity.sql) y configurar `SUPABASE_SECRET_KEY` solo en el servidor. Ver [activación y pruebas](docs/rankings.md).
+
+## Escenarios
+
+Cantera del desierto y Planta industrial, ambos para 4/10/20 jugadores. La creación de sala permite elegir escenario y capacidad por separado. Arte y colisiones comparten un catálogo; ver [mapas y pruebas](docs/mapas.md).

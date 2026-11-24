@@ -1,0 +1,5 @@
+{
+  "name": "@tap-war/shared",
+  "private": true,
+  "type": "module"
+}

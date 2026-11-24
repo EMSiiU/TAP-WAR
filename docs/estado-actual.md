@@ -1,6 +1,6 @@
 # Estado actual de TAP-WAR
 
-Actualizado el 23 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
+Actualizado el 24 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
 
 ## Funcionalidad implementada
 
@@ -8,6 +8,8 @@ Actualizado el 23 de noviembre de 2026. Este documento resume el alcance impleme
 | --- | --- |
 | Salas múltiples | Creación dinámica de salas públicas (listadas en `GET /api/rooms`) o privadas por código de 6 caracteres, con limpieza automática al vaciarse |
 | Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa |
+| Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor; implementación local |
+| Geometría de mapas | Catálogo compartido para arte y colisiones; sin piezas de objetos dispersas en el suelo; rutas y apariciones verificadas |
 | Controles | PC (WASD + ratón/ESPACIO), móvil/tablet (joysticks táctiles gemelos + botón de pantalla completa) y mandos USB/Bluetooth (Gamepad API) |
 | Arena | Movimiento analógico/digital, colisiones, pickups y combate autoritativos por mapa |
 | Combate | Diez armas de fuego/melé, munición, pickups, daño, bajas y reaparición |
@@ -29,9 +31,9 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 18 pruebas correctas de perfil/foto, URL del servidor, Gamepad y códigos/mapas; gateways simulados |
+| Cliente: npm test | 31 pruebas correctas de perfil/foto, URL, Gamepad, mapas y entrada táctil; incluye 13 regresiones nuevas de cancelación, multitáctil y ciclo de vida |
 | Cliente: npm run build | TypeScript y compilación de producción correctos |
-| Servidor: npm test | 30 pruebas correctas de autenticación, infraestructura, salas, mapas, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
+| Servidor: npm test | 43 pruebas correctas de autenticación, infraestructura, salas, escenarios, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
 | Colyseus real en desarrollo | /health respondió 200; name/userId inventados sin token fueron rechazados con AUTH_FAILED |
 | Perfiles en Supabase | Tabla, RLS, dos políticas, trigger e índice único comprobados; creación automática de perfil confirmada |
@@ -42,6 +44,16 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 Las pruebas SQL usan ROLLBACK. La prueba visual de foto utilizó un archivo de prueba sin guardarlo en Supabase. Los resultados históricos de S1-05 y S1-06 permanecen en [prueba-sprint-1.md](prueba-sprint-1.md).
 
 La nueva migración de rankings se verificó en PostgreSQL 18 local con Auth/Storage simulados; la prueba SQL de rankings devuelve PASS y usa ROLLBACK. La revisión visual del bloque y la API remota siguen pendientes. Ver [activación de rankings](rankings.md).
+
+Se verificó el escenario industrial con dos clientes reales de Colyseus (Auth/guardado simulados): selección, unión, inicio, abandono y revancha. Se revisaron renderizaciones de los mapas; falta prueba visual interactiva con cuentas reales. Ver [escenarios y comprobaciones](mapas.md).
+
+## Correcciones locales de interfaz
+
+- El escenario ocupa un contenedor separado del encabezado y los controles. En horizontal, los joysticks se ajustan al alto real y a la anchura de los laterales; se respetan las zonas seguras del dispositivo. En casos de altura extrema, los laterales permiten desplazamiento en lugar de perder controles.
+- Abrir el menú, desactivar táctil, finalizar una ronda, desmontar controles, perder foco/captura o cambiar de orientación limpia movimiento y disparo. El cliente envía una entrada de parada inmediatamente. Un dedo adicional no reemplaza al dueño del botón de disparo.
+- La ventana de resultados limita su altura al espacio disponible. El detalle completo puede desplazarse; revancha y salida permanecen fuera de esa zona desplazable.
+- Verificación visual en Chrome local: controles en sala de espera, emulación horizontal de 844×390 y resultados ficticios de veinte jugadores con desplazamiento hasta la última fila; botones visibles y revancha de prueba funcional. No se iniciaron partidas ni se guardaron estadísticas para estas comprobaciones.
+- Sigue pendiente la comprobación en un teléfono físico: pulsar movimiento/disparo, abrir el menú con otro dedo, soltar y continuar; alternar aplicaciones; girar; desactivar/activar táctil; revisar resultados en vertical y horizontal.
 
 ## Validación pendiente
 

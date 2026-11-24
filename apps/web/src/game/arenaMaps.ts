@@ -1,37 +1,12 @@
-import arenaData from '../../../../packages/shared/arena.json' with { type: 'json' }
-
-export type MapSize = 'small' | 'medium' | 'large'
-export type RoomCapacity = 4 | 10 | 20
-
-export type ArenaObstacle = {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export type ArenaPoint = {
-  x: number
-  y: number
-}
-
-export type ArenaMapConfig = {
-  id: MapSize
-  label: string
-  maxPlayers: RoomCapacity
-  width: number
-  height: number
-  playerRadius: number
-  pickupIntervalMs: number
-  pickupSpawnPoints: ArenaPoint[]
-  spawnPoints: ArenaPoint[]
-  obstacles: ArenaObstacle[]
-}
+import type { MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.ts'
+export { getArenaMap, buildMapLayers, normalizeEnvironment, ENVIRONMENT_OPTIONS } from '../../../../packages/shared/mapCatalog.ts'
+export type { ArenaMapConfig, ArenaObstacle, ArenaPoint, MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.ts'
 
 export type PublicRoomSummary = {
   code: string
   name: string
   mapSize: MapSize
+  environment: MapEnvironment
   clients: number
   maxClients: number
   phase: 'waiting' | 'playing' | 'finished'
@@ -42,6 +17,7 @@ export type RoomJoinRequest =
   | {
       mode: 'create'
       maxPlayers: RoomCapacity
+      environment?: MapEnvironment
       isPrivate: boolean
       roomName: string
     }
@@ -65,11 +41,6 @@ export const MAP_LABEL_BY_SIZE: Record<MapSize, string> = {
   small: 'Pequeño',
   medium: 'Mediano',
   large: 'Grande',
-}
-
-export function getArenaMap(mapSize: MapSize): ArenaMapConfig {
-  const maps = arenaData.maps as Record<MapSize, ArenaMapConfig>
-  return maps[mapSize] ?? maps.small
 }
 
 export function normalizeRoomCode(raw: string): string {
