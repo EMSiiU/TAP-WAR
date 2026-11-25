@@ -97,6 +97,75 @@ export function segmentIntersectsPlayerHitbox(
     return dx * dx + dy * dy <= hitRadius * hitRadius
 }
 
+export function overlapsObstacleWithRadius(
+    x: number,
+    y: number,
+    radius: number,
+    arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
+): boolean {
+    if (x < radius || x > arenaMap.width - radius || y < radius || y > arenaMap.height - radius) {
+        return true
+    }
+    return arenaMap.obstacles.some((obstacle) => {
+        const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.width)
+        const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.height)
+        const dx = x - closestX
+        const dy = y - closestY
+
+        return dx * dx + dy * dy < radius * radius
+    })
+}
+
+export function pickRandomFreeArenaPoint(
+    arenaMap: CollisionMap,
+    occupied: readonly Position[] = [],
+    options: {
+        clearance?: number
+        minSpacing?: number
+        fallbacks?: readonly Position[]
+        rng?: () => number
+    } = {},
+): Position {
+    const clearance = Math.max(arenaMap.playerRadius + 8, options.clearance ?? 30)
+    const minSpacing = options.minSpacing ?? 72
+    const rng = options.rng ?? Math.random
+    const minX = 32 + clearance
+    const maxX = arenaMap.width - 32 - clearance
+    const minY = 32 + clearance
+    const maxY = arenaMap.height - 32 - clearance
+
+    if (maxX > minX && maxY > minY) {
+        for (const spacing of [minSpacing, Math.min(32, minSpacing), 0]) {
+            const attempts = spacing > 0 ? 60 : 40
+            const spacingSq = spacing * spacing
+            for (let i = 0; i < attempts; i++) {
+                const x = Math.round(minX + rng() * (maxX - minX))
+                const y = Math.round(minY + rng() * (maxY - minY))
+                if (overlapsObstacleWithRadius(x, y, clearance, arenaMap)) continue
+                if (
+                    spacingSq > 0 &&
+                    occupied.some((p) => {
+                        const dx = p.x - x
+                        const dy = p.y - y
+                        return dx * dx + dy * dy < spacingSq
+                    })
+                ) {
+                    continue
+                }
+                return { x, y }
+            }
+        }
+    }
+
+    const candidates = (options.fallbacks ?? []).filter(
+        (p) => !overlapsObstacleWithRadius(p.x, p.y, arenaMap.playerRadius, arenaMap),
+    )
+    if (candidates.length > 0) {
+        return candidates[Math.floor(rng() * candidates.length)]
+    }
+    return { x: Math.round(arenaMap.width / 2), y: Math.round(arenaMap.height / 2) }
+}
+
 export function segmentBlockedByObstacle(
     x1: number,
     y1: number,

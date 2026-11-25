@@ -16,15 +16,17 @@ import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
 import { verifyArenaAccount, type VerifiedAccount } from '../auth.js'
 import weaponsConfig from '../../../../packages/shared/weapons.json' with { type: 'json' }
 import {
+    DASH_RECHARGE_MS,
     GOLDEN_DURATION_MS,
-    GOLDEN_SHIELD_AMOUNT,
     GUN_GAME_LADDER,
     MAX_DASHES,
     MAX_RESERVE_MAGAZINES,
     MEDKIT_HEAL_AMOUNT,
     SHIELD_DURATION_MS,
-    SHIELD_NORMAL_AMOUNT,
+    calculateExplosionDamage,
+    maxActiveItemsForPlayers,
     normalizeGameMode,
+    scaledSpawnIntervalMs,
     teamKillTargetForCapacity,
     type GameMode,
     type PowerUpKind,
@@ -32,6 +34,7 @@ import {
 import {
     isBulletHittingObstacle,
     moveInsideArena,
+    pickRandomFreeArenaPoint,
     segmentBlockedByObstacle,
     segmentIntersectsPlayerHitbox,
 } from './ArenaCollision.js'
@@ -72,6 +75,7 @@ type WeaponSpec = {
     cooldownMs: number
     reloadMs?: number
     damage: number
+    explosionRadius?: number
     rangePx?: number
     arcDeg?: number
     speed: number
@@ -335,7 +339,9 @@ export class ArenaRoom extends Room {
     private clearBuffs(player: Player) {
         player.shield = 0
         player.shieldRemaining = 0
+        player.shieldProgress = 0
         player.shieldUntil = 0
+        player.shieldDurationMs = 0
         player.goldenRemaining = 0
         player.goldenUntil = 0
         player.dashUntil = 0
@@ -385,10 +391,9 @@ export class ArenaRoom extends Room {
     private balanceTeamsForStart() {
         if (this.state.gameMode !== 'tdm') return
         const all = Array.from(this.state.players.values())
-        let orange = all.filter((p) => p.team === 'orange')
-        let blue = all.filter((p) => p.team === 'blue')
+        const orange = all.filter((p) => p.team === 'orange')
+        const blue = all.filter((p) => p.team === 'blue')
 
-        // Ensure unassigned players get teams first.
         for (const player of all) {
             if (player.team !== 'orange' && player.team !== 'blue') {
                 const targetTeam: TeamColor = orange.length <= blue.length ? 'orange' : 'blue'
@@ -399,7 +404,6 @@ export class ArenaRoom extends Room {
             }
         }
 
-        // Balance if one team has at least 2 more players than the other.
         while (orange.length - blue.length > 1) {
             const moved = orange.pop()!
             moved.team = 'blue'
@@ -437,6 +441,10 @@ export class ArenaRoom extends Room {
         const dirY = moveLen > 0.05 ? input.moveY / moveLen : Math.sin(input.aimAngle)
 
         player.dashes = Math.max(0, player.dashes - 1)
+        if (player.dashes < MAX_DASHES && player.dashRechargeStartAt === 0) {
+            player.dashRechargeStartAt = now
+            player.dashRechargeProgress = 0
+        }
         const accountId = this.accounts.get(sessionId)?.accountId
         if (accountId) this.dashesByAccount.set(accountId, player.dashes)
 
@@ -522,9 +530,10 @@ export class ArenaRoom extends Room {
         this.state.winnerId = ''
         this.state.winnerName = ''
         this.goldenSpawned = false
-        this.nextPickupAt = now + this.arenaMap.pickupIntervalMs
-        this.nextPowerUpAt = now + Math.round(this.arenaMap.powerUpIntervalMs * 0.7)
-        // Keep the room unlocked during playing so new players can join mid-match.
+        const playerCount = this.state.players.size
+        this.nextPickupAt = now + scaledSpawnIntervalMs(this.arenaMap.pickupIntervalMs, playerCount)
+        this.nextPowerUpAt =
+            now + Math.round(scaledSpawnIntervalMs(this.arenaMap.powerUpIntervalMs, playerCount) * 0.65)
         void this.unlock?.()?.catch?.(() => {})
         this.syncMetadata()
 
@@ -539,6 +548,8 @@ export class ArenaRoom extends Room {
             player.weaponTier = 0
             player.dashes = MAX_DASHES
             player.maxDashes = MAX_DASHES
+            player.dashRechargeProgress = 0
+            player.dashRechargeStartAt = 0
             player.dashSeq = 0
             player.dashAngle = 0
             player.dashCooldownUntil = 0
@@ -581,6 +592,8 @@ export class ArenaRoom extends Room {
             player.weaponTier = 0
             player.dashes = MAX_DASHES
             player.maxDashes = MAX_DASHES
+            player.dashRechargeProgress = 0
+            player.dashRechargeStartAt = 0
             player.dashSeq = 0
             player.dashAngle = 0
             player.dashCooldownUntil = 0
@@ -725,21 +738,12 @@ export class ArenaRoom extends Room {
         const attacker = this.state.players.get(attackerId)
         if (this.isFriendly(attacker, target)) return false
 
-        let remainingDamage = damage
-        if (target.shield > 0) {
-            const absorbed = Math.min(target.shield, remainingDamage)
-            target.shield = Math.max(0, target.shield - absorbed)
-            remainingDamage -= absorbed
-            if (target.shield <= 0) {
-                target.shield = 0
-                target.shieldUntil = 0
-                target.shieldRemaining = 0
-            }
+        // Timed shield blocks all incoming damage without breaking; it only expires on timer end.
+        if (target.shield > 0 && now < target.shieldUntil) {
+            return false
         }
 
-        if (remainingDamage > 0) {
-            target.hp = Math.max(0, target.hp - remainingDamage)
-        }
+        target.hp = Math.max(0, target.hp - damage)
 
         if (target.hp <= 0) {
             target.hp = 0
@@ -783,9 +787,12 @@ export class ArenaRoom extends Room {
                             nextWeapon === 'axe' || nextWeapon === 'knife',
                         )
                     } else {
-                        // Quick-melee humiliation while on a firearm tier demotes the victim by 1 tier.
                         target.weaponTier = Math.max(0, target.weaponTier - 1)
-                        if (!this.isMeleeWeapon(attacker.weaponType) && attacker.ammo === 0 && attacker.reserveAmmo === 0) {
+                        if (
+                            !this.isMeleeWeapon(attacker.weaponType) &&
+                            attacker.ammo === 0 &&
+                            attacker.reserveAmmo === 0
+                        ) {
                             attacker.ammo = attacker.maxAmmo
                         }
                     }
@@ -793,6 +800,44 @@ export class ArenaRoom extends Room {
                     this.finishMatch(attacker.id, attacker.name, 'kills')
                     return true
                 }
+            }
+        }
+        return false
+    }
+
+    private detonateExplosion(
+        x: number,
+        y: number,
+        radius: number,
+        maxDamage: number,
+        ownerId: string,
+        weaponType: WeaponType,
+        now: number,
+    ): boolean {
+        try {
+            this.broadcast?.('explosion', { x: Math.round(x), y: Math.round(y), radius })
+        } catch {
+            // Isolated unit tests without an attached Colyseus transport.
+        }
+
+        const owner = this.state.players.get(ownerId)
+        for (const [playerId, target] of this.state.players) {
+            if (playerId === ownerId || target.isDead || target.hp <= 0) continue
+            if (this.isFriendly(owner, target)) continue
+
+            const dist = Math.hypot(target.x - x, target.y - y)
+            if (dist > radius) continue
+            if (
+                dist > PLAYER_HIT_RADIUS &&
+                segmentBlockedByObstacle(x, y, target.x, target.y, this.arenaMap)
+            ) {
+                continue
+            }
+
+            const damage = calculateExplosionDamage(dist, radius, maxDamage)
+            if (damage <= 0) continue
+            if (this.applyDamageToPlayer(playerId, target, ownerId, damage, now, weaponType)) {
+                return true
             }
         }
         return false
@@ -821,6 +866,7 @@ export class ArenaRoom extends Room {
                 spec.speed,
                 spec.damage,
                 spec.bulletScale,
+                spec.explosionRadius ?? 0,
                 player.teamColor,
                 now,
             )
@@ -838,6 +884,7 @@ export class ArenaRoom extends Room {
         speed: number,
         damage: number,
         scale: number,
+        explosionRadius: number,
         teamColor: TeamColor,
         now: number,
     ) {
@@ -850,6 +897,9 @@ export class ArenaRoom extends Room {
             segmentBlockedByObstacle(originX, originY, spawnX, spawnY, this.arenaMap) ||
             isBulletHittingObstacle(spawnX, spawnY, 4, this.arenaMap)
         ) {
+            if (explosionRadius > 0) {
+                this.detonateExplosion(originX, originY, explosionRadius, damage, ownerId, player.weaponType, now)
+            }
             return
         }
 
@@ -868,7 +918,11 @@ export class ArenaRoom extends Room {
                     PLAYER_HIT_RADIUS,
                 )
             ) {
-                this.applyDamageToPlayer(playerId, target, ownerId, damage, now, player.weaponType)
+                if (explosionRadius > 0) {
+                    this.detonateExplosion(target.x, target.y, explosionRadius, damage, ownerId, player.weaponType, now)
+                } else {
+                    this.applyDamageToPlayer(playerId, target, ownerId, damage, now, player.weaponType)
+                }
                 return
             }
         }
@@ -883,11 +937,22 @@ export class ArenaRoom extends Room {
         bullet.vx = Math.cos(angle) * speed
         bullet.vy = Math.sin(angle) * speed
         bullet.damage = damage
+        bullet.explosionRadius = explosionRadius
         bullet.scale = scale
         bullet.teamColor = teamColor
 
         this.state.bullets.set(bullet.id, bullet)
         this.bulletCreatedAt.set(bullet.id, now)
+    }
+
+    private collectOccupiedItemPoints() {
+        const occupied: { x: number; y: number }[] = []
+        for (const p of this.state.pickups.values()) occupied.push({ x: p.x, y: p.y })
+        for (const pu of this.state.powerUps.values()) occupied.push({ x: pu.x, y: pu.y })
+        for (const pl of this.state.players.values()) {
+            if (!pl.isDead) occupied.push({ x: pl.x, y: pl.y })
+        }
+        return occupied
     }
 
     private shouldSpawnGolden(): boolean {
@@ -917,13 +982,11 @@ export class ArenaRoom extends Room {
     private spawnGoldenPowerUp(now: number) {
         if (this.goldenSpawned) return
         this.goldenSpawned = true
-        const spot = this.arenaMap.goldenSpawnPoint
-
-        for (const [id, existing] of this.state.powerUps) {
-            if (existing.x === spot.x && existing.y === spot.y) {
-                this.state.powerUps.delete(id)
-            }
-        }
+        const spot = pickRandomFreeArenaPoint(this.arenaMap, this.collectOccupiedItemPoints(), {
+            clearance: 34,
+            minSpacing: 72,
+            fallbacks: [this.arenaMap.goldenSpawnPoint, ...this.arenaMap.powerUpSpawnPoints],
+        })
 
         const powerUp = new PowerUpState()
         powerUp.id = `pu-${++this.nextPowerUpId}`
@@ -937,15 +1000,19 @@ export class ArenaRoom extends Room {
     private spawnPowerUp() {
         const existing = Array.from(this.state.powerUps.values())
         const normalActive = existing.filter((p) => p.kind !== 'golden')
-        const maxActive = Math.max(2, Math.min(this.arenaMap.powerUpSpawnPoints.length, 6))
+        const maxActive = maxActiveItemsForPlayers(
+            this.state.players.size,
+            this.state.mapSize,
+            'powerup',
+        )
         if (normalActive.length >= maxActive) return
 
-        const availableSpots = this.arenaMap.powerUpSpawnPoints.filter((spot) =>
-            existing.every((p) => p.x !== spot.x || p.y !== spot.y),
-        )
-        if (availableSpots.length === 0) return
+        const spot = pickRandomFreeArenaPoint(this.arenaMap, this.collectOccupiedItemPoints(), {
+            clearance: 30,
+            minSpacing: 72,
+            fallbacks: this.arenaMap.powerUpSpawnPoints,
+        })
 
-        const spot = availableSpots[Math.floor(Math.random() * availableSpots.length)]
         const activeKinds = new Set(normalActive.map((p) => p.kind))
         const preferredKinds = NORMAL_POWERUPS.filter((k) => !activeKinds.has(k))
         const pool = preferredKinds.length > 0 ? preferredKinds : NORMAL_POWERUPS
@@ -957,6 +1024,16 @@ export class ArenaRoom extends Room {
         powerUp.x = spot.x
         powerUp.y = spot.y
         this.state.powerUps.set(powerUp.id, powerUp)
+    }
+
+    private activateShield(player: Player, durationMs: number, now: number) {
+        const nextUntil = Math.max(player.shieldUntil, now + durationMs)
+        const remainingMs = Math.max(1, nextUntil - now)
+        player.shield = 100
+        player.shieldUntil = nextUntil
+        player.shieldDurationMs = Math.max(durationMs, remainingMs)
+        player.shieldRemaining = Math.max(1, Math.ceil(remainingMs / 1000))
+        player.shieldProgress = Math.max(0, Math.min(1, remainingMs / player.shieldDurationMs))
     }
 
     private applyPowerUp(sessionId: string, player: Player, kind: PowerUpKind, now: number): boolean {
@@ -981,25 +1058,25 @@ export class ArenaRoom extends Room {
         }
 
         if (kind === 'shield') {
-            player.shield = Math.max(player.shield, SHIELD_NORMAL_AMOUNT)
-            player.shieldUntil = Math.max(player.shieldUntil, now + SHIELD_DURATION_MS)
-            player.shieldRemaining = Math.max(1, Math.ceil((player.shieldUntil - now) / 1000))
+            this.activateShield(player, SHIELD_DURATION_MS, now)
             return true
         }
 
         if (kind === 'dash') {
             player.dashes = Math.min(MAX_DASHES, player.dashes + 1)
+            if (player.dashes >= MAX_DASHES) {
+                player.dashRechargeStartAt = 0
+                player.dashRechargeProgress = 0
+            }
             const accountId = this.accounts.get(sessionId)?.accountId
             if (accountId) this.dashesByAccount.set(accountId, player.dashes)
             return true
         }
 
-        // Golden Power-Up: heal to 100, shield + infinite ammo for 15s.
+        // Golden Power-Up: heal to 100, unbreakable shield + infinite ammo for 15s.
         player.hp = 100
-        player.shield = Math.max(player.shield, GOLDEN_SHIELD_AMOUNT)
-        player.shieldUntil = Math.max(player.shieldUntil, now + GOLDEN_DURATION_MS)
+        this.activateShield(player, GOLDEN_DURATION_MS, now)
         player.goldenUntil = now + GOLDEN_DURATION_MS
-        player.shieldRemaining = Math.max(1, Math.ceil((player.shieldUntil - now) / 1000))
         player.goldenRemaining = Math.ceil(GOLDEN_DURATION_MS / 1000)
         if (!this.isMeleeWeapon(player.weaponType) && player.maxAmmo > 0) {
             this.cancelReload(player)
@@ -1034,6 +1111,7 @@ export class ArenaRoom extends Room {
                 if (player.goldenUntil > 0) player.goldenUntil += deltaMs
                 if (player.dashUntil > 0) player.dashUntil += deltaMs
                 if (player.dashCooldownUntil > 0) player.dashCooldownUntil += deltaMs
+                if (player.dashRechargeStartAt > 0) player.dashRechargeStartAt += deltaMs
             }
             return
         }
@@ -1045,7 +1123,7 @@ export class ArenaRoom extends Room {
             this.setAnnouncement('')
         }
 
-        // Update player movement (dash takes priority over normal walk) and timed states.
+        // Update player movement (dash takes priority over normal walk).
         for (const [id, player] of this.state.players) {
             if (player.isDead) continue
 
@@ -1087,8 +1165,37 @@ export class ArenaRoom extends Room {
 
         if (this.state.phase !== 'playing') return
 
-        // Update reload timers, shield timers, and golden power-up timers.
-        for (const player of this.state.players.values()) {
+        // Update reload, shield durability, golden, and dash recharge timers.
+        for (const [sessionId, player] of this.state.players) {
+            // Dash recharges 1 charge every 10 seconds up to MAX_DASHES.
+            if (player.dashes < MAX_DASHES) {
+                if (player.dashRechargeStartAt === 0) {
+                    player.dashRechargeStartAt = now
+                }
+                const elapsed = now - player.dashRechargeStartAt
+                if (elapsed >= DASH_RECHARGE_MS) {
+                    const gained = Math.floor(elapsed / DASH_RECHARGE_MS)
+                    player.dashes = Math.min(MAX_DASHES, player.dashes + gained)
+                    const accountId = this.accounts.get(sessionId)?.accountId
+                    if (accountId) this.dashesByAccount.set(accountId, player.dashes)
+                    if (player.dashes >= MAX_DASHES) {
+                        player.dashRechargeStartAt = 0
+                        player.dashRechargeProgress = 0
+                    } else {
+                        player.dashRechargeStartAt += gained * DASH_RECHARGE_MS
+                        player.dashRechargeProgress = Math.max(
+                            0,
+                            Math.min(1, (now - player.dashRechargeStartAt) / DASH_RECHARGE_MS),
+                        )
+                    }
+                } else {
+                    player.dashRechargeProgress = Math.max(0, Math.min(1, elapsed / DASH_RECHARGE_MS))
+                }
+            } else {
+                player.dashRechargeStartAt = 0
+                player.dashRechargeProgress = 0
+            }
+
             if (player.isDead) continue
 
             if (player.isReloading) {
@@ -1108,12 +1215,19 @@ export class ArenaRoom extends Room {
             }
 
             if (player.shieldUntil > 0) {
-                if (now >= player.shieldUntil || player.shield <= 0) {
+                if (now >= player.shieldUntil) {
                     player.shield = 0
                     player.shieldUntil = 0
+                    player.shieldDurationMs = 0
                     player.shieldRemaining = 0
+                    player.shieldProgress = 0
                 } else {
-                    player.shieldRemaining = Math.max(1, Math.ceil((player.shieldUntil - now) / 1000))
+                    const remainingMs = player.shieldUntil - now
+                    player.shieldRemaining = Math.max(1, Math.ceil(remainingMs / 1000))
+                    player.shieldProgress = Math.max(
+                        0,
+                        Math.min(1, remainingMs / Math.max(1, player.shieldDurationMs)),
+                    )
                 }
             }
 
@@ -1149,6 +1263,23 @@ export class ArenaRoom extends Room {
             if (outOfBounds || expired || hitWall) {
                 this.state.bullets.delete(bulletId)
                 this.bulletCreatedAt.delete(bulletId)
+                if (bullet.explosionRadius > 0) {
+                    const blastX = hitWall || outOfBounds ? prevX : bullet.x
+                    const blastY = hitWall || outOfBounds ? prevY : bullet.y
+                    if (
+                        this.detonateExplosion(
+                            blastX,
+                            blastY,
+                            bullet.explosionRadius,
+                            bullet.damage,
+                            bullet.ownerId,
+                            bullet.weaponType,
+                            now,
+                        )
+                    ) {
+                        return
+                    }
+                }
                 continue
             }
 
@@ -1171,7 +1302,21 @@ export class ArenaRoom extends Room {
                     this.state.bullets.delete(bulletId)
                     this.bulletCreatedAt.delete(bulletId)
 
-                    if (
+                    if (bullet.explosionRadius > 0) {
+                        if (
+                            this.detonateExplosion(
+                                target.x,
+                                target.y,
+                                bullet.explosionRadius,
+                                bullet.damage,
+                                bullet.ownerId,
+                                bullet.weaponType,
+                                now,
+                            )
+                        ) {
+                            return
+                        }
+                    } else if (
                         this.applyDamageToPlayer(
                             playerId,
                             target,
@@ -1188,10 +1333,13 @@ export class ArenaRoom extends Room {
             }
         }
 
+        const activePlayerCount = this.state.players.size
+
         // Weapon pickups (disabled in Gun Game).
         if (this.state.gameMode !== 'gungame') {
             if (now >= this.nextPickupAt) {
-                this.nextPickupAt = now + this.arenaMap.pickupIntervalMs
+                this.nextPickupAt =
+                    now + scaledSpawnIntervalMs(this.arenaMap.pickupIntervalMs, activePlayerCount)
                 this.spawnWeaponPickup()
             }
 
@@ -1210,7 +1358,8 @@ export class ArenaRoom extends Room {
 
         // Power-Ups (enabled in all modes) + one-time Golden Power-Up near match end.
         if (now >= this.nextPowerUpAt) {
-            this.nextPowerUpAt = now + this.arenaMap.powerUpIntervalMs
+            this.nextPowerUpAt =
+                now + scaledSpawnIntervalMs(this.arenaMap.powerUpIntervalMs, activePlayerCount)
             this.spawnPowerUp()
         }
 
@@ -1250,13 +1399,18 @@ export class ArenaRoom extends Room {
     }
 
     private spawnWeaponPickup() {
-        const existingPickups = Array.from(this.state.pickups.values())
-        const availableSpots = this.arenaMap.pickupSpawnPoints.filter((spot) =>
-            existingPickups.every((p) => p.x !== spot.x || p.y !== spot.y),
+        const maxActive = maxActiveItemsForPlayers(
+            this.state.players.size,
+            this.state.mapSize,
+            'weapon',
         )
-        if (availableSpots.length === 0) return
+        if (this.state.pickups.size >= maxActive) return
 
-        const spot = availableSpots[Math.floor(Math.random() * availableSpots.length)]
+        const spot = pickRandomFreeArenaPoint(this.arenaMap, this.collectOccupiedItemPoints(), {
+            clearance: 30,
+            minSpacing: 72,
+            fallbacks: this.arenaMap.pickupSpawnPoints,
+        })
         const weaponType = PICKUP_WEAPONS[Math.floor(Math.random() * PICKUP_WEAPONS.length)]
 
         const pickup = new WeaponPickup()
@@ -1309,7 +1463,6 @@ export class ArenaRoom extends Room {
         try {
             account = await verifyArenaAccount(options?.accessToken)
         } catch (error) {
-            // No exponer respuestas del proveedor ni incluir tokens en logs/errores.
             const message =
                 error instanceof Error &&
                 [
@@ -1391,6 +1544,7 @@ export class ArenaRoom extends Room {
         }
 
         if (this.state.phase === 'playing') {
+            const now = performance.now()
             if (returningParticipant && returningOldSessionId) {
                 this.participants.delete(returningOldSessionId)
                 returningParticipant.sessionId = client.sessionId
@@ -1402,6 +1556,7 @@ export class ArenaRoom extends Room {
                 player.deaths = returningParticipant.deaths
                 player.weaponTier = returningParticipant.weaponTier ?? 0
                 player.dashes = this.dashesByAccount.get(auth.accountId) ?? MAX_DASHES
+                if (player.dashes < MAX_DASHES) player.dashRechargeStartAt = now
             } else {
                 const newParticipant: Participant = {
                     sessionId: client.sessionId,
@@ -1416,6 +1571,7 @@ export class ArenaRoom extends Room {
                 this.participants.set(client.sessionId, newParticipant)
                 player.dashes = this.dashesByAccount.get(auth.accountId) ?? MAX_DASHES
                 this.dashesByAccount.set(auth.accountId, player.dashes)
+                if (player.dashes < MAX_DASHES) player.dashRechargeStartAt = now
                 if (this.matchId && this.startedAt) {
                     try {
                         void (this.resultStore ?? getResultStore())
@@ -1426,6 +1582,13 @@ export class ArenaRoom extends Room {
                     }
                 }
             }
+
+            // Immediately tighten upcoming spawn timers when more players join.
+            const nextCount = this.state.players.size + 1
+            const nextPickupLimit = now + scaledSpawnIntervalMs(this.arenaMap.pickupIntervalMs, nextCount)
+            const nextPowerUpLimit = now + scaledSpawnIntervalMs(this.arenaMap.powerUpIntervalMs, nextCount)
+            if (this.nextPickupAt > nextPickupLimit) this.nextPickupAt = nextPickupLimit
+            if (this.nextPowerUpAt > nextPowerUpLimit) this.nextPowerUpAt = nextPowerUpLimit
         } else {
             player.dashes = MAX_DASHES
         }

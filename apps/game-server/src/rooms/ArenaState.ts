@@ -38,9 +38,11 @@ export class Player extends Schema {
     @type('number') hp = 100
     @type('number') shield = 0
     @type('number') shieldRemaining = 0
+    @type('number') shieldProgress = 0
     @type('number') goldenRemaining = 0
     @type('number') dashes = 5
     @type('number') maxDashes = 5
+    @type('number') dashRechargeProgress = 0
     @type('number') dashSeq = 0
     @type('number') dashAngle = 0
     @type('number') weaponTier = 0
@@ -58,9 +60,11 @@ export class Player extends Schema {
     reloadCompleteAt = 0
     reloadDurationMs = 0
     shieldUntil = 0
+    shieldDurationMs = 0
     goldenUntil = 0
     dashUntil = 0
     dashCooldownUntil = 0
+    dashRechargeStartAt = 0
     dashDirX = 0
     dashDirY = 0
 }
@@ -78,6 +82,7 @@ export class BulletState extends Schema {
     @type('number') scale = 1
 
     damage = 25
+    explosionRadius = 0
 }
 
 export class WeaponPickup extends Schema {

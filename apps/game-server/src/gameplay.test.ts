@@ -8,14 +8,21 @@ import type { Client } from 'colyseus'
 import { ArenaRoom } from './rooms/ArenaRoom.js'
 import type { WeaponType } from './rooms/ArenaState.js'
 import { parseArenaInput } from './rooms/ArenaInput.js'
+import { overlapsObstacleWithRadius, pickRandomFreeArenaPoint } from './rooms/ArenaCollision.js'
+import { getArenaMap } from './rooms/ArenaMaps.js'
 import { ResultStore, resolveResults, type MatchResult, type Participant } from './results.js'
 import weaponsConfig from '../../../packages/shared/weapons.json' with { type: 'json' }
 import {
+  DASH_RECHARGE_MS,
   GOLDEN_DURATION_MS,
   GUN_GAME_LADDER,
+  LAUNCHER_EXPLOSION_RADIUS,
   MAX_DASHES,
   SHIELD_DURATION_MS,
+  calculateExplosionDamage,
+  maxActiveItemsForPlayers,
   normalizeGameMode,
+  scaledSpawnIntervalMs,
 } from '../../../packages/shared/gameplay.js'
 
 function makeAccount(
@@ -227,17 +234,20 @@ test('power-ups: cargador, botiquin +50, escudo 10s y power-up dorado 1 vez por 
     assert.equal(room['applyPowerUp']('a', a, 'ammo', now), true)
     assert.equal(a.reserveAmmo, 15)
 
-    // Shield absorbs damage first and expires after 10s.
+    // Timed shield blocks shots WITHOUT breaking or losing shield until timer expires (10s).
     assert.equal(room['applyPowerUp']('a', a, 'shield', now), true)
-    assert.equal(a.shield, 50)
+    assert.equal(a.shield, 100)
     assert.ok(a.shieldUntil >= now + SHIELD_DURATION_MS)
-    room['applyDamageToPlayer']('a', a, 'b', 30, now)
-    assert.equal(a.shield, 20)
-    assert.equal(a.hp, 100)
+    room['applyDamageToPlayer']('a', a, 'b', 100, now)
+    room['applyDamageToPlayer']('a', a, 'b', 90, now + 50)
+    assert.equal(a.hp, 100, 'El escudo bloquea disparos sin recibir daño')
+    assert.equal(a.shield, 100, 'Los disparos no deben quitar ni reducir el escudo')
+    assert.ok(a.shieldRemaining > 0)
     a.shieldUntil = performance.now() - 1
     room['simulate'](16)
     assert.equal(a.shield, 0)
     assert.equal(a.shieldRemaining, 0)
+    assert.equal(a.shieldProgress, 0)
 
     // Golden Power-Up spawns once near the end of the match.
     room.state.timeRemaining = 55
@@ -419,4 +429,90 @@ test('resolveResults soporta empate en tdm y desempate por nivel en gungame', ()
     resolveResults(ggPlayers, 'time', undefined, { gameMode: 'gungame' }).map((p) => p.points),
     [3, 0],
   )
+})
+
+test('lanzagranadas explota al impactar con radio y dano dependiente de la distancia', async () => {
+  const maxDmg = weaponsConfig.weapons.launcher.damage
+  assert.equal(calculateExplosionDamage(0, LAUNCHER_EXPLOSION_RADIUS, maxDmg), maxDmg)
+  assert.equal(calculateExplosionDamage(20, LAUNCHER_EXPLOSION_RADIUS, maxDmg), maxDmg)
+  const midDmg = calculateExplosionDamage(80, LAUNCHER_EXPLOSION_RADIUS, maxDmg)
+  const edgeDmg = calculateExplosionDamage(LAUNCHER_EXPLOSION_RADIUS, LAUNCHER_EXPLOSION_RADIUS, maxDmg)
+  assert.ok(midDmg < maxDmg && midDmg > edgeDmg, 'Dano disminuye con la distancia')
+  assert.ok(edgeDmg > 0)
+  assert.equal(calculateExplosionDamage(LAUNCHER_EXPLOSION_RADIUS + 1, LAUNCHER_EXPLOSION_RADIUS, maxDmg), 0)
+
+  const { room, cleanup } = await createStartedRoom({}, [
+    { id: 'shooter', auth: makeAccount('Bombardero', 'launcher') },
+    { id: 'close', auth: makeAccount('Cerca', 'rifle') },
+    { id: 'far', auth: makeAccount('Borde', 'rifle') },
+    { id: 'safe', auth: makeAccount('Lejos', 'rifle') },
+  ])
+  try {
+    const events: { type: string; payload: unknown }[] = []
+    room.broadcast = ((type: string, payload: unknown) => {
+      events.push({ type, payload })
+    }) as typeof room.broadcast
+
+    const close = room.state.players.get('close')!
+    const far = room.state.players.get('far')!
+    const safe = room.state.players.get('safe')!
+    close.x = 300; close.y = 300
+    far.x = 400; far.y = 300 // 100px away (< 128)
+    safe.x = 600; safe.y = 300 // 300px away (> 128)
+
+    room['detonateExplosion'](300, 300, LAUNCHER_EXPLOSION_RADIUS, maxDmg, 'shooter', 'launcher', performance.now())
+    assert.equal(events.length, 1)
+    assert.equal(events[0].type, 'explosion')
+    assert.equal(close.hp, 100 - maxDmg)
+    assert.ok(far.hp < 100 && far.hp > close.hp, 'Jugador en el borde recibe menos dano que en el centro')
+    assert.equal(safe.hp, 100, 'Jugador fuera del radio no recibe dano')
+  } finally {
+    await cleanup()
+  }
+})
+
+test('dash recarga 1 carga cada 10 segundos y nunca excede 5', async () => {
+  const { room, cleanup } = await createStartedRoom()
+  try {
+    const a = room.state.players.get('a')!
+    a.x = 300
+    a.y = 300
+    const t0 = performance.now()
+    room['tryDash']('a', a, { moveX: 1, moveY: 0, aimAngle: 0, dash: true }, t0)
+    assert.equal(a.dashes, 4)
+
+    // Halfway through 10s recharge.
+    a.dashRechargeStartAt = performance.now() - DASH_RECHARGE_MS / 2
+    room['simulate'](16)
+    assert.equal(a.dashes, 4)
+    assert.ok(a.dashRechargeProgress >= 0.45 && a.dashRechargeProgress <= 0.6)
+
+    // After 10s elapsed, dash recharges +1 back to 5 and progress resets to 0.
+    a.dashRechargeStartAt = performance.now() - DASH_RECHARGE_MS - 20
+    room['simulate'](16)
+    assert.equal(a.dashes, MAX_DASHES)
+    assert.equal(a.dashRechargeProgress, 0)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('spawns aleatorios respetan obstaculos y escalan con mas jugadores', () => {
+  for (const env of ['desert', 'industrial'] as const) {
+    for (const size of ['small', 'medium', 'large'] as const) {
+      const map = getArenaMap(size, env)
+      const generated = new Set<string>()
+      for (let i = 0; i < 20; i++) {
+        const point = pickRandomFreeArenaPoint(map, [], { clearance: 30 })
+        assert.equal(overlapsObstacleWithRadius(point.x, point.y, 28, map), false)
+        generated.add(`${point.x},${point.y}`)
+      }
+      assert.ok(generated.size > 5, 'Spawns deben variar aleatoriamente')
+    }
+  }
+
+  assert.ok(scaledSpawnIntervalMs(12000, 10) < scaledSpawnIntervalMs(12000, 2))
+  assert.ok(scaledSpawnIntervalMs(12000, 20) < scaledSpawnIntervalMs(12000, 6))
+  assert.ok(maxActiveItemsForPlayers(10, 'medium', 'powerup') > maxActiveItemsForPlayers(2, 'medium', 'powerup'))
+  assert.ok(maxActiveItemsForPlayers(20, 'large', 'weapon') > maxActiveItemsForPlayers(2, 'large', 'weapon'))
 })
