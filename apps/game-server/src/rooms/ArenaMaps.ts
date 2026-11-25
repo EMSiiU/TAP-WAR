@@ -1,6 +1,8 @@
 import { randomInt } from 'node:crypto'
 export { getArenaMap, normalizeEnvironment } from '../../../../packages/shared/mapCatalog.js'
 export type { ArenaMapConfig, ArenaObstacle, ArenaPoint, MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.js'
+export { normalizeGameMode } from '../../../../packages/shared/gameplay.js'
+export type { GameMode, PowerUpKind, TeamId } from '../../../../packages/shared/gameplay.js'
 import type { MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.js'
 
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'

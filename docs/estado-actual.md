@@ -1,19 +1,21 @@
 # Estado actual de TAP-WAR
 
-Actualizado el 24 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
+Actualizado el 25 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
 
 ## Funcionalidad implementada
 
 | Área | Comportamiento |
 | --- | --- |
-| Salas múltiples | Creación dinámica de salas públicas (listadas en `GET /api/rooms`) o privadas por código de 6 caracteres, con limpieza automática al vaciarse |
-| Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa |
-| Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor; implementación local |
-| Geometría de mapas | Catálogo compartido para arte y colisiones; sin piezas de objetos dispersas en el suelo; rutas y apariciones verificadas |
-| Controles | PC (WASD + ratón/ESPACIO), móvil/tablet (joysticks táctiles gemelos + botón de pantalla completa) y mandos USB/Bluetooth (Gamepad API) |
-| Arena | Movimiento analógico/digital, colisiones, pickups y combate autoritativos por mapa |
-| Combate | Diez armas de fuego/melé, munición, pickups, daño, bajas y reaparición |
-| Partida | Inicio manual del anfitrión con dos participantes, 300 segundos o 20 kills; empate, abandono, resultados y revancha; menú personal sin pausa global |
+| Salas múltiples | Creación dinámica de salas públicas (listadas en `GET /api/rooms`, tanto en espera como en curso) o privadas por código de 6 caracteres; permite unirse a partidas ya iniciadas mientras existan plazas, con limpieza automática al vaciarse |
+| Modos de juego | Tres modos autoritativos: **Todos contra todos** (`ffa`), **Duelo por equipos** (`tdm`, Naranja vs Azul sin fuego amigo) y **Juego de armas** (`gungame`, progresión de 10 armas hasta el cuchillo) |
+| Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa en todos los tamaños |
+| Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor |
+| Geometría de mapas | Catálogo compartido para arte y colisiones; spawns de jugadores, armas, power-ups y punto dorado verificados y conectados |
+| Controles | PC (WASD, clic izq. disparar, clic der. melé rápido, `R` recargar, `Espacio` dash), móvil/tablet (joysticks táctiles + botones `DISPARO`, `MELÉ`, `REC` y `DASH` + pantalla completa) y mandos USB/Bluetooth (Gamepad API) |
+| Arena | Movimiento analógico/digital, dash (5 por partida, tope de 5), colisiones (incluyendo raycast continuo de proyectiles), pickups y combate autoritativos por mapa |
+| Combate | Diez armas (`sniper = 100` daño, `axe = 90` daño), melé rápido incluso con arma de fuego equipada, cargador extra + recarga manual con `R`, daño, bajas y reaparición |
+| Power-Ups | Apariciones periódicas de cargadores, botiquines (+50 HP), escudos temporales (10 s), recargas de dash (+1 hasta 5) y Power-Up Dorado único por partida cerca del final (resaltado en minimapa; 100 HP, escudo y munición infinita por 15 s) |
+| Partida | Inicio manual del anfitrión con dos participantes, entrada en curso habilitada, 300 segundos o meta del modo; empate, abandono, resultados y revancha; menú personal sin pausa global |
 | Acceso | Registro/login por correo y contraseña, Google y restauración de sesión; contraseña de al menos 8 caracteres |
 | Perfil inicial | Elección obligatoria de username después de autenticar y antes del lobby |
 | Mi perfil | Edición de username y foto opcional, con subida, reemplazo y eliminación |
@@ -31,9 +33,9 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 31 pruebas correctas de perfil/foto, URL, Gamepad, mapas y entrada táctil; incluye 13 regresiones nuevas de cancelación, multitáctil y ciclo de vida |
+| Cliente: npm test | 31 pruebas correctas de perfil/foto, URL, Gamepad (incluyendo melé/recarga/dash), modos de juego, mapas y entrada táctil |
 | Cliente: npm run build | TypeScript y compilación de producción correctos |
-| Servidor: npm test | 43 pruebas correctas de autenticación, infraestructura, salas, escenarios, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
+| Servidor: npm test | 53 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, dash, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
 | Colyseus real en desarrollo | /health respondió 200; name/userId inventados sin token fueron rechazados con AUTH_FAILED |
 | Perfiles en Supabase | Tabla, RLS, dos políticas, trigger e índice único comprobados; creación automática de perfil confirmada |

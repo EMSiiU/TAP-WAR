@@ -1,12 +1,23 @@
 import type { MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.ts'
+import type { GameMode } from '../../../../packages/shared/gameplay.ts'
 export { getArenaMap, buildMapLayers, normalizeEnvironment, ENVIRONMENT_OPTIONS } from '../../../../packages/shared/mapCatalog.ts'
 export type { ArenaMapConfig, ArenaObstacle, ArenaPoint, MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.ts'
+export {
+  GAME_MODE_OPTIONS,
+  GUN_GAME_LADDER,
+  MAX_DASHES,
+  POWERUP_META,
+  gameModeLabel,
+  normalizeGameMode,
+} from '../../../../packages/shared/gameplay.ts'
+export type { GameMode, PowerUpKind, TeamId } from '../../../../packages/shared/gameplay.ts'
 
 export type PublicRoomSummary = {
   code: string
   name: string
   mapSize: MapSize
   environment: MapEnvironment
+  gameMode: GameMode
   clients: number
   maxClients: number
   phase: 'waiting' | 'playing' | 'finished'
@@ -18,6 +29,7 @@ export type RoomJoinRequest =
       mode: 'create'
       maxPlayers: RoomCapacity
       environment?: MapEnvironment
+      gameMode?: GameMode
       isPrivate: boolean
       roomName: string
     }

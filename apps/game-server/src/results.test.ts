@@ -78,16 +78,16 @@ test('fallo de disco no se anuncia como guardado y conserva el cierre para reint
   } finally { store.close(); await rm(directory, { recursive: true, force: true }) }
 })
 
-test('sala: inicio manual, cuenta única, 300s/20kills y abandono conservado una sola vez', async () => {
+test('sala: inicio manual, cuenta única, 300s/20kills, entrada en curso y abandono conservado una sola vez', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tap-war-room-'))
   const sent: MatchResult[] = []
   const store = new ResultStore(directory, async r => { sent.push(r) })
   const room = new ArenaRoom(store)
   // No network transport is needed to exercise the authoritative lifecycle.
   room.lock = async () => {}; room.unlock = async () => {}
-  const a = { sessionId: 'a' } as Client; const b = { sessionId: 'b' } as Client
+  const a = { sessionId: 'a' } as Client; const b = { sessionId: 'b' } as Client; const c = { sessionId: 'c' } as Client
   const account = (name: string) => ({ accountId: randomUUID(), name, expiresAt: Date.now()+60000, skin: 'fox' as const, teamColor: 'orange' as const, weapon: 'rifle' as const })
-  const aa = account('Uno'); const bb = account('Dos')
+  const aa = account('Uno'); const bb = account('Dos'); const cc = account('Tres')
   try {
     await store.initialize()
     room.onJoin(a, {}, aa); room.onJoin(b, {}, bb)
@@ -95,17 +95,21 @@ test('sala: inicio manual, cuenta única, 300s/20kills y abandono conservado una
     assert.throws(() => room.onJoin({ sessionId: 'duplicate' } as Client, {}, aa), /cuenta ya ocupa/)
     await room['startMatch']()
     assert.equal(room.state.phase, 'playing'); assert.equal(room.state.timeRemaining,300); assert.equal(room.state.killsToWin,20)
-    assert.throws(() => room.onJoin({ sessionId: 'late' } as Client, {}, account('Tres')), /ya inició/)
+    // Mid-match join is allowed while playing and capacity permits.
+    room.onJoin(c, {}, cc)
+    assert.equal(room.state.players.size, 3)
     room.state.players.get('a')!.kills = 2
     room.state.players.get('b')!.kills = 1
+    room.onLeave(c)
     room.onLeave(b)
     assert.equal(room.state.phase,'finished'); assert.equal(room.state.winnerId,'a')
-    assert.equal(JSON.parse(room.state.resultSummary).length, 2)
+    assert.equal(JSON.parse(room.state.resultSummary).length, 3)
+    assert.throws(() => room.onJoin({ sessionId: 'late-after-finish' } as Client, {}, account('Cuatro')), /ya terminó/)
     // Await the asynchronous disk flush without assuming timer durations.
     for (let i=0; i<100 && !sent.length; i++) await new Promise(r => setTimeout(r,5))
     assert.equal(sent.length,1)
     assert.equal(sent[0].players[1].abandoned,true); assert.equal(sent[0].players[1].kills,1)
-    assert.deepEqual(sent[0].players.map(p => p.points), [3,0])
+    assert.deepEqual(sent[0].players.map(p => p.points), [3,0,0])
     room['finishMatch']('a','Uno')
     assert.equal(sent.length,1)
   } finally { room.onDispose(); store.close(); await new Promise(r => setTimeout(r,20)); await rm(directory, { recursive: true, force: true }) }

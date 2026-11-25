@@ -1,4 +1,4 @@
-import MatchResults from './game/MatchResults'
+import MatchResults, { type MatchResultRow } from './game/MatchResults'
 import ArenaHeader from './game/ArenaHeader'
 import MapPreview from './game/MapPreview'
 import Rankings from './rankings/Rankings'
@@ -12,13 +12,19 @@ import ProfileAvatar from './auth/ProfileAvatar'
 import PhaserView from './game/PhaserView'
 import TouchControls, { type TouchInputState } from './game/TouchControls'
 import {
-  MAP_LABEL_BY_SIZE,
   ENVIRONMENT_OPTIONS,
-  normalizeEnvironment,
-  getArenaMap,
-  type MapEnvironment,
+  GAME_MODE_OPTIONS,
+  GUN_GAME_LADDER,
+  MAP_LABEL_BY_SIZE,
   MAP_OPTIONS,
+  MAX_DASHES,
+  gameModeLabel,
+  getArenaMap,
+  normalizeEnvironment,
+  normalizeGameMode,
   normalizeRoomCode,
+  type GameMode,
+  type MapEnvironment,
   type MapSize,
   type PublicRoomSummary,
   type RoomCapacity,
@@ -27,6 +33,7 @@ import {
 import { resolveGameServerUrl, toApiUrl, toHealthCheckUrl } from './game/serverUrl'
 import weaponsConfig from '../../../packages/shared/weapons.json'
 import type {
+  ArenaActionKind,
   ArenaControls,
   BulletState,
   CrosshairStyle,
@@ -34,6 +41,7 @@ import type {
   PickupState,
   PlayerSkin,
   PlayerState,
+  PowerUpState,
   TeamColor,
   WeaponType,
 } from './game/ArenaScene'
@@ -43,10 +51,12 @@ type ArenaState = {
   roomName: string
   mapSize: MapSize
   environment: MapEnvironment
+  gameMode: GameMode
   maxPlayers: number
   isPrivate: boolean
   hostId: string
   notice: string
+  announcement: string
   saveStatus: string
   resultSummary: string
   finishReason: string
@@ -55,11 +65,14 @@ type ArenaState = {
   pausedByName: string
   timeRemaining: number
   killsToWin: number
+  orangeScore: number
+  blueScore: number
   winnerId: string
   winnerName: string
   players: Map<string, PlayerState>
   bullets: Map<string, BulletState>
   pickups: Map<string, PickupState>
+  powerUps: Map<string, PowerUpState>
 }
 
 const SKIN_OPTIONS: { id: PlayerSkin; label: string }[] = [
@@ -74,6 +87,7 @@ const WEAPON_OPTIONS = Object.values(weaponsConfig.weapons) as {
   name: string
   isMelee?: boolean
   cooldownMs: number
+  reloadMs?: number
   damage: number
   rangePx?: number
   arcDeg?: number
@@ -94,10 +108,12 @@ type MatchMeta = {
   roomName: string
   mapSize: MapSize
   environment: MapEnvironment
+  gameMode: GameMode
   maxPlayers: number
   isPrivate: boolean
   hostId: string
   notice: string
+  announcement: string
   saveStatus: string
   resultSummary: string
   finishReason: string
@@ -106,6 +122,8 @@ type MatchMeta = {
   pausedByName: string
   timeRemaining: number
   killsToWin: number
+  orangeScore: number
+  blueScore: number
   winnerId: string
   winnerName: string
 }
@@ -152,6 +170,7 @@ function ArenaSession({
   const [players, setPlayers] = useState<PlayerState[]>([])
   const [bullets, setBullets] = useState<BulletState[]>([])
   const [pickups, setPickups] = useState<PickupState[]>([])
+  const [powerUps, setPowerUps] = useState<PowerUpState[]>([])
   const [localPaused, setLocalPaused] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -159,6 +178,7 @@ function ArenaSession({
   const [copiedCode, setCopiedCode] = useState(false)
   const shellRef = useRef<HTMLDivElement>(null)
   const touchInputRef = useRef<TouchInputState>(neutralTouchInput())
+  const actionTriggerRef = useRef<((action: ArenaActionKind) => void) | null>(null)
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
@@ -173,10 +193,12 @@ function ArenaSession({
             : 'small'
         : 'small',
     environment: roomRequest.mode === 'create' ? normalizeEnvironment(roomRequest.environment) : 'desert',
+    gameMode: roomRequest.mode === 'create' ? normalizeGameMode(roomRequest.gameMode) : 'ffa',
     maxPlayers: roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
     isPrivate: roomRequest.mode === 'create' ? roomRequest.isPrivate : false,
     hostId: '',
     notice: '',
+    announcement: '',
     saveStatus: '',
     resultSummary: '',
     finishReason: '',
@@ -185,6 +207,8 @@ function ArenaSession({
     pausedByName: '',
     timeRemaining: 300,
     killsToWin: 20,
+    orangeScore: 0,
+    blueScore: 0,
     winnerId: '',
     winnerName: '',
   })
@@ -202,7 +226,6 @@ function ArenaSession({
   useEffect(() => {
     if (!touchMode || localPaused || matchMeta.phase === 'finished') resetTouchInput()
   }, [touchMode, localPaused, matchMeta.phase, resetTouchInput])
-
 
   useEffect(() => {
     const onFullscreenChange = () => {
@@ -245,6 +268,7 @@ function ArenaSession({
                 weapon: playerWeapon,
                 maxPlayers: roomRequest.maxPlayers,
                 environment: roomRequest.environment,
+                gameMode: roomRequest.gameMode ?? 'ffa',
                 isPrivate: roomRequest.isPrivate,
                 roomName: roomRequest.roomName,
               })
@@ -290,16 +314,21 @@ function ArenaSession({
           if (state.pickups) {
             setPickups(Array.from(state.pickups.values()))
           }
+          if (state.powerUps) {
+            setPowerUps(Array.from(state.powerUps.values()))
+          }
           setMatchMeta({
             roomCode: state.roomCode || joined.roomId || '',
             roomName: state.roomName ?? '',
             mapSize:
               state.mapSize === 'medium' || state.mapSize === 'large' ? state.mapSize : 'small',
             environment: normalizeEnvironment(state.environment),
+            gameMode: normalizeGameMode(state.gameMode),
             maxPlayers: typeof state.maxPlayers === 'number' ? state.maxPlayers : 4,
             isPrivate: Boolean(state.isPrivate),
             hostId: state.hostId ?? '',
             notice: state.notice ?? '',
+            announcement: state.announcement ?? '',
             saveStatus: state.saveStatus ?? '',
             resultSummary: state.resultSummary ?? '',
             finishReason: state.finishReason ?? '',
@@ -308,6 +337,8 @@ function ArenaSession({
             pausedByName: state.pausedByName ?? '',
             timeRemaining: typeof state.timeRemaining === 'number' ? state.timeRemaining : 300,
             killsToWin: typeof state.killsToWin === 'number' ? state.killsToWin : 20,
+            orangeScore: typeof state.orangeScore === 'number' ? state.orangeScore : 0,
+            blueScore: typeof state.blueScore === 'number' ? state.blueScore : 0,
             winnerId: state.winnerId ?? '',
             winnerName: state.winnerName ?? '',
           })
@@ -347,7 +378,7 @@ function ArenaSession({
         if (error instanceof MatchMakeError && error.code === ErrorCode.MATCHMAKE_INVALID_ROOM_ID) {
           onEnd(
             error.message.endsWith(' is locked')
-              ? 'La sala está llena o la partida ya inició.'
+              ? 'La sala está llena o la partida ya terminó.'
               : 'No se encontró ninguna sala con ese código.',
           )
           return
@@ -381,17 +412,20 @@ function ArenaSession({
     }
   }, [playerName, playerSkin, playerWeapon, roomRequest, onEnd])
 
+  const localPlayer = players.find((p) => p.id === controls?.playerId)
+
   useEffect(() => {
-    if (
-      matchMeta.phase === 'finished' &&
-      matchMeta.winnerId &&
-      matchMeta.winnerId !== controls?.playerId
-    ) {
+    if (matchMeta.phase !== 'finished' || !matchMeta.winnerId) return
+    const localWon =
+      matchMeta.gameMode === 'tdm'
+        ? Boolean(localPlayer?.team && matchMeta.winnerId === `team:${localPlayer.team}`)
+        : matchMeta.winnerId === controls?.playerId
+    if (!localWon) {
       const audio = new Audio('/assets/sounds/lose-a.ogg')
       audio.volume = 0.55
       audio.play().catch(() => {})
     }
-  }, [matchMeta.phase, matchMeta.winnerId, controls?.playerId])
+  }, [matchMeta.phase, matchMeta.winnerId, matchMeta.gameMode, controls?.playerId, localPlayer?.team])
 
   async function toggleFullscreen() {
     try {
@@ -426,25 +460,38 @@ function ArenaSession({
     }
   }
 
-  const finalPlayers: {
-    sessionId: string
-    name: string
-    kills: number
-    deaths: number
-    abandoned: boolean
-    outcome: string
-    points: number
-  }[] = matchMeta.resultSummary ? JSON.parse(matchMeta.resultSummary) : []
-  const sortedPlayers = [...finalPlayers].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
-  const localPlayer = players.find((p) => p.id === controls?.playerId)
-  const liveLeaders = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths).slice(0, 3)
+  const finalPlayers: MatchResultRow[] = matchMeta.resultSummary ? JSON.parse(matchMeta.resultSummary) : []
+  const sortedPlayers = [...finalPlayers].sort((a, b) => {
+    if (matchMeta.gameMode === 'gungame') {
+      return (b.weaponTier ?? 0) - (a.weaponTier ?? 0) || b.kills - a.kills || a.deaths - b.deaths
+    }
+    if (matchMeta.gameMode === 'tdm') {
+      const rank = (o: string) => (o === 'win' ? 2 : o === 'draw' ? 1 : 0)
+      return rank(b.outcome) - rank(a.outcome) || b.kills - a.kills || a.deaths - b.deaths
+    }
+    return b.kills - a.kills || a.deaths - b.deaths
+  })
+
+  const liveLeaders = [...players]
+    .sort((a, b) =>
+      matchMeta.gameMode === 'gungame'
+        ? (b.weaponTier ?? 0) - (a.weaponTier ?? 0) || b.kills - a.kills || a.deaths - b.deaths
+        : b.kills - a.kills || a.deaths - b.deaths,
+    )
+    .slice(0, 3)
+
   const scoreLine =
-    players.length <= 4
-      ? players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
-      : `Top: ${liveLeaders.map((p) => `${p.name} ${p.kills}`).join(' · ')} | Tú: ${localPlayer?.kills ?? 0}`
+    matchMeta.gameMode === 'tdm'
+      ? `Naranja ${matchMeta.orangeScore} — ${matchMeta.blueScore} Azul`
+      : matchMeta.gameMode === 'gungame'
+        ? `Top: ${liveLeaders.map((p) => `${p.name} Nv.${Math.min(GUN_GAME_LADDER.length, (p.weaponTier ?? 0) + 1)}`).join(' · ')} | Tú: Nv.${Math.min(GUN_GAME_LADDER.length, (localPlayer?.weaponTier ?? 0) + 1)}`
+        : players.length <= 4
+          ? players.map((p) => `${p.name}: ${p.kills}`).join(' vs ')
+          : `Top: ${liveLeaders.map((p) => `${p.name} ${p.kills}`).join(' · ')} | Tú: ${localPlayer?.kills ?? 0}`
 
   const localWeaponSpec = localPlayer ? WEAPON_BY_ID[localPlayer.weaponType] : undefined
   const localTeamColor: TeamColor =
+    localPlayer?.team === 'blue' ||
     localPlayer?.teamColor === 'blue' ||
     localPlayer?.skin === 'mouse' ||
     localPlayer?.skin === 'rabbit'
@@ -452,15 +499,31 @@ function ArenaSession({
       : 'orange'
   const localAmmo = localPlayer?.ammo ?? 0
   const localMaxAmmo = localPlayer?.maxAmmo ?? localWeaponSpec?.maxAmmo ?? 0
+  const localReserveAmmo = localPlayer?.reserveAmmo ?? 0
+  const localReloading = Boolean(localPlayer?.isReloading)
+  const localReloadProgress = localPlayer?.reloadProgress ?? 0
+  const localDashes = localPlayer?.dashes ?? MAX_DASHES
+  const localMaxDashes = localPlayer?.maxDashes ?? MAX_DASHES
+  const localShield = localPlayer?.shield ?? 0
+  const localShieldSec = localPlayer?.shieldRemaining ?? 0
+  const localGoldenSec = localPlayer?.goldenRemaining ?? 0
+  const isGolden = localGoldenSec > 0
   const isLocalFirearm = Boolean(localWeaponSpec && !localWeaponSpec.isMelee && localMaxAmmo > 0)
-  const isLowAmmo = isLocalFirearm && localAmmo <= Math.ceil(localMaxAmmo * 0.25)
+  const canReload = isLocalFirearm && !isGolden && !localReloading && localAmmo < localMaxAmmo && localReserveAmmo > 0
+  const needsReload = isLocalFirearm && !isGolden && !localReloading && localAmmo === 0 && localReserveAmmo > 0
+  const isLowAmmo = isLocalFirearm && !isGolden && localAmmo <= Math.ceil(localMaxAmmo * 0.25)
   const ammoIconSrc =
     localPlayer?.weaponType === 'shotgun' ? '/assets/ui/icon-shell.png' : '/assets/ui/icon-bullet.png'
   const finishReason =
     (
       {
         time: 'Tiempo agotado',
-        kills: 'Meta de 20 kills alcanzada',
+        kills:
+          matchMeta.gameMode === 'gungame'
+            ? 'Todas las armas completadas'
+            : matchMeta.gameMode === 'tdm'
+              ? `Meta de ${matchMeta.killsToWin} bajas de equipo alcanzada`
+              : `Meta de ${matchMeta.killsToWin} kills alcanzada`,
         abandon: 'Victoria por abandono',
         interrupted: 'Partida interrumpida',
       } as Record<string, string>
@@ -477,25 +540,53 @@ function ArenaSession({
   const showTouchControls = Boolean(
     controls && touchMode && !localPaused && matchMeta.phase !== 'finished',
   )
+  const resultsTitle =
+    matchMeta.gameMode === 'tdm'
+      ? finalPlayers.some((p) => p.outcome === 'draw')
+        ? 'Empate entre equipos'
+        : matchMeta.winnerName
+          ? `Ganador: ${matchMeta.winnerName}`
+          : 'Partida interrumpida'
+      : finalPlayers.filter((p) => p.outcome === 'draw').length > 1
+        ? `Empate: ${matchMeta.winnerName}`
+        : matchMeta.winnerName
+          ? `Ganador: ${matchMeta.winnerName}`
+          : 'Partida interrumpida'
 
   return (
     <div ref={shellRef} className={`arena-shell${touchMode ? ' is-touch-mode' : ''}`}>
       <ArenaHeader
-        roomCode={matchMeta.roomCode} roomName={matchMeta.roomName} isPrivate={matchMeta.isPrivate}
+        roomCode={matchMeta.roomCode}
+        roomName={matchMeta.roomName}
+        isPrivate={matchMeta.isPrivate}
+        gameModeLabel={gameModeLabel(matchMeta.gameMode)}
         environmentLabel={ENVIRONMENT_OPTIONS.find(option => option.id === matchMeta.environment)?.label || ''}
-        sizeLabel={MAP_LABEL_BY_SIZE[matchMeta.mapSize]} playerCount={players.length} maxPlayers={matchMeta.maxPlayers}
-        clock={formatClock(matchMeta.timeRemaining)} scoreLine={scoreLine} killsToWin={matchMeta.killsToWin}
-        status={status} connected={Boolean(controls)} gamepadConnected={gamepadConnected}
-        touchMode={touchMode} fullscreen={isFullscreen} copied={copiedCode}
-        onCopy={() => { void copyRoomCode() }} onTouchToggle={() => { resetTouchInput(); setTouchMode(value => !value) }}
-        onFullscreen={() => { void toggleFullscreen() }} onExit={onExit} onSignOut={onSignOut}
+        sizeLabel={MAP_LABEL_BY_SIZE[matchMeta.mapSize]}
+        playerCount={players.length}
+        maxPlayers={matchMeta.maxPlayers}
+        clock={formatClock(matchMeta.timeRemaining)}
+        scoreLine={scoreLine}
+        killsToWin={matchMeta.killsToWin}
+        targetLabel={matchMeta.gameMode === 'gungame' ? 'Armas' : 'Meta'}
+        status={status}
+        connected={Boolean(controls)}
+        gamepadConnected={gamepadConnected}
+        touchMode={touchMode}
+        fullscreen={isFullscreen}
+        copied={copiedCode}
+        onCopy={() => { void copyRoomCode() }}
+        onTouchToggle={() => { resetTouchInput(); setTouchMode(value => !value) }}
+        onFullscreen={() => { void toggleFullscreen() }}
+        onExit={onExit}
+        onSignOut={onSignOut}
       />
 
       <div className={`arena-stage${showTouchControls ? ' has-touch-controls' : ''}`}>
         {controls && matchMeta.phase === 'waiting' && (
           <div className="arena-waiting-banner" role="status">
             <span>
-              Sala <strong>{matchMeta.roomName || matchMeta.roomCode}</strong> · Código:{' '}
+              Sala <strong>{matchMeta.roomName || matchMeta.roomCode}</strong> ·{' '}
+              <strong>{gameModeLabel(matchMeta.gameMode)}</strong> · Código:{' '}
               <strong>{matchMeta.roomCode}</strong> ({players.length}/{matchMeta.maxPlayers}) ·{' '}
               {players.length < 2
                 ? 'Se necesitan al menos dos jugadores.'
@@ -515,30 +606,104 @@ function ArenaSession({
           </div>
         )}
 
+        {controls && matchMeta.phase === 'playing' && matchMeta.announcement && (
+          <div className="arena-announcement-banner" role="status">
+            <img src="/assets/ui/powerup-golden.svg" alt="" className="arena-announcement-icon" />
+            <span>{matchMeta.announcement}</span>
+          </div>
+        )}
+
         <div className="arena-viewport"><div className="arena-canvas-wrap">
           {controls && localWeaponSpec && localPlayer && (
-            <div className={`arena-ammo-badge${isLowAmmo ? ' is-low' : ''}`} role="status">
-              {isLocalFirearm ? (
-                <>
-                  <span className="arena-ammo-icons" aria-hidden="true">
-                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
-                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
-                    <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
+            <div className="arena-hud-bottom" role="status">
+              <div className="arena-hud-badges-row">
+                {matchMeta.gameMode === 'tdm' && localPlayer.team && (
+                  <span className={`arena-status-pill is-team-${localPlayer.team}`}>
+                    {localPlayer.team === 'blue' ? 'Equipo Azul' : 'Equipo Naranja'}
                   </span>
-                  <span>
-                    {localAmmo} / {localMaxAmmo}
+                )}
+                {matchMeta.gameMode === 'gungame' && (
+                  <span className="arena-status-pill is-gungame">
+                    Nivel {Math.min(GUN_GAME_LADDER.length, (localPlayer.weaponTier ?? 0) + 1)}/{GUN_GAME_LADDER.length}
                   </span>
-                </>
-              ) : (
-                <>
-                  <img
-                    src={`/assets/weapons/weapon-${localPlayer.weaponType}-${localTeamColor}.png`}
-                    alt={localWeaponSpec.name}
-                    className="arena-melee-icon"
-                  />
-                  <span>{localWeaponSpec.name} · Melé</span>
-                </>
-              )}
+                )}
+                {isGolden && (
+                  <span className="arena-status-pill is-golden">
+                    <img src="/assets/ui/powerup-golden.svg" alt="" />
+                    DORADO {localGoldenSec}s · Munición ∞
+                  </span>
+                )}
+                {localShield > 0 && (
+                  <span className="arena-status-pill is-shield">
+                    <img src="/assets/ui/powerup-shield.svg" alt="" />
+                    Escudo {localShield} ({localShieldSec}s)
+                  </span>
+                )}
+              </div>
+
+              <div className="arena-hud-primary-row">
+                <div className={`arena-ammo-badge${isLowAmmo ? ' is-low' : ''}${isGolden ? ' is-golden' : ''}`}>
+                  {isLocalFirearm ? (
+                    <>
+                      <span className="arena-ammo-icons" aria-hidden="true">
+                        <img src={ammoIconSrc} alt="" className="arena-ammo-icon" />
+                      </span>
+                      <div className="arena-ammo-text">
+                        <strong>
+                          {isGolden ? '∞' : `${localAmmo} / ${localReserveAmmo}`}
+                        </strong>
+                        <small>
+                          {localReloading
+                            ? 'Recargando…'
+                            : needsReload
+                              ? touchMode
+                                ? 'Pulsa REC'
+                                : 'Pulsa R para recargar'
+                              : !isGolden && localAmmo === 0 && localReserveAmmo === 0
+                                ? touchMode
+                                  ? 'Sin balas · Usa MELÉ'
+                                  : 'Sin balas · Click der. Melé'
+                                : localWeaponSpec.name}
+                        </small>
+                        {localReloading && (
+                          <span className="arena-reload-track" aria-hidden="true">
+                            <span
+                              className="arena-reload-fill"
+                              style={{ width: `${Math.round(localReloadProgress * 100)}%` }}
+                            />
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <img
+                        src={`/assets/weapons/weapon-${localPlayer.weaponType}-${localTeamColor}.png`}
+                        alt={localWeaponSpec.name}
+                        className="arena-melee-icon"
+                      />
+                      <span>{localWeaponSpec.name} · Melé</span>
+                    </>
+                  )}
+                </div>
+
+                <div
+                  className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
+                  title={touchMode ? 'Dashes restantes' : 'Dash (Espacio)'}
+                >
+                  <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
+                  <div className="arena-dash-info">
+                    <span className="arena-dash-label">
+                      DASH {localDashes}/{localMaxDashes}
+                    </span>
+                    <span className="arena-dash-pips" aria-hidden="true">
+                      {Array.from({ length: localMaxDashes }, (_, idx) => (
+                        <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
+                      ))}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -547,13 +712,16 @@ function ArenaSession({
               players={players}
               bullets={bullets}
               pickups={pickups}
+              powerUps={powerUps}
               phase={matchMeta.phase}
+              gameMode={matchMeta.gameMode}
               isPaused={localPaused}
               crosshairStyle={crosshairStyle}
               mapSize={matchMeta.mapSize}
               environment={matchMeta.environment}
               touchMode={touchMode}
               touchInputRef={touchInputRef}
+              actionTriggerRef={actionTriggerRef}
               onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
               onGamepadChange={setGamepadConnected}
               resumeSignal={resumeSignal}
@@ -567,6 +735,14 @@ function ArenaSession({
             onTouchInput={receiveTouchInput}
             onEmote={(emote) => controls.sendEmote?.(emote)}
             onMenu={() => { resetTouchInput(); setLocalPaused(true) }}
+            onMelee={() => actionTriggerRef.current?.('melee')}
+            onReload={() => actionTriggerRef.current?.('reload')}
+            onDash={() => actionTriggerRef.current?.('dash')}
+            dashes={localDashes}
+            maxDashes={localMaxDashes}
+            canReload={canReload}
+            isReloading={localReloading}
+            needsReload={needsReload}
           />
         )}
 
@@ -598,10 +774,14 @@ function ArenaSession({
 
         {matchMeta.phase === 'finished' && (
           <MatchResults
-            title={finalPlayers.filter(p => p.outcome === 'draw').length > 1 ? `Empate: ${matchMeta.winnerName}` : matchMeta.winnerName ? `Ganador: ${matchMeta.winnerName}` : 'Partida interrumpida'}
-            reason={finishReason} saveMessage={saveMessage} players={sortedPlayers}
+            title={resultsTitle}
+            reason={finishReason}
+            saveMessage={saveMessage}
+            players={sortedPlayers}
+            gameMode={matchMeta.gameMode}
             rematchDisabled={controls?.playerId !== matchMeta.hostId || ['saving', 'failed'].includes(matchMeta.saveStatus)}
-            onRematch={() => rematchRef.current?.()} onExit={onExit}
+            onRematch={() => rematchRef.current?.()}
+            onExit={onExit}
           />
         )}
       </div>
@@ -631,6 +811,7 @@ export default function App({
   const [playerName, setPlayerName] = useState<string | null>(null)
   const [roomRequest, setRoomRequest] = useState<RoomJoinRequest | null>(null)
 
+  const [createGameMode, setCreateGameMode] = useState<GameMode>('ffa')
   const [createEnvironment, setCreateEnvironment] = useState<MapEnvironment>('desert')
   const [createMaxPlayers, setCreateMaxPlayers] = useState<RoomCapacity>(4)
   const [createPrivate, setCreatePrivate] = useState(false)
@@ -831,7 +1012,7 @@ export default function App({
                   <span className="weapon-stats">
                     {weapon.isMelee
                       ? `${weapon.damage} dmg · ${weapon.rangePx ?? 60}px · Melé`
-                      : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo} balas`}
+                      : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo}×2`}
                   </span>
                 </button>
               ))}
@@ -901,6 +1082,23 @@ export default function App({
               </button>
             </div>
 
+            <span className="skin-grid-label">Modo de juego</span>
+            <div className="room-mode-grid" role="radiogroup" aria-label="Modo de juego">
+              {GAME_MODE_OPTIONS.map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={createGameMode === mode.id}
+                  className={`room-mode-option${createGameMode === mode.id ? ' is-selected' : ''}`}
+                  onClick={() => setCreateGameMode(mode.id)}
+                >
+                  <strong>{mode.label}</strong>
+                  <span>{mode.description}</span>
+                </button>
+              ))}
+            </div>
+
             <span className="skin-grid-label">Escenario</span>
             <div className="room-environment-grid" role="radiogroup" aria-label="Escenario de la sala">
               {ENVIRONMENT_OPTIONS.map(option => (
@@ -950,6 +1148,7 @@ export default function App({
                   mode: 'create',
                   maxPlayers: createMaxPlayers,
                   environment: createEnvironment,
+                  gameMode: createGameMode,
                   isPrivate: createPrivate,
                   roomName: createRoomName,
                 })
@@ -1013,10 +1212,16 @@ export default function App({
                 {publicRooms.map((room) => (
                   <li key={room.code} className="public-room-item">
                     <div className="public-room-info">
-                      <strong>{room.name}</strong>
+                      <strong>
+                        {room.name}{' '}
+                        <span className={`room-phase-tag is-${room.phase}`}>
+                          {room.phase === 'playing' ? 'En curso' : 'En espera'}
+                        </span>
+                      </strong>
                       <span>
-                        Código: {room.code} · {ENVIRONMENT_OPTIONS.find(option => option.id === normalizeEnvironment(room.environment))?.label} · {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/
-                        {room.maxClients}
+                        Código: {room.code} · {gameModeLabel(normalizeGameMode(room.gameMode))} ·{' '}
+                        {ENVIRONMENT_OPTIONS.find(option => option.id === normalizeEnvironment(room.environment))?.label} ·{' '}
+                        {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/{room.maxClients}
                         {room.hostName ? ` · Anfitrión: ${room.hostName}` : ''}
                       </span>
                     </div>
@@ -1038,8 +1243,8 @@ export default function App({
         </section>
 
         <p className="auth-hint" style={{ marginTop: 14 }}>
-          Controles: PC (WASD + ratón/ESPACIO), móvil/tablet (joysticks táctiles + pantalla completa)
-          y mando USB/Bluetooth (sticks + RT/RB/A).
+          Controles PC: WASD mover · Clic izq. disparar · Clic der. melé · R recargar · Espacio dash (5 por partida).
+          Móvil: joysticks + botones DISPARO/MELÉ/REC/DASH. Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
         </p>
       </div>
     </main>

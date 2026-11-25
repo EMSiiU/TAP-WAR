@@ -29,11 +29,40 @@
   height: clamp(28px, calc(var(--touch-stick-size) * .4), 44px); flex: 0 0 auto;
 }
 .arena-shell .touch-stick-label { font-size: 11px; bottom: 3px; letter-spacing: .3px; }
-.arena-shell .touch-right-cluster { gap: 6px; flex: 0 0 auto; width: 100%; }
+.arena-shell .touch-left-cluster,
+.arena-shell .touch-right-cluster { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; width: 100%; }
+.arena-shell .touch-combat-buttons { display: flex; flex-direction: column; gap: 5px; width: 100%; align-items: center; }
+.arena-shell .touch-secondary-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; width: 100%; }
 .arena-shell .touch-rail-actions { gap: 4px; flex: 0 0 auto; }
 .arena-shell .touch-pill-btn { box-sizing: border-box; min-height: 32px; padding: 4px 9px; font-size: 13px; }
 .arena-shell .touch-emote-icon { display: block; width: 24px; height: 24px; image-rendering: pixelated; pointer-events: none; }
-.arena-shell .touch-fire-btn { box-sizing: border-box; min-height: 32px; padding: 4px 9px; font-size: 12px; max-width: 100%; }
+.arena-shell .touch-btn-icon { display: inline-block; width: 16px; height: 16px; image-rendering: pixelated; pointer-events: none; }
+.arena-shell .touch-fire-btn { box-sizing: border-box; width: 100%; min-height: 32px; padding: 5px 8px; font-size: 12px; max-width: 100%; }
+.arena-shell .touch-action-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  border: 2px solid #f5e2cb;
+  background: rgba(36, 25, 50, 0.88);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  max-width: 100%;
+}
+.arena-shell .touch-action-btn.is-dash { width: 100%; border-color: #38bdf8; color: #bae6fd; }
+.arena-shell .touch-action-btn.is-dash.is-depleted { border-color: #64748b; color: #94a3b8; opacity: 0.55; }
+.arena-shell .touch-action-btn.is-melee { border-color: #fb923c; color: #ffedd5; }
+.arena-shell .touch-action-btn.is-reload { border-color: #fbbf24; color: #fef3c7; }
+.arena-shell .touch-action-btn.is-reload.is-highlight { background: #b45309; border-color: #fef08a; color: #ffffff; }
 @media (orientation: landscape) {
   .arena-shell .has-touch-controls .arena-waiting-banner {
     width: calc(100% - var(--touch-rail-width) * 2 - 24px); max-width: 620px;
@@ -66,6 +95,12 @@
   .arena-shell.is-touch-mode .arena-scoreboard { gap: 6px; justify-content: flex-end; }
   .arena-shell.is-touch-mode .arena-clock { font-size: 15px; padding: 3px 6px; }
   .arena-shell.is-touch-mode .arena-live-score { flex: 1; font-size: 13px; }
+  .arena-shell.is-touch-mode .arena-hud-bottom { bottom: 4px; left: 4px; gap: 3px; }
+  .arena-shell.is-touch-mode .arena-ammo-badge,
+  .arena-shell.is-touch-mode .arena-dash-badge { padding: 4px 7px; font-size: 0.78rem; }
+  .arena-shell.is-touch-mode .arena-ammo-icon,
+  .arena-shell.is-touch-mode .arena-dash-icon { width: 18px; height: 18px; }
+  .arena-shell.is-touch-mode .arena-mode-pill { display: none; }
 }
 
 /* The whole detail area can scroll, while the actions remain outside it. */

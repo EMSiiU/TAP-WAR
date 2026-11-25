@@ -15,10 +15,52 @@ export type ArenaMapConfig = {
   height: number
   playerRadius: number
   pickupIntervalMs: number
+  powerUpIntervalMs: number
   pickupSpawnPoints: ArenaPoint[]
+  powerUpSpawnPoints: ArenaPoint[]
+  goldenSpawnPoint: ArenaPoint
   spawnPoints: ArenaPoint[]
   obstacles: ArenaObstacle[]
   routes: FloorZone[]
+}
+
+const POWERUP_SPAWN_PLANS: Record<MapSize, { intervalMs: number; points: ArenaPoint[]; golden: ArenaPoint }> = {
+  small: {
+    intervalMs: 12000,
+    points: [
+      { x: 352, y: 384 },
+      { x: 672, y: 384 },
+      { x: 320, y: 112 },
+      { x: 704, y: 656 },
+    ],
+    golden: { x: 512, y: 272 },
+  },
+  medium: {
+    intervalMs: 9500,
+    points: [
+      { x: 576, y: 576 },
+      { x: 1024, y: 576 },
+      { x: 384, y: 960 },
+      { x: 1216, y: 192 },
+      { x: 800, y: 448 },
+      { x: 800, y: 704 },
+    ],
+    golden: { x: 800, y: 448 },
+  },
+  large: {
+    intervalMs: 7500,
+    points: [
+      { x: 1120, y: 624 },
+      { x: 1120, y: 976 },
+      { x: 768, y: 800 },
+      { x: 1472, y: 800 },
+      { x: 480, y: 224 },
+      { x: 1760, y: 224 },
+      { x: 480, y: 1376 },
+      { x: 1760, y: 1376 },
+    ],
+    golden: { x: 1120, y: 624 },
+  },
 }
 
 export const ENVIRONMENT_OPTIONS = [
@@ -54,9 +96,13 @@ export function getArenaMap(size: MapSize, rawEnvironment: unknown = 'desert'): 
   const centerY = base.height / 2
   const routes = [tileRect([1, Math.floor(centerY/32)-2, base.width/32-2, 4]),
     tileRect([Math.floor(centerX/32)-2, 1, 4, base.height/32-2])]
+  const powerUpPlan = POWERUP_SPAWN_PLANS[base.id as MapSize]
   return {
     ...base, id: base.id as MapSize, maxPlayers: base.maxPlayers as RoomCapacity, environment,
     label: ENVIRONMENT_OPTIONS.find(option => option.id === environment)!.label,
+    powerUpIntervalMs: powerUpPlan.intervalMs,
+    powerUpSpawnPoints: powerUpPlan.points,
+    goldenSpawnPoint: powerUpPlan.golden,
     obstacles: [...borders.map(rect => ({ ...rect, material: 'wall' as const })), ...interior],
     routes,
   }

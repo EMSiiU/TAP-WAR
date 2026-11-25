@@ -1,5 +1,14 @@
 import Phaser from 'phaser'
-import { getArenaMap, buildMapLayers, type MapEnvironment, type ArenaMapConfig, type MapSize } from './arenaMaps'
+import {
+    POWERUP_META,
+    buildMapLayers,
+    getArenaMap,
+    type ArenaMapConfig,
+    type GameMode,
+    type MapEnvironment,
+    type MapSize,
+    type PowerUpKind,
+} from './arenaMaps'
 import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
 import type { TouchInputState } from './TouchControls'
 
@@ -27,11 +36,23 @@ export type PlayerState = {
     name: string
     skin: PlayerSkin
     teamColor: TeamColor
+    team?: TeamColor | ''
     weaponType: WeaponType
     ammo?: number
     maxAmmo?: number
+    reserveAmmo?: number
+    isReloading?: boolean
+    reloadProgress?: number
     lastMeleeWeapon?: 'knife' | 'axe'
     hp: number
+    shield?: number
+    shieldRemaining?: number
+    goldenRemaining?: number
+    dashes?: number
+    maxDashes?: number
+    dashSeq?: number
+    dashAngle?: number
+    weaponTier?: number
     kills: number
     deaths: number
     isDead: boolean
@@ -60,11 +81,27 @@ export type PickupState = {
     y: number
 }
 
+export type PowerUpState = {
+    id: string
+    kind: PowerUpKind
+    x: number
+    y: number
+}
+
 export type CrosshairStyle = 'outline' | 'plain'
+export type ArenaActionKind = 'melee' | 'reload' | 'dash'
 
 export type ArenaControls = {
     playerId: string
-    send: (input: { moveX: number; moveY: number; aimAngle: number; shoot?: boolean }) => void
+    send: (input: {
+        moveX: number
+        moveY: number
+        aimAngle: number
+        shoot?: boolean
+        melee?: boolean
+        reload?: boolean
+        dash?: boolean
+    }) => void
     sendEmote?: (emote: 'dots' | 'alert') => void
     sendPause?: (paused: boolean) => void
 }
@@ -73,16 +110,17 @@ const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
 const INPUT_INTERVAL_MS = 50
 const WALK_ANIM_TIMEOUT_MS = 120
 const PLAYER_DISPLAY_SIZE = 80
-const WEAPON_DISPLAY_SIZE = 68 // ~85% del tamaño del personaje (68 / 80)
-const WEAPON_BASE_Y = -10 // Altura de cintura/manos proporcional al nuevo tamaño
-const WEAPON_RADIAL_OFFSET = 15 // Desplamiento radial en dirección de aimAngle
+const WEAPON_DISPLAY_SIZE = 68
+const WEAPON_BASE_Y = -10
+const WEAPON_RADIAL_OFFSET = 15
 const SMALL_BULLET_BASE_SIZE = 18
 const HEAVY_BULLET_BASE_SIZE = 16
 const SHELL_SMALL_SIZE = 14
 const SHELL_SHOTGUN_SIZE = 16
 const PICKUP_DISPLAY_SIZE = 44
+const POWERUP_DISPLAY_SIZE = 34
 const EMOTE_DISPLAY_SIZE = 32
-const EMOTE_OFFSET_Y = -104
+const EMOTE_OFFSET_Y = -110
 const HP_BAR_WIDTH = 56
 const HP_BAR_HEIGHT = 16
 const HP_BAR_Y = -62
@@ -93,6 +131,7 @@ const SKINS: PlayerSkin[] = ['fox', 'squirrel', 'mouse', 'rabbit']
 const TEAM_COLORS: TeamColor[] = ['orange', 'blue']
 const HEAVY_WEAPONS = new Set<WeaponType>(['rifle', 'sniper', 'launcher', 'plasma'])
 const MELEE_WEAPONS = new Set<WeaponType>(['knife', 'axe'])
+const POWERUP_KINDS: PowerUpKind[] = ['ammo', 'medkit', 'shield', 'dash', 'golden']
 const WEAPON_TYPES: WeaponType[] = [
     'pistol',
     'revolver',
@@ -108,17 +147,32 @@ const WEAPON_TYPES: WeaponType[] = [
 
 type PlayerView = {
     root: Phaser.GameObjects.Container
+    teamRing: Phaser.GameObjects.Ellipse
+    auraRing: Phaser.GameObjects.Arc
     body: Phaser.GameObjects.Sprite
     weapon: Phaser.GameObjects.Image
     emoteSprite: Phaser.GameObjects.Image
     hpBarFrame: Phaser.GameObjects.Image
     hpBarFill: Phaser.GameObjects.Image
+    shieldBarBg: Phaser.GameObjects.Rectangle
+    shieldBarFill: Phaser.GameObjects.Rectangle
+    reloadBarBg: Phaser.GameObjects.Rectangle
+    reloadBarFill: Phaser.GameObjects.Rectangle
+    label: Phaser.GameObjects.Text
     skin: PlayerSkin
     teamColor: TeamColor
+    team: TeamColor | ''
     weaponType: WeaponType
     isDead: boolean
     lastHp: number
+    lastShield: number
+    lastGolden: number
+    lastDashes: number
+    lastReserveAmmo: number
+    lastReloading: boolean
+    lastAmmo: number
     lastMeleeSeq: number
+    lastDashSeq: number
     isSwinging: boolean
     targetX: number
     targetY: number
@@ -132,11 +186,19 @@ type PickupView = {
     sprite: Phaser.GameObjects.Image
 }
 
+type PowerUpView = {
+    root: Phaser.GameObjects.Container
+    sprite: Phaser.GameObjects.Image
+    kind: PowerUpKind
+}
+
 export default class ArenaScene extends Phaser.Scene {
     private players: PlayerState[] = []
     private bullets: BulletState[] = []
     private pickups: PickupState[] = []
+    private powerUps: PowerUpState[] = []
     private currentPhase: MatchPhase = 'waiting'
+    private gameMode: GameMode = 'ffa'
     private crosshairStyle: CrosshairStyle = 'outline'
     private isPaused = false
     private touchMode = false
@@ -149,13 +211,16 @@ export default class ArenaScene extends Phaser.Scene {
     private playerViews = new Map<string, PlayerView>()
     private bulletViews = new Map<string, Phaser.GameObjects.Image>()
     private pickupViews = new Map<string, PickupView>()
+    private powerUpViews = new Map<string, PowerUpView>()
     private lastShellAtByOwner = new Map<string, number>()
+    private lastEmptyClickAt = 0
     private aimCrosshair?: Phaser.GameObjects.Image
     private minimapGraphics?: Phaser.GameObjects.Graphics
     private isReady = false
 
     private controls: ArenaControls
     private cleanupControls?: () => void
+    private dispatchAction?: (action: ArenaActionKind) => void
 
     constructor(
         controls: ArenaControls,
@@ -199,6 +264,12 @@ export default class ArenaScene extends Phaser.Scene {
                 }
             }
         }
+        for (const kind of POWERUP_KINDS) {
+            this.load.svg(`powerup-${kind}`, `/assets/ui/powerup-${kind}.svg`, {
+                width: 40,
+                height: 40,
+            })
+        }
         this.load.image('bullet-small', '/assets/characters/bullet-small.png')
         this.load.image('bullet-heavy', '/assets/characters/bullet-heavy.png')
         this.load.image('bullet-plasma', '/assets/characters/bullet-plasma.png')
@@ -221,6 +292,10 @@ export default class ArenaScene extends Phaser.Scene {
         this.load.audio('lose-c', '/assets/sounds/lose-c.ogg')
         this.load.audio('select-a', '/assets/sounds/select-a.ogg')
         this.load.audio('coin-a', '/assets/sounds/coin-a.ogg')
+        this.load.audio('coin-b', '/assets/sounds/coin-b.ogg')
+        this.load.audio('coin-c', '/assets/sounds/coin-c.ogg')
+        this.load.audio('jump-a', '/assets/sounds/jump-a.ogg')
+        this.load.audio('move-a', '/assets/sounds/move-a.ogg')
         this.load.audio('fall-a', '/assets/sounds/fall-a.ogg')
         this.load.audio('error-a', '/assets/sounds/error-a.ogg')
     }
@@ -228,6 +303,7 @@ export default class ArenaScene extends Phaser.Scene {
     create() {
         this.isReady = true
         this.input.setDefaultCursor(this.touchMode ? 'default' : 'none')
+        this.input.mouse?.disableContextMenu()
         this.cameras.main.setBounds(0, 0, this.arenaMap.width, this.arenaMap.height)
 
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -244,14 +320,14 @@ export default class ArenaScene extends Phaser.Scene {
             this.playerViews.clear()
             this.bulletViews.clear()
             this.pickupViews.clear()
+            this.powerUpViews.clear()
             this.lastShellAtByOwner.clear()
         })
 
         this.renderArenaMap()
 
-        if (this.arenaMap.id !== 'small') {
-            this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(9500)
-        }
+        // Always render minimap so the Golden Power-Up and teammates are visible on every map size.
+        this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(9500)
 
         for (const skin of SKINS) {
             const animKey = `walk-${skin}`
@@ -275,6 +351,7 @@ export default class ArenaScene extends Phaser.Scene {
         this.applyPlayers(this.players)
         this.applyBullets(this.bullets)
         this.applyPickups(this.pickups)
+        this.applyPowerUps(this.powerUps)
         if (this.arenaMap.id !== 'small') {
             const localView = this.playerViews.get(this.controls.playerId)
             if (localView) {
@@ -307,10 +384,13 @@ export default class ArenaScene extends Phaser.Scene {
             edges.lineStyle(4, industrial ? 0x303244 : 0x624653, 0.95)
             edges.strokeRect(obstacle.x + 2, obstacle.y + 2, obstacle.width - 4, obstacle.height - 4)
             edges.lineStyle(6, industrial ? 0x36364c : 0x624653, 0.7)
-            edges.lineBetween(obstacle.x + 5, obstacle.y + obstacle.height - 5,
-                obstacle.x + obstacle.width - 5, obstacle.y + obstacle.height - 5)
+            edges.lineBetween(
+                obstacle.x + 5,
+                obstacle.y + obstacle.height - 5,
+                obstacle.x + obstacle.width - 5,
+                obstacle.y + obstacle.height - 5,
+            )
             if (industrial && obstacle.width > 32 && obstacle.height > 32) {
-                // Safety paint on the machine itself; no non-solid props.
                 for (let x = obstacle.x + 8; x < obstacle.x + obstacle.width - 8; x += 24) {
                     edges.fillStyle(0xf2c46d, 0.9)
                     edges.fillRect(x, obstacle.y + obstacle.height - 12, 12, 4)
@@ -321,11 +401,16 @@ export default class ArenaScene extends Phaser.Scene {
         const labelY = this.arenaMap.height * 0.12
         const names = industrial ? ['ALMACÉN OESTE', 'ALMACÉN ESTE'] : ['CANTERA OESTE', 'CANTERA ESTE']
         for (let index = 0; index < names.length; index++) {
-            this.add.text(this.arenaMap.width * (index ? 0.75 : 0.25), labelY, names[index], {
-                fontFamily: 'monospace', fontSize: '20px',
-                color: industrial ? '#e3d9bf' : '#6d4850',
-                backgroundColor: industrial ? '#55516b' : '#e4b88e', padding: { x: 10, y: 5 },
-            }).setOrigin(0.5).setDepth(1)
+            this.add
+                .text(this.arenaMap.width * (index ? 0.75 : 0.25), labelY, names[index], {
+                    fontFamily: 'monospace',
+                    fontSize: '20px',
+                    color: industrial ? '#e3d9bf' : '#6d4850',
+                    backgroundColor: industrial ? '#55516b' : '#e4b88e',
+                    padding: { x: 10, y: 5 },
+                })
+                .setOrigin(0.5)
+                .setDepth(1)
         }
     }
 
@@ -340,6 +425,11 @@ export default class ArenaScene extends Phaser.Scene {
                 view.root.setDepth(nextY)
                 view.body.setDepth(nextY)
                 view.weapon.setDepth(nextY + 1)
+            }
+
+            if (view.auraRing.visible) {
+                const pulse = 1 + Math.sin(time / 120) * 0.08
+                view.auraRing.setScale(pulse)
             }
 
             const deadKey = `player-${view.skin}-dead`
@@ -368,17 +458,17 @@ export default class ArenaScene extends Phaser.Scene {
             if (localView) {
                 this.cameras.main.centerOn(localView.root.x, localView.root.y)
             }
-            this.renderMinimap()
         }
 
+        this.renderMinimap(time)
         this.updateCrosshair()
     }
 
-    private renderMinimap() {
+    private renderMinimap(time: number) {
         const g = this.minimapGraphics
         if (!g) return
 
-        const mmW = 156
+        const mmW = this.arenaMap.id === 'small' ? 132 : 156
         const mmH = Math.round((mmW * this.arenaMap.height) / this.arenaMap.width)
         const mmX = 1024 - mmW - 12
         const mmY = 12
@@ -386,9 +476,9 @@ export default class ArenaScene extends Phaser.Scene {
         const scaleY = mmH / this.arenaMap.height
 
         g.clear()
-        g.fillStyle(0x1e1629, 0.78)
+        g.fillStyle(0x1e1629, 0.76)
         g.fillRoundedRect(mmX, mmY, mmW, mmH, 6)
-        g.lineStyle(2, 0xf5e2cb, 0.7)
+        g.lineStyle(2, 0xf5e2cb, 0.72)
         g.strokeRoundedRect(mmX, mmY, mmW, mmH, 6)
 
         g.fillStyle(0x8d6e63, 0.9)
@@ -401,21 +491,55 @@ export default class ArenaScene extends Phaser.Scene {
             )
         }
 
-        g.fillStyle(0xfbbf24, 0.95)
+        g.fillStyle(0xfbbf24, 0.8)
         for (const pickup of this.pickups) {
-            g.fillCircle(mmX + pickup.x * scaleX, mmY + pickup.y * scaleY, 2.5)
+            g.fillCircle(mmX + pickup.x * scaleX, mmY + pickup.y * scaleY, 2.2)
         }
 
+        const pulse = (Math.sin(time / 140) + 1) / 2
+        for (const powerUp of this.powerUps) {
+            const px = mmX + powerUp.x * scaleX
+            const py = mmY + powerUp.y * scaleY
+            if (powerUp.kind === 'golden') {
+                // Highlight the Golden Power-Up prominently on the minimap with a pulsing beacon.
+                g.lineStyle(2.5, 0xfef08a, 0.55 + pulse * 0.45)
+                g.strokeCircle(px, py, 5.5 + pulse * 4.5)
+                g.fillStyle(0xfacc15, 1)
+                g.fillCircle(px, py, 4.2)
+                g.fillStyle(0xffffff, 0.95)
+                g.fillCircle(px, py, 1.8)
+            } else {
+                const meta = POWERUP_META[powerUp.kind]
+                g.fillStyle(meta.color, 0.95)
+                g.fillCircle(px, py, 2.6)
+            }
+        }
+
+        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
         for (const player of this.players) {
             if (player.isDead) continue
             const isLocal = player.id === this.controls.playerId
-            g.fillStyle(isLocal ? 0x38bdf8 : 0xf87171, 1)
+            const isTeammate =
+                !isLocal &&
+                this.gameMode === 'tdm' &&
+                Boolean(localPlayer?.team) &&
+                player.team === localPlayer?.team
+            const color = isLocal ? 0x38bdf8 : isTeammate ? 0x4ade80 : 0xf87171
+            g.fillStyle(color, 1)
             g.fillCircle(mmX + player.x * scaleX, mmY + player.y * scaleY, isLocal ? 3.5 : 2.5)
+            if (isLocal) {
+                g.lineStyle(1.2, 0xffffff, 0.95)
+                g.strokeCircle(mmX + player.x * scaleX, mmY + player.y * scaleY, 3.8)
+            }
         }
     }
 
     setCrosshairStyle(style: CrosshairStyle) {
         this.crosshairStyle = style
+    }
+
+    setGameMode(mode: GameMode) {
+        this.gameMode = mode
     }
 
     setTouchMode(enabled: boolean) {
@@ -441,6 +565,10 @@ export default class ArenaScene extends Phaser.Scene {
         if (!this.touchMode && this.currentPhase !== 'finished') {
             this.game.canvas.requestPointerLock?.()
         }
+    }
+
+    triggerAction(action: ArenaActionKind) {
+        this.dispatchAction?.(action)
     }
 
     private updateCrosshair() {
@@ -490,6 +618,7 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     stopControls() {
+        this.dispatchAction = undefined
         this.cleanupControls?.()
         this.cleanupControls = undefined
     }
@@ -509,8 +638,10 @@ export default class ArenaScene extends Phaser.Scene {
     private startControls() {
         const keys = new Set<string>()
         let pointerDown = false
-        let spaceDown = false
         let pendingShot = false
+        let pendingMelee = false
+        let pendingReload = false
+        let pendingDash = false
         let aimAngle = 0
         const detectGamepadEdges = createGamepadEdgeDetector()
         let lastReportedGamepad = false
@@ -583,15 +714,43 @@ export default class ArenaScene extends Phaser.Scene {
             }
 
             const isPointerDown = !this.touchMode && (pointerDown || this.input.activePointer.leftButtonDown())
-            const shoot = isPointerDown || spaceDown || pendingShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
-            pendingShot = false
+            const shoot = isPointerDown || pendingShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
+            const melee = pendingMelee || edges.meleePressed
+            const reload = pendingReload || edges.reloadPressed
+            const dash = pendingDash || edges.dashPressed
 
-            this.controls.send({
+            pendingShot = false
+            pendingMelee = false
+            pendingReload = false
+            pendingDash = false
+
+            const payload: {
+                moveX: number
+                moveY: number
+                aimAngle: number
+                shoot?: boolean
+                melee?: boolean
+                reload?: boolean
+                dash?: boolean
+            } = {
                 moveX,
                 moveY,
                 aimAngle,
                 shoot,
-            })
+            }
+            if (melee) payload.melee = true
+            if (reload) payload.reload = true
+            if (dash) payload.dash = true
+
+            this.controls.send(payload)
+        }
+
+        this.dispatchAction = (action: ArenaActionKind) => {
+            if (this.isPaused || this.currentPhase === 'finished') return
+            if (action === 'melee') pendingMelee = true
+            else if (action === 'reload') pendingReload = true
+            else if (action === 'dash') pendingDash = true
+            sendInput()
         }
 
         const onPointerMove = (next: Phaser.Input.Pointer) => {
@@ -622,7 +781,25 @@ export default class ArenaScene extends Phaser.Scene {
             if (document.pointerLockElement !== this.game.canvas) {
                 this.game.canvas.requestPointerLock?.()
             }
+            if (next.button === 2 || next.rightButtonDown()) {
+                pendingMelee = true
+                sendInput()
+                return
+            }
             if (next.button === 0 || next.leftButtonDown()) {
+                const local = this.players.find((p) => p.id === this.controls.playerId)
+                if (
+                    local &&
+                    this.currentPhase === 'playing' &&
+                    !MELEE_WEAPONS.has(local.weaponType) &&
+                    (local.ammo ?? 0) <= 0 &&
+                    (local.goldenRemaining ?? 0) <= 0 &&
+                    !local.isReloading &&
+                    this.time.now - this.lastEmptyClickAt > 320
+                ) {
+                    this.lastEmptyClickAt = this.time.now
+                    this.playSound('error-a', 0.35)
+                }
                 pointerDown = true
                 pendingShot = true
                 sendInput()
@@ -641,11 +818,17 @@ export default class ArenaScene extends Phaser.Scene {
             }
         }
 
+        const onContextMenu = (event: MouseEvent) => {
+            event.preventDefault()
+        }
+
         const stopMovement = () => {
             keys.clear()
             pointerDown = false
-            spaceDown = false
             pendingShot = false
+            pendingMelee = false
+            pendingReload = false
+            pendingDash = false
             this.controls.send({ moveX: 0, moveY: 0, aimAngle, shoot: false })
         }
 
@@ -683,8 +866,11 @@ export default class ArenaScene extends Phaser.Scene {
             if (MOVEMENT_KEYS.has(event.code)) {
                 keys.add(event.code)
             } else if (event.code === 'Space') {
-                spaceDown = true
-                pendingShot = true
+                event.preventDefault()
+                pendingDash = true
+                sendInput()
+            } else if (event.code === 'KeyR') {
+                pendingReload = true
                 sendInput()
             } else if (event.code === 'Digit1' || event.code === 'Numpad1') {
                 this.controls.sendEmote?.('dots')
@@ -694,9 +880,6 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         const onKeyUp = (event: KeyboardEvent) => {
-            if (event.code === 'Space') {
-                spaceDown = false
-            }
             if (keys.delete(event.code) && hasFocus() && !this.isPaused) sendInput()
         }
 
@@ -711,6 +894,7 @@ export default class ArenaScene extends Phaser.Scene {
         this.input.on('pointermove', onPointerMove)
         this.input.on('pointerdown', onPointerDown)
         this.input.on('pointerup', onPointerUp)
+        this.game.canvas.addEventListener('contextmenu', onContextMenu)
         document.addEventListener('mousemove', onLockedMouseMove)
         document.addEventListener('pointerlockchange', onPointerLockChange)
         window.addEventListener('pointerup', onGlobalPointerUp)
@@ -730,6 +914,7 @@ export default class ArenaScene extends Phaser.Scene {
             this.input.off('pointermove', onPointerMove)
             this.input.off('pointerdown', onPointerDown)
             this.input.off('pointerup', onPointerUp)
+            this.game.canvas.removeEventListener('contextmenu', onContextMenu)
             document.removeEventListener('mousemove', onLockedMouseMove)
             document.removeEventListener('pointerlockchange', onPointerLockChange)
             window.removeEventListener('pointerup', onGlobalPointerUp)
@@ -755,6 +940,11 @@ export default class ArenaScene extends Phaser.Scene {
     setPickups(pickups: PickupState[]) {
         this.pickups = pickups
         if (this.isReady && this.sys.isActive()) this.applyPickups(pickups)
+    }
+
+    setPowerUps(powerUps: PowerUpState[]) {
+        this.powerUps = powerUps
+        if (this.isReady && this.sys.isActive()) this.applyPowerUps(powerUps)
     }
 
     private applyPickups(pickups: PickupState[]) {
@@ -787,6 +977,62 @@ export default class ArenaScene extends Phaser.Scene {
             })
 
             this.pickupViews.set(pickup.id, { root, sprite })
+        }
+    }
+
+    private applyPowerUps(powerUps: PowerUpState[]) {
+        const activeIds = new Set(powerUps.map((p) => p.id))
+
+        for (const [id, view] of this.powerUpViews) {
+            if (!activeIds.has(id)) {
+                view.root.destroy()
+                this.powerUpViews.delete(id)
+            }
+        }
+
+        for (const powerUp of powerUps) {
+            if (this.powerUpViews.has(powerUp.id)) continue
+
+            const meta = POWERUP_META[powerUp.kind]
+            const isGolden = powerUp.kind === 'golden'
+            const outerRadius = isGolden ? 30 : 21
+            const glow = this.add.circle(0, 0, outerRadius, meta.color, isGolden ? 0.36 : 0.26)
+            glow.setStrokeStyle(isGolden ? 3 : 2, isGolden ? 0xfef08a : 0x3d2e4f)
+
+            const children: Phaser.GameObjects.GameObject[] = [glow]
+            if (isGolden) {
+                const beacon = this.add.circle(0, 0, 38, 0xfacc15, 0.14)
+                beacon.setStrokeStyle(2, 0xfef08a, 0.85)
+                children.unshift(beacon)
+                this.tweens.add({
+                    targets: beacon,
+                    scale: 1.35,
+                    alpha: 0.05,
+                    duration: 900,
+                    repeat: -1,
+                    ease: 'Sine.easeOut',
+                })
+                this.playSound('coin-c', 0.5)
+            }
+
+            const size = isGolden ? POWERUP_DISPLAY_SIZE + 10 : POWERUP_DISPLAY_SIZE
+            const sprite = this.add
+                .image(0, 0, `powerup-${powerUp.kind}`)
+                .setDisplaySize(size, size)
+            children.push(sprite)
+
+            const root = this.add.container(powerUp.x, powerUp.y, children).setDepth(powerUp.y + 1)
+
+            this.tweens.add({
+                targets: sprite,
+                y: isGolden ? -7 : -4,
+                duration: isGolden ? 550 : 750,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+            })
+
+            this.powerUpViews.set(powerUp.id, { root, sprite, kind: powerUp.kind })
         }
     }
 
@@ -924,6 +1170,38 @@ export default class ArenaScene extends Phaser.Scene {
         })
     }
 
+    private playDashEffect(view: PlayerView, dashAngle: number) {
+        this.playSound('jump-a', 0.42)
+        const startX = view.root.x
+        const startY = view.root.y
+        const facingLeft = view.body.flipX
+
+        for (let i = 0; i < 3; i++) {
+            const offset = i * 16
+            const ghost = this.add
+                .image(
+                    startX - Math.cos(dashAngle) * offset,
+                    startY - Math.sin(dashAngle) * offset,
+                    `player-${view.skin}-idle`,
+                )
+                .setDisplaySize(PLAYER_DISPLAY_SIZE, PLAYER_DISPLAY_SIZE)
+                .setOrigin(0.5, 0.85)
+                .setFlipX(facingLeft)
+                .setTint(0x38bdf8)
+                .setAlpha(0.55 - i * 0.14)
+                .setDepth(startY - 1)
+
+            this.tweens.add({
+                targets: ghost,
+                alpha: 0,
+                scaleX: ghost.scaleX * 0.92,
+                scaleY: ghost.scaleY * 0.92,
+                duration: 220 + i * 45,
+                onComplete: () => ghost.destroy(),
+            })
+        }
+    }
+
     private applyPlayers(players: PlayerState[]) {
         const activeIds = new Set(players.map((player) => player.id))
 
@@ -936,13 +1214,19 @@ export default class ArenaScene extends Phaser.Scene {
 
         for (const player of players) {
             const skin: PlayerSkin = SKINS.includes(player.skin) ? player.skin : 'fox'
+            const team: TeamColor | '' =
+                player.team === 'orange' || player.team === 'blue' ? player.team : ''
             const teamColor: TeamColor =
-                player.teamColor === 'blue' || skin === 'mouse' || skin === 'rabbit' ? 'blue' : 'orange'
+                team ||
+                (player.teamColor === 'blue' || skin === 'mouse' || skin === 'rabbit'
+                    ? 'blue'
+                    : 'orange')
             const weaponType: WeaponType = WEAPON_TYPES.includes(player.weaponType)
                 ? player.weaponType
                 : 'rifle'
 
             let view = this.playerViews.get(player.id)
+            const isLocal = player.id === this.controls.playerId
 
             if (!view) {
                 view = this.createPlayerView(
@@ -952,8 +1236,17 @@ export default class ArenaScene extends Phaser.Scene {
                     player.hp ?? 100,
                     skin,
                     teamColor,
+                    team,
                     weaponType,
                 )
+                view.lastMeleeSeq = player.meleeAttackSeq ?? 0
+                view.lastDashSeq = player.dashSeq ?? 0
+                view.lastShield = player.shield ?? 0
+                view.lastGolden = player.goldenRemaining ?? 0
+                view.lastDashes = player.dashes ?? 5
+                view.lastReserveAmmo = player.reserveAmmo ?? 0
+                view.lastReloading = Boolean(player.isReloading)
+                view.lastAmmo = player.ammo ?? 0
                 this.playerViews.set(player.id, view)
             } else {
                 if (player.x !== view.lastX || player.y !== view.lastY) {
@@ -962,26 +1255,26 @@ export default class ArenaScene extends Phaser.Scene {
                     view.lastMovedAt = this.time.now
                 }
 
-                if (view.weaponType !== weaponType || view.teamColor !== teamColor) {
-                    const prevWeapon = view.weaponType
-                    const switchedToMeleeOutOfAmmo =
-                        player.id === this.controls.playerId &&
-                        !MELEE_WEAPONS.has(prevWeapon) &&
-                        MELEE_WEAPONS.has(weaponType) &&
-                        (player.ammo ?? 0) <= 0
-                    const pickedUp = prevWeapon !== weaponType && !switchedToMeleeOutOfAmmo && weaponType !== 'rifle'
+                if (view.team !== team) {
+                    view.team = team
+                    this.updateTeamVisuals(view, team)
+                }
 
+                const weaponChanged = view.weaponType !== weaponType || view.teamColor !== teamColor
+                if (weaponChanged) {
+                    const prevWeapon = view.weaponType
                     view.weaponType = weaponType
                     view.teamColor = teamColor
                     view.weapon.setTexture(`weapon-${weaponType}-${teamColor}`)
+                    view.hpBarFill.setTexture(
+                        teamColor === 'blue' ? 'hp-bar-fill-blue' : 'hp-bar-fill',
+                    )
                     if (MELEE_WEAPONS.has(weaponType)) {
                         view.weapon.setOrigin(0.5, 0.85)
                     } else {
                         view.weapon.setOrigin(0.2, 0.5)
                     }
-                    if (switchedToMeleeOutOfAmmo) {
-                        this.playSound('error-a', 0.45)
-                    } else if (pickedUp) {
+                    if (prevWeapon !== weaponType && isLocal) {
                         this.playSound('coin-a', 0.45)
                     }
                 }
@@ -989,36 +1282,77 @@ export default class ArenaScene extends Phaser.Scene {
                 const seq = player.meleeAttackSeq ?? 0
                 if (seq > view.lastMeleeSeq) {
                     view.lastMeleeSeq = seq
-                    this.playSound('shoot-f', 0.4)
+                    const meleeKind: MeleeWeaponType = MELEE_WEAPONS.has(weaponType)
+                        ? (weaponType as MeleeWeaponType)
+                        : (player.lastMeleeWeapon ?? 'knife')
+                    this.playSound('shoot-f', 0.42)
                     this.playMeleeSlash(
                         view,
                         player.lastMeleeAngle ?? player.aimAngle,
-                        weaponType,
+                        meleeKind,
                         teamColor,
+                        !MELEE_WEAPONS.has(weaponType),
                     )
                 }
 
+                const dashSeq = player.dashSeq ?? 0
+                if (dashSeq > view.lastDashSeq) {
+                    view.lastDashSeq = dashSeq
+                    this.playDashEffect(view, player.dashAngle ?? player.aimAngle)
+                }
+
                 const currentHp = player.hp ?? 100
-                if (currentHp < view.lastHp) {
+                const currentShield = player.shield ?? 0
+                const currentGolden = player.goldenRemaining ?? 0
+                const currentDashes = player.dashes ?? 5
+                const currentReserve = player.reserveAmmo ?? 0
+                const currentReloading = Boolean(player.isReloading)
+                const currentAmmo = player.ammo ?? 0
+
+                if (currentHp < view.lastHp || currentShield < view.lastShield) {
                     this.playSound('hurt-a', 0.45)
-                    view.body.setTint(0xff4d4d)
+                    view.body.setTint(currentShield < view.lastShield && currentHp === view.lastHp ? 0x38bdf8 : 0xff4d4d)
                     this.time.delayedCall(120, () => {
                         if (view && view.body.scene) view.body.clearTint()
                     })
-                    if (player.id === this.controls.playerId) {
+                    if (isLocal) {
                         this.cameras.main.shake(60, 0.002)
                     }
                 }
+
+                if (currentGolden > 0 && view.lastGolden === 0) {
+                    this.playSound('coin-c', 0.55)
+                } else if (isLocal) {
+                    if (currentReloading && !view.lastReloading) {
+                        this.playSound('move-a', 0.4)
+                    } else if (!currentReloading && view.lastReloading && currentAmmo > view.lastAmmo) {
+                        this.playSound('coin-b', 0.42)
+                    } else if (
+                        !view.isDead &&
+                        (currentShield > view.lastShield ||
+                            currentHp > view.lastHp ||
+                            currentDashes > view.lastDashes ||
+                            (!weaponChanged && currentReserve > view.lastReserveAmmo))
+                    ) {
+                        this.playSound('coin-b', 0.45)
+                    }
+                }
+
                 view.lastHp = currentHp
+                view.lastShield = currentShield
+                view.lastGolden = currentGolden
+                view.lastDashes = currentDashes
+                view.lastReserveAmmo = currentReserve
+                view.lastReloading = currentReloading
+                view.lastAmmo = currentAmmo
             }
 
             const wasDead = view.isDead
             const isDeadNow = Boolean(player.isDead)
             if (isDeadNow && !wasDead) {
-                this.playSound(player.id === this.controls.playerId ? 'lose-c' : 'hurt-d', 0.5)
+                this.playSound(isLocal ? 'lose-c' : 'hurt-d', 0.5)
             }
 
-            const isLocal = player.id === this.controls.playerId
             const respawnTeleport =
                 (!isDeadNow && wasDead) || Math.hypot(player.x - view.root.x, player.y - view.root.y) > 160
 
@@ -1076,15 +1410,57 @@ export default class ArenaScene extends Phaser.Scene {
                 view.weapon.setVisible(false)
                 view.hpBarFrame.setVisible(false)
                 view.hpBarFill.setVisible(false)
+                view.shieldBarBg.setVisible(false)
+                view.shieldBarFill.setVisible(false)
+                view.reloadBarBg.setVisible(false)
+                view.reloadBarFill.setVisible(false)
+                view.auraRing.setVisible(false)
+                view.teamRing.setVisible(false)
                 continue
             }
 
             view.weapon.setVisible(true)
             view.hpBarFrame.setVisible(true)
             view.hpBarFill.setVisible(true)
+            view.teamRing.setVisible(this.gameMode === 'tdm' && Boolean(team))
 
             const hpRatio = Math.max(0, Math.min(1, (player.hp ?? 100) / 100))
             view.hpBarFill.setCrop(0, 0, Math.round(192 * hpRatio), 64)
+
+            const shieldVal = player.shield ?? 0
+            const goldenSec = player.goldenRemaining ?? 0
+            if (shieldVal > 0) {
+                const ratio = Math.max(0, Math.min(1, shieldVal / 100))
+                view.shieldBarBg.setVisible(true)
+                view.shieldBarFill.setVisible(true)
+                view.shieldBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * ratio), 5)
+                view.shieldBarFill.setFillStyle(goldenSec > 0 ? 0xfacc15 : 0x38bdf8, 1)
+            } else {
+                view.shieldBarBg.setVisible(false)
+                view.shieldBarFill.setVisible(false)
+            }
+
+            if (goldenSec > 0) {
+                view.auraRing.setVisible(true)
+                view.auraRing.setFillStyle(0xfacc15, 0.16)
+                view.auraRing.setStrokeStyle(3, 0xfef08a, 0.95)
+            } else if (shieldVal > 0) {
+                view.auraRing.setVisible(true)
+                view.auraRing.setFillStyle(0x38bdf8, 0.14)
+                view.auraRing.setStrokeStyle(2.5, 0x7dd3fc, 0.9)
+            } else {
+                view.auraRing.setVisible(false)
+            }
+
+            if (player.isReloading) {
+                const progress = Math.max(0, Math.min(1, player.reloadProgress ?? 0))
+                view.reloadBarBg.setVisible(true)
+                view.reloadBarFill.setVisible(true)
+                view.reloadBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * progress), 4)
+            } else {
+                view.reloadBarBg.setVisible(false)
+                view.reloadBarFill.setVisible(false)
+            }
 
             const weaponX = Math.cos(player.aimAngle) * WEAPON_RADIAL_OFFSET
             const weaponY = WEAPON_BASE_Y + Math.sin(player.aimAngle) * WEAPON_RADIAL_OFFSET
@@ -1105,32 +1481,71 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
+    private updateTeamVisuals(view: PlayerView, team: TeamColor | '') {
+        if (team === 'blue') {
+            view.teamRing.setFillStyle(0x3b82f6, 0.25)
+            view.teamRing.setStrokeStyle(2.5, 0x93c5fd, 0.95)
+            view.label.setColor('#bfdbfe')
+        } else if (team === 'orange') {
+            view.teamRing.setFillStyle(0xf97316, 0.25)
+            view.teamRing.setStrokeStyle(2.5, 0xfdba74, 0.95)
+            view.label.setColor('#fed7aa')
+        } else {
+            view.label.setColor('#ffffff')
+        }
+    }
+
     private playMeleeSlash(
         view: PlayerView,
         attackAngle: number,
-        weaponType: WeaponType,
+        weaponType: MeleeWeaponType,
         teamColor: TeamColor,
+        isQuickMelee: boolean,
     ) {
-        view.isSwinging = true
-        this.tweens.killTweensOf(view.weapon)
-
         const facingLeft = attackAngle > Math.PI / 2 || attackAngle < -Math.PI / 2
         const baseAngle = attackAngle + Math.PI / 2
         const dir = facingLeft ? -1 : 1
         const startAngle = baseAngle - dir * Phaser.Math.DegToRad(65)
         const endAngle = baseAngle + dir * Phaser.Math.DegToRad(75)
-        view.weapon.setFlipX(facingLeft)
-        view.weapon.setRotation(startAngle)
 
-        this.tweens.add({
-            targets: view.weapon,
-            rotation: endAngle,
-            duration: 140,
-            ease: 'Cubic.easeOut',
-            onComplete: () => {
-                view.isSwinging = false
-            },
-        })
+        if (isQuickMelee) {
+            // Render a brief swinging knife/axe sprite even while carrying a firearm.
+            const quickSprite = this.add
+                .image(
+                    view.root.x + Math.cos(attackAngle) * 16,
+                    view.root.y + WEAPON_BASE_Y + Math.sin(attackAngle) * 16,
+                    `weapon-${weaponType}-${teamColor}`,
+                )
+                .setDisplaySize(WEAPON_DISPLAY_SIZE * 0.9, WEAPON_DISPLAY_SIZE * 0.9)
+                .setOrigin(0.5, 0.85)
+                .setFlipX(facingLeft)
+                .setRotation(startAngle)
+                .setDepth(view.root.y + 4)
+
+            this.tweens.add({
+                targets: quickSprite,
+                rotation: endAngle,
+                alpha: 0.2,
+                duration: 150,
+                ease: 'Cubic.easeOut',
+                onComplete: () => quickSprite.destroy(),
+            })
+        } else {
+            view.isSwinging = true
+            this.tweens.killTweensOf(view.weapon)
+            view.weapon.setFlipX(facingLeft)
+            view.weapon.setRotation(startAngle)
+
+            this.tweens.add({
+                targets: view.weapon,
+                rotation: endAngle,
+                duration: 140,
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    view.isSwinging = false
+                },
+            })
+        }
 
         const radius = weaponType === 'axe' ? 68 : 48
         const arcHalf = Phaser.Math.DegToRad(weaponType === 'axe' ? 68 : 52)
@@ -1160,8 +1575,19 @@ export default class ArenaScene extends Phaser.Scene {
         hp: number,
         skin: PlayerSkin,
         teamColor: TeamColor,
+        team: TeamColor | '',
         weaponType: WeaponType,
     ): PlayerView {
+        const teamRing = this.add
+            .ellipse(0, 4, 46, 20, 0xf97316, 0.25)
+            .setStrokeStyle(2.5, 0xfdba74, 0.95)
+            .setVisible(false)
+
+        const auraRing = this.add
+            .circle(0, -24, 34, 0x38bdf8, 0.14)
+            .setStrokeStyle(2.5, 0x7dd3fc, 0.9)
+            .setVisible(false)
+
         const body = this.add
             .sprite(0, 0, `player-${skin}-idle`)
             .setDisplaySize(PLAYER_DISPLAY_SIZE, PLAYER_DISPLAY_SIZE)
@@ -1182,8 +1608,26 @@ export default class ArenaScene extends Phaser.Scene {
             .image(0, HP_BAR_Y, 'hp-bar-frame')
             .setDisplaySize(HP_BAR_WIDTH, HP_BAR_HEIGHT)
 
+        const shieldBarBg = this.add
+            .rectangle(0, HP_BAR_Y - 11, HP_BAR_WIDTH, 7, 0x1e1629, 0.88)
+            .setStrokeStyle(1, 0x38bdf8, 0.9)
+            .setVisible(false)
+        const shieldBarFill = this.add
+            .rectangle(-(HP_BAR_WIDTH - 4) / 2, HP_BAR_Y - 11, HP_BAR_WIDTH - 4, 5, 0x38bdf8, 1)
+            .setOrigin(0, 0.5)
+            .setVisible(false)
+
+        const reloadBarBg = this.add
+            .rectangle(0, HP_BAR_Y + 11, HP_BAR_WIDTH, 6, 0x1e1629, 0.85)
+            .setStrokeStyle(1, 0xf59e0b, 0.9)
+            .setVisible(false)
+        const reloadBarFill = this.add
+            .rectangle(-(HP_BAR_WIDTH - 4) / 2, HP_BAR_Y + 11, 2, 4, 0xfbbf24, 1)
+            .setOrigin(0, 0.5)
+            .setVisible(false)
+
         const label = this.add
-            .text(0, -76, name, {
+            .text(0, -82, name, {
                 fontSize: '14px',
                 color: '#ffffff',
                 stroke: '#1e1b2e',
@@ -1197,26 +1641,48 @@ export default class ArenaScene extends Phaser.Scene {
             .setVisible(false)
 
         const root = this.add.container(x, y, [
+            teamRing,
+            auraRing,
             body,
             weapon,
             hpBarFill,
             hpBarFrame,
+            shieldBarBg,
+            shieldBarFill,
+            reloadBarBg,
+            reloadBarFill,
             label,
             emoteSprite,
         ])
-        return {
+
+        const view: PlayerView = {
             root,
+            teamRing,
+            auraRing,
             body,
             weapon,
             emoteSprite,
             hpBarFrame,
             hpBarFill,
+            shieldBarBg,
+            shieldBarFill,
+            reloadBarBg,
+            reloadBarFill,
+            label,
             skin,
             teamColor,
+            team,
             weaponType,
             isDead: false,
             lastHp: hp,
+            lastShield: 0,
+            lastGolden: 0,
+            lastDashes: 5,
+            lastReserveAmmo: 0,
+            lastReloading: false,
+            lastAmmo: 0,
             lastMeleeSeq: 0,
+            lastDashSeq: 0,
             isSwinging: false,
             targetX: x,
             targetY: y,
@@ -1224,5 +1690,7 @@ export default class ArenaScene extends Phaser.Scene {
             lastY: y,
             lastMovedAt: -WALK_ANIM_TIMEOUT_MS,
         }
+        this.updateTeamVisuals(view, team)
+        return view
     }
 }

@@ -18,6 +18,7 @@
 }
 .arena-header-identity { grid-area: identity; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .arena-brand { font-size: 16px; font-weight: 850; letter-spacing: 1px; color: #fff9ef; white-space: nowrap; }
+.arena-mode-pill { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 5px; background: #2e223b; border: 1px solid #8e739a; color: #f2c46d; white-space: nowrap; }
 .arena-room-visibility { color: #d8c5df; }
 .arena-code-button, .arena-toolbar-button, .arena-toolbar-menu summary {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

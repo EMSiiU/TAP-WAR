@@ -1,10 +1,35 @@
+import type { GameMode } from './arenaMaps'
+
 export type MatchResultRow = {
-  sessionId: string; name: string; kills: number; deaths: number; abandoned: boolean; outcome: string; points: number
+  sessionId: string
+  name: string
+  kills: number
+  deaths: number
+  abandoned: boolean
+  outcome: string
+  points: number
+  team?: 'orange' | 'blue'
+  weaponTier?: number
 }
 
-export default function MatchResults({ title, reason, saveMessage, players, rematchDisabled, onRematch, onExit }: {
-  title: string; reason: string; saveMessage?: string; players: MatchResultRow[]; rematchDisabled: boolean
-  onRematch: () => void; onExit: () => void
+export default function MatchResults({
+  title,
+  reason,
+  saveMessage,
+  players,
+  gameMode,
+  rematchDisabled,
+  onRematch,
+  onExit,
+}: {
+  title: string
+  reason: string
+  saveMessage?: string
+  players: MatchResultRow[]
+  gameMode?: GameMode
+  rematchDisabled: boolean
+  onRematch: () => void
+  onExit: () => void
 }) {
   return <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-labelledby="arena-results-title">
     <div className="arena-results-modal">
@@ -14,9 +39,27 @@ export default function MatchResults({ title, reason, saveMessage, players, rema
         <p role="status">{saveMessage}</p>
         <div className="arena-results-scroll">
           <table className="arena-results-table">
-            <thead><tr><th>Jugador</th><th>Eliminaciones</th><th>Muertes</th><th>Resultado</th><th>Puntos</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Jugador</th>
+                {gameMode === 'tdm' && <th>Equipo</th>}
+                {gameMode === 'gungame' && <th>Nivel</th>}
+                <th>Eliminaciones</th>
+                <th>Muertes</th>
+                <th>Resultado</th>
+                <th>Puntos</th>
+              </tr>
+            </thead>
             <tbody>{players.map(player => <tr key={player.sessionId}>
               <td>{player.name}{player.abandoned ? ' (abandono)' : ''}</td>
+              {gameMode === 'tdm' && (
+                <td>
+                  <span className={`team-chip is-${player.team ?? 'orange'}`}>
+                    {player.team === 'blue' ? 'Azul' : 'Naranja'}
+                  </span>
+                </td>
+              )}
+              {gameMode === 'gungame' && <td>{player.weaponTier ?? 0}/10</td>}
               <td>{player.kills}</td><td>{player.deaths}</td>
               <td>{({ win: 'Victoria', draw: 'Empate', loss: 'Derrota' } as Record<string,string>)[player.outcome]}</td>
               <td>+{player.points}</td>
