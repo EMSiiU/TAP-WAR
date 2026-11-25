@@ -16,6 +16,9 @@ export type GamepadSample = {
   aimAngle: number
   aimMagnitude: number
   shoot: boolean
+  melee: boolean
+  reload: boolean
+  dash: boolean
   emoteDots: boolean
   emoteAlert: boolean
   pauseToggle: boolean
@@ -65,10 +68,10 @@ export function readGamepadInput(pad: GamepadLike, moveDeadzone = 0.18, aimDeadz
     aimAngle = angle === Math.PI ? -Math.PI : angle
   }
 
-  const shoot =
-    isPressed(pad.buttons[7], 0.25) ||
-    isPressed(pad.buttons[5], 0.5) ||
-    isPressed(pad.buttons[0], 0.5)
+  const shoot = isPressed(pad.buttons[7], 0.25) || isPressed(pad.buttons[5], 0.5)
+  const dash = isPressed(pad.buttons[0], 0.5)
+  const melee = isPressed(pad.buttons[1], 0.5) || isPressed(pad.buttons[11], 0.5)
+  const reload = isPressed(pad.buttons[2], 0.5)
 
   const emoteDots = isPressed(pad.buttons[4], 0.5)
   const emoteAlert = isPressed(pad.buttons[6], 0.5) || isPressed(pad.buttons[3], 0.5)
@@ -81,6 +84,9 @@ export function readGamepadInput(pad: GamepadLike, moveDeadzone = 0.18, aimDeadz
     aimAngle,
     aimMagnitude: right.mag,
     shoot,
+    melee,
+    reload,
+    dash,
     emoteDots,
     emoteAlert,
     pauseToggle,
@@ -101,23 +107,49 @@ export function createGamepadEdgeDetector() {
   let prevDots = false
   let prevAlert = false
   let prevPause = false
+  let prevDash = false
+  let prevMelee = false
+  let prevReload = false
 
   return (sample: GamepadSample | null) => {
     if (!sample) {
       prevDots = false
       prevAlert = false
       prevPause = false
-      return { emoteDotsPressed: false, emoteAlertPressed: false, pausePressed: false }
+      prevDash = false
+      prevMelee = false
+      prevReload = false
+      return {
+        emoteDotsPressed: false,
+        emoteAlertPressed: false,
+        pausePressed: false,
+        dashPressed: false,
+        meleePressed: false,
+        reloadPressed: false,
+      }
     }
 
     const emoteDotsPressed = sample.emoteDots && !prevDots
     const emoteAlertPressed = sample.emoteAlert && !prevAlert
     const pausePressed = sample.pauseToggle && !prevPause
+    const dashPressed = sample.dash && !prevDash
+    const meleePressed = sample.melee && !prevMelee
+    const reloadPressed = sample.reload && !prevReload
 
     prevDots = sample.emoteDots
     prevAlert = sample.emoteAlert
     prevPause = sample.pauseToggle
+    prevDash = sample.dash
+    prevMelee = sample.melee
+    prevReload = sample.reload
 
-    return { emoteDotsPressed, emoteAlertPressed, pausePressed }
+    return {
+      emoteDotsPressed,
+      emoteAlertPressed,
+      pausePressed,
+      dashPressed,
+      meleePressed,
+      reloadPressed,
+    }
   }
 }

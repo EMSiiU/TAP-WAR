@@ -1,14 +1,16 @@
 import { useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import ArenaScene, {
+  type ArenaActionKind,
   type ArenaControls,
   type BulletState,
   type CrosshairStyle,
   type MatchPhase,
   type PickupState,
   type PlayerState,
+  type PowerUpState,
 } from './ArenaScene'
-import type { MapEnvironment, MapSize } from './arenaMaps'
+import type { GameMode, MapEnvironment, MapSize } from './arenaMaps'
 import type { TouchInputState } from './TouchControls'
 import arena from '../../../../packages/shared/arena.json'
 
@@ -16,13 +18,16 @@ type PhaserViewProps = {
   players: PlayerState[]
   bullets: BulletState[]
   pickups: PickupState[]
+  powerUps: PowerUpState[]
   phase: MatchPhase
+  gameMode: GameMode
   isPaused: boolean
   crosshairStyle: CrosshairStyle
   mapSize: MapSize
   environment: MapEnvironment
   touchMode: boolean
   touchInputRef: React.RefObject<TouchInputState>
+  actionTriggerRef?: React.RefObject<((action: ArenaActionKind) => void) | null>
   onMenuToggle?: () => void
   onGamepadChange?: (connected: boolean) => void
   resumeSignal: number
@@ -33,13 +38,16 @@ export default function PhaserView({
   players,
   bullets,
   pickups,
+  powerUps,
   phase,
+  gameMode,
   isPaused,
   crosshairStyle,
   mapSize,
   environment,
   touchMode,
   touchInputRef,
+  actionTriggerRef,
   onMenuToggle,
   onGamepadChange,
   resumeSignal,
@@ -50,7 +58,9 @@ export default function PhaserView({
   const latestPlayersRef = useRef(players)
   const latestBulletsRef = useRef(bullets)
   const latestPickupsRef = useRef(pickups)
+  const latestPowerUpsRef = useRef(powerUps)
   const latestPhaseRef = useRef(phase)
+  const latestGameModeRef = useRef(gameMode)
   const latestPausedRef = useRef(isPaused)
   const latestCrosshairRef = useRef(crosshairStyle)
   const latestTouchModeRef = useRef(touchMode)
@@ -81,9 +91,19 @@ export default function PhaserView({
   }, [pickups])
 
   useEffect(() => {
+    latestPowerUpsRef.current = powerUps
+    sceneRef.current?.setPowerUps(powerUps)
+  }, [powerUps])
+
+  useEffect(() => {
     latestPhaseRef.current = phase
     sceneRef.current?.setPhase(phase)
   }, [phase])
+
+  useEffect(() => {
+    latestGameModeRef.current = gameMode
+    sceneRef.current?.setGameMode(gameMode)
+  }, [gameMode])
 
   useEffect(() => {
     latestPausedRef.current = isPaused
@@ -116,10 +136,16 @@ export default function PhaserView({
     scene.setPlayers(latestPlayersRef.current)
     scene.setBullets(latestBulletsRef.current)
     scene.setPickups(latestPickupsRef.current)
+    scene.setPowerUps(latestPowerUpsRef.current)
     scene.setPhase(latestPhaseRef.current)
+    scene.setGameMode(latestGameModeRef.current)
     scene.setPaused(latestPausedRef.current)
     scene.setCrosshairStyle(latestCrosshairRef.current)
     sceneRef.current = scene
+    if (actionTriggerRef) {
+      actionTriggerRef.current = (action) => scene.triggerAction(action)
+    }
+
     let game: Phaser.Game | undefined
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
@@ -151,13 +177,14 @@ export default function PhaserView({
     })
 
     return () => {
+      if (actionTriggerRef) actionTriggerRef.current = null
       sceneRef.current = null
       active = false
       resizeObserver?.disconnect()
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls, mapSize, environment, touchInputRef])
+  }, [controls, mapSize, environment, touchInputRef, actionTriggerRef])
 
   useEffect(() => {
     if (resumeSignal > 0) {

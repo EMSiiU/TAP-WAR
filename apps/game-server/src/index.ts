@@ -49,7 +49,10 @@ const server = defineServer({
           locked: false,
         })
         const rooms = listings
-          .filter((room) => room.clients < room.maxClients)
+          .filter((room) => {
+            const meta = (room.metadata ?? {}) as Record<string, unknown>
+            return room.clients < room.maxClients && meta.phase !== 'finished'
+          })
           .map((room) => {
             const meta = (room.metadata ?? {}) as Record<string, unknown>
             return {
@@ -58,6 +61,8 @@ const server = defineServer({
               mapSize:
                 meta.mapSize === 'medium' || meta.mapSize === 'large' ? meta.mapSize : 'small',
               environment: meta.environment === 'industrial' ? 'industrial' : 'desert',
+              gameMode:
+                meta.gameMode === 'tdm' || meta.gameMode === 'gungame' ? meta.gameMode : 'ffa',
               clients: room.clients,
               maxClients: room.maxClients,
               phase: meta.phase === 'playing' || meta.phase === 'finished' ? meta.phase : 'waiting',

@@ -6,9 +6,29 @@ type TouchControlsProps = {
   onTouchInput: (input: TouchInputState) => void
   onEmote: (emote: 'dots' | 'alert') => void
   onMenu: () => void
+  onMelee: () => void
+  onReload: () => void
+  onDash: () => void
+  dashes: number
+  maxDashes: number
+  canReload: boolean
+  isReloading: boolean
+  needsReload: boolean
 }
 
-export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchControlsProps) {
+export default function TouchControls({
+  onTouchInput,
+  onEmote,
+  onMenu,
+  onMelee,
+  onReload,
+  onDash,
+  dashes,
+  maxDashes,
+  canReload,
+  isReloading,
+  needsReload,
+}: TouchControlsProps) {
   const moveKnob = useRef<HTMLDivElement>(null)
   const aimKnob = useRef<HTMLDivElement>(null)
   const publish = useRef(onTouchInput)
@@ -21,7 +41,7 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
 
   const getController = useCallback(() => {
     if (!controller.current) {
-      controller.current = new TouchInputController(input => publish.current(input))
+      controller.current = new TouchInputController((input) => publish.current(input))
     }
     return controller.current
   }, [])
@@ -64,7 +84,7 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
     getController().move(control, event.pointerId, offset)
     if (knob) knob.style.transform = `translate(${offset.tx}px, ${offset.ty}px)`
   }
-  function end(control: 'move' | 'aim' | 'fire', event: ReactPointerEvent<HTMLElement>) {
+  function end(control: TouchControl, event: ReactPointerEvent<HTMLElement>) {
     if (!getController().release(control, event.pointerId)) return
     captures.current.delete(event.pointerId)
     if (control !== 'fire') {
@@ -74,16 +94,34 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
     try { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) } catch { /* Already released. */ }
   }
 
+  function triggerInstant(event: ReactPointerEvent<HTMLButtonElement>, action: () => void) {
+    event.preventDefault()
+    event.stopPropagation()
+    action()
+  }
+
   return <>
     <div className="touch-rail touch-rail-left" aria-label="Controles táctiles izquierda">
       <div className="touch-rail-actions">
         <button type="button" className="touch-pill-btn" aria-label="Enviar risa" title="Risa (1)" onClick={() => onEmote('dots')}><img className="touch-emote-icon" src="/assets/ui/emote-laugh.svg" alt="" draggable={false}/></button>
         <button type="button" className="touch-pill-btn" aria-label="Enviar corazón" title="Corazón (2)" onClick={() => onEmote('alert')}><img className="touch-emote-icon" src="/assets/ui/emote-heart.svg" alt="" draggable={false}/></button>
       </div>
-      <div className="touch-stick touch-stick-move" role="application" aria-label="Joystick de movimiento"
-        onPointerDown={e => start('move', e)} onPointerMove={e => move('move', e)}
-        onPointerUp={e => end('move', e)} onPointerCancel={e => end('move', e)} onLostPointerCapture={e => end('move', e)}>
-        <div ref={moveKnob} className="touch-stick-knob"/><span className="touch-stick-label">MOVER</span>
+      <div className="touch-left-cluster">
+        <button
+          type="button"
+          className={`touch-action-btn is-dash${dashes <= 0 ? ' is-depleted' : ''}`}
+          aria-label={`Dash (${dashes} de ${maxDashes} disponibles)`}
+          disabled={dashes <= 0}
+          onPointerDown={e => { if (dashes > 0) triggerInstant(e, onDash) }}
+        >
+          <img className="touch-btn-icon" src="/assets/ui/powerup-dash.svg" alt="" draggable={false} />
+          <span>DASH {dashes}/{maxDashes}</span>
+        </button>
+        <div className="touch-stick touch-stick-move" role="application" aria-label="Joystick de movimiento"
+          onPointerDown={e => start('move', e)} onPointerMove={e => move('move', e)}
+          onPointerUp={e => end('move', e)} onPointerCancel={e => end('move', e)} onLostPointerCapture={e => end('move', e)}>
+          <div ref={moveKnob} className="touch-stick-knob"/><span className="touch-stick-label">MOVER</span>
+        </div>
       </div>
     </div>
     <div className="touch-rail touch-rail-right" aria-label="Controles táctiles derecha">
@@ -91,9 +129,36 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
         <button type="button" className="touch-pill-btn" onClick={() => { reset(); onMenu() }}>Menú</button>
       </div>
       <div className="touch-right-cluster">
-        <button type="button" className="touch-fire-btn" aria-label="Disparar"
-          onPointerDown={e => start('fire', e)} onPointerUp={e => end('fire', e)}
-          onPointerCancel={e => end('fire', e)} onLostPointerCapture={e => end('fire', e)}>DISPARO</button>
+        <div className="touch-combat-buttons">
+          <button
+            type="button"
+            className="touch-fire-btn"
+            aria-label="Disparar"
+            onPointerDown={e => start('fire', e)} onPointerUp={e => end('fire', e)}
+            onPointerCancel={e => end('fire', e)} onLostPointerCapture={e => end('fire', e)}
+          >
+            DISPARO
+          </button>
+          <div className="touch-secondary-row">
+            <button
+              type="button"
+              className="touch-action-btn is-melee"
+              aria-label="Ataque melé"
+              onPointerDown={e => triggerInstant(e, onMelee)}
+            >
+              MELÉ
+            </button>
+            <button
+              type="button"
+              className={`touch-action-btn is-reload${needsReload ? ' is-highlight' : ''}`}
+              aria-label="Recargar arma"
+              disabled={!canReload || isReloading}
+              onPointerDown={e => { if (canReload && !isReloading) triggerInstant(e, onReload) }}
+            >
+              {isReloading ? 'REC…' : 'REC'}
+            </button>
+          </div>
+        </div>
         <div className="touch-stick touch-stick-aim" role="application" aria-label="Joystick de apuntado y disparo"
           onPointerDown={e => start('aim', e)} onPointerMove={e => move('aim', e)}
           onPointerUp={e => end('aim', e)} onPointerCancel={e => end('aim', e)} onLostPointerCapture={e => end('aim', e)}>

@@ -32,10 +32,15 @@ for (const environment of environments) for (const size of sizes) {
       assert.ok((environment==='industrial' ? [29,70] : [64,65,173]).includes(layers.ground[y][x]))
     }
   })
-  test(`${environment}/${size}: spawns y armas libres, distintos y conectados`, () => {
+  test(`${environment}/${size}: spawns, armas y power-ups libres, distintos y conectados`, () => {
     const map=getArenaMap(size,environment)
     assert.equal(new Set(map.spawnPoints.map(p=>`${p.x},${p.y}`)).size,map.maxPlayers)
-    const points=[...map.spawnPoints,...map.pickupSpawnPoints]
+    assert.ok(map.powerUpSpawnPoints.length >= 4)
+    assert.equal(
+      new Set(map.powerUpSpawnPoints.map(p=>`${p.x},${p.y}`)).size,
+      map.powerUpSpawnPoints.length,
+    )
+    const points=[...map.spawnPoints,...map.pickupSpawnPoints,...map.powerUpSpawnPoints,map.goldenSpawnPoint]
     for (const p of points) {
       assert.ok(p.x>32+map.playerRadius && p.y>32+map.playerRadius)
       assert.ok(p.x<map.width-32-map.playerRadius && p.y<map.height-32-map.playerRadius)

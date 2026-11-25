@@ -5,6 +5,7 @@ type ArenaHeaderProps = {
   roomCode: string
   roomName: string
   isPrivate: boolean
+  gameModeLabel: string
   environmentLabel: string
   sizeLabel: string
   playerCount: number
@@ -12,6 +13,7 @@ type ArenaHeaderProps = {
   clock: string
   scoreLine: string
   killsToWin: number
+  targetLabel?: string
   status: string
   connected: boolean
   gamepadConnected: boolean
@@ -38,6 +40,7 @@ export default function ArenaHeader(props: ArenaHeaderProps) {
   return <header className="arena-header" aria-label="Información y controles de la partida">
     <div className="arena-header-identity">
       <strong className="arena-brand">TAP-WAR</strong>
+      <span className="arena-mode-pill">{props.gameModeLabel}</span>
       <span className="arena-room-visibility">{props.isPrivate ? 'Privada' : 'Pública'}</span>
       {props.roomCode && <button type="button" className="arena-code-button" onClick={props.onCopy}
         title={`Copiar código de ${props.roomName || 'la sala'}`} aria-label={props.copied ? 'Código copiado' : `Copiar código ${props.roomCode}`}>
@@ -77,7 +80,7 @@ export default function ArenaHeader(props: ArenaHeaderProps) {
     <div className="arena-scoreboard">
       <span className="arena-clock" role="timer" aria-label={`Tiempo restante ${props.clock}`}>{props.clock}</span>
       <span className="arena-live-score" title={props.scoreLine}>{props.scoreLine || 'Esperando jugadores'}</span>
-      <span className="arena-kill-target">Meta <b>{props.killsToWin}</b></span>
+      <span className="arena-kill-target">{props.targetLabel ?? 'Meta'} <b>{props.killsToWin}</b></span>
       <span className={`arena-connection${props.connected ? ' is-connected' : ''}`} role="status" title={props.status}>
         <span aria-hidden="true" className="arena-connection-dot"/><span>{props.connected ? 'Conectado' : props.status}</span>
       </span>
