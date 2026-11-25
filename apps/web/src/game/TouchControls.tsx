@@ -12,27 +12,36 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
   const moveKnob = useRef<HTMLDivElement>(null)
   const aimKnob = useRef<HTMLDivElement>(null)
   const publish = useRef(onTouchInput)
-  publish.current = onTouchInput
   const captures = useRef(new Map<number, HTMLElement>())
   const controller = useRef<TouchInputController | null>(null)
-  if (!controller.current) controller.current = new TouchInputController(input => publish.current(input))
+
+  useEffect(() => {
+    publish.current = onTouchInput
+  }, [onTouchInput])
+
+  const getController = useCallback(() => {
+    if (!controller.current) {
+      controller.current = new TouchInputController(input => publish.current(input))
+    }
+    return controller.current
+  }, [])
 
   const reset = useCallback(() => {
-    controller.current!.reset()
+    getController().reset()
     for (const knob of [moveKnob.current, aimKnob.current]) if (knob) knob.style.transform = 'translate(0px, 0px)'
     const held = [...captures.current]
     captures.current.clear()
     for (const [id, element] of held) {
       try { if (element.hasPointerCapture(id)) element.releasePointerCapture(id) } catch { /* Already cancelled. */ }
     }
-  }, [])
+  }, [getController])
   useEffect(() => bindTouchResetEvents(window, document, reset), [reset])
 
   function knobFor(control: 'move' | 'aim') { return control === 'move' ? moveKnob.current : aimKnob.current }
   function start(control: TouchControl, event: ReactPointerEvent<HTMLElement>) {
     event.preventDefault(); event.stopPropagation()
     const offset = control === 'fire' ? undefined : stickOffset(event.currentTarget.getBoundingClientRect(), knobFor(control)?.getBoundingClientRect().width || 32, event.clientX, event.clientY)
-    if (!controller.current!.press(control, event.pointerId, offset)) return
+    if (!getController().press(control, event.pointerId, offset)) return
     if (control !== 'fire' && offset) {
       const knob = knobFor(control)
       if (knob) knob.style.transform = `translate(${offset.tx}px, ${offset.ty}px)`
@@ -41,7 +50,7 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
       event.currentTarget.setPointerCapture(event.pointerId)
       captures.current.set(event.pointerId, event.currentTarget)
     } catch {
-      controller.current!.release(control, event.pointerId)
+      getController().release(control, event.pointerId)
       if (control !== 'fire') {
         const knob = knobFor(control)
         if (knob) knob.style.transform = 'translate(0px, 0px)'
@@ -52,11 +61,11 @@ export default function TouchControls({ onTouchInput, onEmote, onMenu }: TouchCo
     if (captures.current.get(event.pointerId) !== event.currentTarget) return
     const knob = knobFor(control)
     const offset = stickOffset(event.currentTarget.getBoundingClientRect(), knob?.getBoundingClientRect().width || 32, event.clientX, event.clientY)
-    controller.current!.move(control, event.pointerId, offset)
+    getController().move(control, event.pointerId, offset)
     if (knob) knob.style.transform = `translate(${offset.tx}px, ${offset.ty}px)`
   }
-  function end(control: TouchControl, event: ReactPointerEvent<HTMLElement>) {
-    if (!controller.current!.release(control, event.pointerId)) return
+  function end(control: 'move' | 'aim' | 'fire', event: ReactPointerEvent<HTMLElement>) {
+    if (!getController().release(control, event.pointerId)) return
     captures.current.delete(event.pointerId)
     if (control !== 'fire') {
       const knob = knobFor(control)
