@@ -193,8 +193,10 @@ function ArenaSession({
   const [controls, setControls] = useState<ArenaControls | null>(null)
   const rematchRef = useRef<(() => void) | null>(null)
   const receiveTouchInput = useCallback((input: TouchInputState) => {
+    const prev = touchInputRef.current
     touchInputRef.current = input
-    if (!input.moveX && !input.moveY && !input.shoot) {
+    const wasActive = prev.moveX !== 0 || prev.moveY !== 0 || prev.shoot
+    if (wasActive && !input.moveX && !input.moveY && !input.shoot) {
       controls?.send({ moveX: 0, moveY: 0, aimAngle: input.aimAngle, shoot: false })
     }
   }, [controls])
