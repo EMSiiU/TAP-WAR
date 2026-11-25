@@ -9,8 +9,10 @@ import {
     type MapSize,
     type PowerUpKind,
 } from './arenaMaps'
+import { findAutoAimAngle } from './autoAim'
 import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
-import type { TouchInputState } from './TouchControls'
+import { DEFAULT_PC_CONTROLS, type PcControlConfig } from './keybindings'
+import { MANUAL_DRAG_THRESHOLD, type TouchInputState } from './touchInput'
 
 export type MatchPhase = 'waiting' | 'playing' | 'finished'
 export type PlayerSkin = 'fox' | 'squirrel' | 'mouse' | 'rabbit'
@@ -47,9 +49,11 @@ export type PlayerState = {
     hp: number
     shield?: number
     shieldRemaining?: number
+    shieldProgress?: number
     goldenRemaining?: number
     dashes?: number
     maxDashes?: number
+    dashRechargeProgress?: number
     dashSeq?: number
     dashAngle?: number
     weaponTier?: number
@@ -89,7 +93,7 @@ export type PowerUpState = {
 }
 
 export type CrosshairStyle = 'outline' | 'plain'
-export type ArenaActionKind = 'melee' | 'reload' | 'dash'
+export type ArenaActionKind = 'melee' | 'reload' | 'dash' | 'touchSync'
 
 export type ArenaControls = {
     playerId: string
@@ -106,7 +110,6 @@ export type ArenaControls = {
     sendPause?: (paused: boolean) => void
 }
 
-const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD'])
 const INPUT_INTERVAL_MS = 50
 const WALK_ANIM_TIMEOUT_MS = 120
 const PLAYER_DISPLAY_SIZE = 80
@@ -200,6 +203,7 @@ export default class ArenaScene extends Phaser.Scene {
     private currentPhase: MatchPhase = 'waiting'
     private gameMode: GameMode = 'ffa'
     private crosshairStyle: CrosshairStyle = 'outline'
+    private pcControls: PcControlConfig = { ...DEFAULT_PC_CONTROLS }
     private isPaused = false
     private touchMode = false
     private arenaMap: ArenaMapConfig
@@ -215,6 +219,7 @@ export default class ArenaScene extends Phaser.Scene {
     private lastShellAtByOwner = new Map<string, number>()
     private lastEmptyClickAt = 0
     private aimCrosshair?: Phaser.GameObjects.Image
+    private aimGuideGraphics?: Phaser.GameObjects.Graphics
     private minimapGraphics?: Phaser.GameObjects.Graphics
     private isReady = false
 
@@ -278,7 +283,6 @@ export default class ArenaScene extends Phaser.Scene {
         this.load.image('hp-bar-frame', '/assets/ui/hp-bar-frame.png')
         this.load.image('hp-bar-fill', '/assets/ui/hp-bar-fill.png')
         this.load.image('hp-bar-fill-blue', '/assets/ui/hp-bar-fill-blue.png')
-        // Keep the wire IDs compatible with existing game servers.
         this.load.svg('emote-dots', '/assets/ui/emote-laugh.svg', { width: 32, height: 32 })
         this.load.svg('emote-alert', '/assets/ui/emote-heart.svg', { width: 32, height: 32 })
         this.load.image('emote-skull', '/assets/ui/emote-skull.png')
@@ -315,6 +319,8 @@ export default class ArenaScene extends Phaser.Scene {
             this.stopControls()
             this.aimCrosshair?.destroy()
             this.aimCrosshair = undefined
+            this.aimGuideGraphics?.destroy()
+            this.aimGuideGraphics = undefined
             this.minimapGraphics?.destroy()
             this.minimapGraphics = undefined
             this.playerViews.clear()
@@ -326,7 +332,7 @@ export default class ArenaScene extends Phaser.Scene {
 
         this.renderArenaMap()
 
-        // Always render minimap so the Golden Power-Up and teammates are visible on every map size.
+        this.aimGuideGraphics = this.add.graphics().setDepth(9200)
         this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(9500)
 
         for (const skin of SKINS) {
@@ -376,8 +382,6 @@ export default class ArenaScene extends Phaser.Scene {
             obsMap.createLayer(0, obsTiles, 0, 0)?.setScale(2).setCullPadding(2, 2)
         }
 
-        // Raised edges stay inside the authoritative rectangle. Ground routes
-        // have no such edges, so players can distinguish floor paint from cover.
         const edges = this.add.graphics().setDepth(1)
         const industrial = this.arenaMap.environment === 'industrial'
         for (const obstacle of this.arenaMap.obstacles) {
@@ -461,7 +465,53 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         this.renderMinimap(time)
+        this.renderTouchAimGuide(time)
         this.updateCrosshair()
+    }
+
+    private renderTouchAimGuide(time: number) {
+        const g = this.aimGuideGraphics
+        if (!g) return
+        g.clear()
+
+        if (!this.touchMode || this.isPaused || this.currentPhase === 'finished') return
+        const touch = this.getTouchInput?.()
+        if (!touch?.aimActive) return
+
+        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
+        if (!localPlayer || localPlayer.isDead) return
+
+        const startX = localPlayer.x
+        const startY = localPlayer.y + WEAPON_BASE_Y
+
+        if (touch.aimMode === 'manual') {
+            const cancelling = touch.aimMagnitude < MANUAL_DRAG_THRESHOLD
+            const beamLen = cancelling ? 60 : Math.max(130, touch.aimMagnitude * MAX_AIM_RADIUS)
+            const endX = startX + Math.cos(touch.aimAngle) * beamLen
+            const endY = startY + Math.sin(touch.aimAngle) * beamLen
+            const color = cancelling ? 0x94a3b8 : touch.shoot ? 0xf97316 : 0xfef08a
+
+            g.lineStyle(12, color, cancelling ? 0.14 : 0.22)
+            g.lineBetween(startX, startY, endX, endY)
+            g.lineStyle(3, color, cancelling ? 0.45 : 0.88)
+            g.lineBetween(startX, startY, endX, endY)
+            g.fillStyle(color, cancelling ? 0.5 : 0.92)
+            g.fillCircle(endX, endY, cancelling ? 4 : 6)
+        } else if (touch.aimMode === 'auto') {
+            const { angle, target } = findAutoAimAngle(localPlayer, this.players, this.gameMode, localPlayer.aimAngle, WEAPON_BASE_Y)
+            if (target) {
+                const pulse = 1 + Math.sin(time / 90) * 0.12
+                g.lineStyle(2.5, 0xfacc15, 0.55)
+                g.lineBetween(startX, startY, target.x, target.y)
+                g.lineStyle(3, 0xfef08a, 0.9)
+                g.strokeCircle(target.x, target.y - 16, 26 * pulse)
+            } else {
+                const endX = startX + Math.cos(angle) * 140
+                const endY = startY + Math.sin(angle) * 140
+                g.lineStyle(3, 0xfacc15, 0.55)
+                g.lineBetween(startX, startY, endX, endY)
+            }
+        }
     }
 
     private renderMinimap(time: number) {
@@ -501,7 +551,6 @@ export default class ArenaScene extends Phaser.Scene {
             const px = mmX + powerUp.x * scaleX
             const py = mmY + powerUp.y * scaleY
             if (powerUp.kind === 'golden') {
-                // Highlight the Golden Power-Up prominently on the minimap with a pulsing beacon.
                 g.lineStyle(2.5, 0xfef08a, 0.55 + pulse * 0.45)
                 g.strokeCircle(px, py, 5.5 + pulse * 4.5)
                 g.fillStyle(0xfacc15, 1)
@@ -538,6 +587,10 @@ export default class ArenaScene extends Phaser.Scene {
         this.crosshairStyle = style
     }
 
+    setPcControls(pcControls: PcControlConfig) {
+        this.pcControls = { ...pcControls }
+    }
+
     setGameMode(mode: GameMode) {
         this.gameMode = mode
     }
@@ -569,6 +622,79 @@ export default class ArenaScene extends Phaser.Scene {
 
     triggerAction(action: ArenaActionKind) {
         this.dispatchAction?.(action)
+    }
+
+    triggerExplosion(x: number, y: number, radius: number) {
+        if (!this.isReady || !this.sys.isActive()) return
+        this.playSound('explosion-a', 0.55)
+
+        // Blast radius zone fill (shows true AoE radius cleanly).
+        const zone = this.add.circle(x, y, radius, 0xf97316, 0.32).setDepth(y + 10)
+        zone.setStrokeStyle(4, 0xfef08a, 0.95)
+        zone.setScale(0.25)
+        this.tweens.add({
+            targets: zone,
+            scale: 1,
+            alpha: 0,
+            duration: 280,
+            ease: 'Cubic.easeOut',
+            onComplete: () => zone.destroy(),
+        })
+
+        // Expanding shockwave ring.
+        const ring = this.add.circle(x, y, radius * 0.95, 0xfef08a, 0).setDepth(y + 11)
+        ring.setStrokeStyle(6, 0xffffff, 0.9)
+        ring.setScale(0.15)
+        this.tweens.add({
+            targets: ring,
+            scale: 1.08,
+            alpha: 0,
+            duration: 240,
+            ease: 'Quad.easeOut',
+            onComplete: () => ring.destroy(),
+        })
+
+        // Bright fiery core flash.
+        const core = this.add.circle(x, y, Math.max(24, radius * 0.36), 0xffffff, 0.95).setDepth(y + 12)
+        this.tweens.add({
+            targets: core,
+            scale: 1.65,
+            alpha: 0,
+            duration: 180,
+            ease: 'Quad.easeOut',
+            onComplete: () => core.destroy(),
+        })
+
+        // Radial fiery sparks and smoke puffs.
+        const sparkCount = 12
+        const colors = [0xfef08a, 0xfb923c, 0xef4444, 0x78716c]
+        for (let i = 0; i < sparkCount; i++) {
+            const angle = (i / sparkCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18)
+            const dist = radius * Phaser.Math.FloatBetween(0.55, 0.98)
+            const spark = this.add
+                .circle(x, y, Phaser.Math.Between(5, 10), colors[i % colors.length], 0.95)
+                .setDepth(y + 13)
+            this.tweens.add({
+                targets: spark,
+                x: x + Math.cos(angle) * dist,
+                y: y + Math.sin(angle) * dist,
+                scale: 0.2,
+                alpha: 0,
+                duration: Phaser.Math.Between(220, 360),
+                ease: 'Cubic.easeOut',
+                onComplete: () => spark.destroy(),
+            })
+        }
+
+        // Distance-scaled screen shake for impact punch.
+        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
+        if (localPlayer) {
+            const distToLocal = Math.hypot(localPlayer.x - x, localPlayer.y - y)
+            if (distToLocal < radius * 4) {
+                const intensity = Math.max(0.002, 0.008 * (1 - distToLocal / (radius * 4)))
+                this.cameras.main.shake(150, intensity)
+            }
+        }
     }
 
     private updateCrosshair() {
@@ -635,16 +761,37 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
+    private playEmptyClickIfNeeded() {
+        const local = this.players.find((p) => p.id === this.controls.playerId)
+        if (
+            local &&
+            this.currentPhase === 'playing' &&
+            !MELEE_WEAPONS.has(local.weaponType) &&
+            (local.ammo ?? 0) <= 0 &&
+            (local.goldenRemaining ?? 0) <= 0 &&
+            !local.isReloading &&
+            this.time.now - this.lastEmptyClickAt > 320
+        ) {
+            this.lastEmptyClickAt = this.time.now
+            this.playSound('error-a', 0.35)
+        }
+    }
+
     private startControls() {
-        const keys = new Set<string>()
-        let pointerDown = false
+        const pressedCodes = new Set<string>()
+        const pressedMouse = new Set<string>()
         let pendingShot = false
         let pendingMelee = false
         let pendingReload = false
         let pendingDash = false
+        let lastAutoShotSeq = this.getTouchInput?.()?.autoAimShotSeq ?? 0
+        let lastManualShotSeq = this.getTouchInput?.()?.manualShotSeq ?? 0
         let aimAngle = 0
         const detectGamepadEdges = createGamepadEdgeDetector()
         let lastReportedGamepad = false
+
+        const isHeld = (binding: string) =>
+            pressedCodes.has(binding) || (!this.touchMode && pressedMouse.has(binding))
 
         const reportGamepadState = (connected: boolean) => {
             if (connected !== lastReportedGamepad) {
@@ -681,12 +828,38 @@ export default class ArenaScene extends Phaser.Scene {
             if (!player) return
 
             const touch = this.touchMode ? this.getTouchInput?.() : undefined
+            let touchBurstShot = false
 
-            if (touch?.aimActive) {
-                const aimRadius = Math.max(90, touch.aimMagnitude * MAX_AIM_RADIUS)
-                this.aimOffsetX = Math.cos(touch.aimAngle) * aimRadius
-                this.aimOffsetY = WEAPON_BASE_Y + Math.sin(touch.aimAngle) * aimRadius
-                aimAngle = touch.aimAngle
+            if (touch) {
+                if (touch.autoAimShotSeq > lastAutoShotSeq) {
+                    lastAutoShotSeq = touch.autoAimShotSeq
+                    const auto = findAutoAimAngle(player, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                    aimAngle = auto.angle
+                    this.aimOffsetX = Math.cos(aimAngle) * 140
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
+                    touchBurstShot = true
+                } else if (touch.manualShotSeq > lastManualShotSeq) {
+                    lastManualShotSeq = touch.manualShotSeq
+                    aimAngle = touch.aimAngle
+                    this.aimOffsetX = Math.cos(aimAngle) * 180
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 180
+                    touchBurstShot = true
+                } else if (touch.aimActive && touch.aimMode === 'auto') {
+                    const auto = findAutoAimAngle(player, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                    aimAngle = auto.angle
+                    this.aimOffsetX = Math.cos(aimAngle) * 140
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
+                } else if (touch.aimActive && touch.aimMode === 'manual') {
+                    const aimRadius = Math.max(90, touch.aimMagnitude * MAX_AIM_RADIUS)
+                    this.aimOffsetX = Math.cos(touch.aimAngle) * aimRadius
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(touch.aimAngle) * aimRadius
+                    aimAngle = touch.aimAngle
+                } else if (padSample?.aimActive) {
+                    const aimRadius = Math.max(110, padSample.aimMagnitude * MAX_AIM_RADIUS)
+                    this.aimOffsetX = Math.cos(padSample.aimAngle) * aimRadius
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(padSample.aimAngle) * aimRadius
+                    aimAngle = padSample.aimAngle
+                }
             } else if (padSample?.aimActive) {
                 const aimRadius = Math.max(110, padSample.aimMagnitude * MAX_AIM_RADIUS)
                 this.aimOffsetX = Math.cos(padSample.aimAngle) * aimRadius
@@ -700,8 +873,9 @@ export default class ArenaScene extends Phaser.Scene {
                 }
             }
 
-            const kbX = Number(keys.has('KeyD')) - Number(keys.has('KeyA'))
-            const kbY = Number(keys.has('KeyS')) - Number(keys.has('KeyW'))
+            const binds = this.pcControls
+            const kbX = Number(isHeld(binds.moveRight)) - Number(isHeld(binds.moveLeft))
+            const kbY = Number(isHeld(binds.moveDown)) - Number(isHeld(binds.moveUp))
             let moveX = kbX
             let moveY = kbY
 
@@ -713,8 +887,9 @@ export default class ArenaScene extends Phaser.Scene {
                 moveY = padSample.moveY
             }
 
-            const isPointerDown = !this.touchMode && (pointerDown || this.input.activePointer.leftButtonDown())
-            const shoot = isPointerDown || pendingShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
+            const shootHeld = isHeld(binds.shoot)
+            const shoot =
+                shootHeld || pendingShot || touchBurstShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
             const melee = pendingMelee || edges.meleePressed
             const reload = pendingReload || edges.reloadPressed
             const dash = pendingDash || edges.dashPressed
@@ -743,6 +918,28 @@ export default class ArenaScene extends Phaser.Scene {
             if (dash) payload.dash = true
 
             this.controls.send(payload)
+        }
+
+        const handleBindingPress = (code: string) => {
+            const binds = this.pcControls
+            if (code === binds.shoot) {
+                this.playEmptyClickIfNeeded()
+                pendingShot = true
+                sendInput()
+            } else if (code === binds.melee) {
+                pendingMelee = true
+                sendInput()
+            } else if (code === binds.reload) {
+                pendingReload = true
+                sendInput()
+            } else if (code === binds.dash) {
+                pendingDash = true
+                sendInput()
+            } else if (code === binds.emote1) {
+                this.controls.sendEmote?.('dots')
+            } else if (code === binds.emote2) {
+                this.controls.sendEmote?.('alert')
+            }
         }
 
         this.dispatchAction = (action: ArenaActionKind) => {
@@ -781,41 +978,17 @@ export default class ArenaScene extends Phaser.Scene {
             if (document.pointerLockElement !== this.game.canvas) {
                 this.game.canvas.requestPointerLock?.()
             }
-            if (next.button === 2 || next.rightButtonDown()) {
-                pendingMelee = true
-                sendInput()
-                return
-            }
-            if (next.button === 0 || next.leftButtonDown()) {
-                const local = this.players.find((p) => p.id === this.controls.playerId)
-                if (
-                    local &&
-                    this.currentPhase === 'playing' &&
-                    !MELEE_WEAPONS.has(local.weaponType) &&
-                    (local.ammo ?? 0) <= 0 &&
-                    (local.goldenRemaining ?? 0) <= 0 &&
-                    !local.isReloading &&
-                    this.time.now - this.lastEmptyClickAt > 320
-                ) {
-                    this.lastEmptyClickAt = this.time.now
-                    this.playSound('error-a', 0.35)
-                }
-                pointerDown = true
-                pendingShot = true
-                sendInput()
-            }
+            const mouseCode = `Mouse${next.button}`
+            pressedMouse.add(mouseCode)
+            handleBindingPress(mouseCode)
         }
 
         const onPointerUp = (next: Phaser.Input.Pointer) => {
-            if (next.button === 0 || !next.leftButtonDown()) {
-                pointerDown = false
-            }
+            pressedMouse.delete(`Mouse${next.button}`)
         }
 
         const onGlobalPointerUp = (event: PointerEvent) => {
-            if (event.button === 0) {
-                pointerDown = false
-            }
+            pressedMouse.delete(`Mouse${event.button}`)
         }
 
         const onContextMenu = (event: MouseEvent) => {
@@ -823,8 +996,8 @@ export default class ArenaScene extends Phaser.Scene {
         }
 
         const stopMovement = () => {
-            keys.clear()
-            pointerDown = false
+            pressedCodes.clear()
+            pressedMouse.clear()
             pendingShot = false
             pendingMelee = false
             pendingReload = false
@@ -863,24 +1036,19 @@ export default class ArenaScene extends Phaser.Scene {
             }
 
             if (!hasFocus() || event.repeat || this.isPaused) return
-            if (MOVEMENT_KEYS.has(event.code)) {
-                keys.add(event.code)
-            } else if (event.code === 'Space') {
+            if (
+                event.code === 'Space' ||
+                event.code.startsWith('Arrow') ||
+                event.code === this.pcControls.dash
+            ) {
                 event.preventDefault()
-                pendingDash = true
-                sendInput()
-            } else if (event.code === 'KeyR') {
-                pendingReload = true
-                sendInput()
-            } else if (event.code === 'Digit1' || event.code === 'Numpad1') {
-                this.controls.sendEmote?.('dots')
-            } else if (event.code === 'Digit2' || event.code === 'Numpad2') {
-                this.controls.sendEmote?.('alert')
             }
+            pressedCodes.add(event.code)
+            handleBindingPress(event.code)
         }
 
         const onKeyUp = (event: KeyboardEvent) => {
-            if (keys.delete(event.code) && hasFocus() && !this.isPaused) sendInput()
+            if (pressedCodes.delete(event.code) && hasFocus() && !this.isPaused) sendInput()
         }
 
         const onVisibilityChange = () => {
@@ -1083,15 +1251,26 @@ export default class ArenaScene extends Phaser.Scene {
                     weaponType === 'plasma'
                         ? 'shoot-b'
                         : weaponType === 'launcher'
-                          ? 'explosion-a'
+                          ? 'shoot-a'
                           : 'shoot-g'
-                this.playSound(shootSfx, weaponType === 'launcher' ? 0.4 : 0.35)
+                this.playSound(shootSfx, weaponType === 'launcher' ? 0.42 : 0.35)
                 this.maybeEjectShell(bullet, weaponType, isHeavy)
 
                 if (bullet.ownerId === this.controls.playerId) {
                     this.cameras.main.shake(60, 0.002)
                     this.pulseCrosshair()
                 }
+            }
+
+            if (weaponType === 'launcher') {
+                const trail = this.add.circle(bullet.x, bullet.y, 4, 0xfb923c, 0.55).setDepth(bullet.y + 1)
+                this.tweens.add({
+                    targets: trail,
+                    scale: 1.9,
+                    alpha: 0,
+                    duration: 140,
+                    onComplete: () => trail.destroy(),
+                })
             }
 
             sprite.setPosition(bullet.x, bullet.y)
@@ -1309,9 +1488,9 @@ export default class ArenaScene extends Phaser.Scene {
                 const currentReloading = Boolean(player.isReloading)
                 const currentAmmo = player.ammo ?? 0
 
-                if (currentHp < view.lastHp || currentShield < view.lastShield) {
+                if (currentHp < view.lastHp) {
                     this.playSound('hurt-a', 0.45)
-                    view.body.setTint(currentShield < view.lastShield && currentHp === view.lastHp ? 0x38bdf8 : 0xff4d4d)
+                    view.body.setTint(0xff4d4d)
                     this.time.delayedCall(120, () => {
                         if (view && view.body.scene) view.body.clearTint()
                     })
@@ -1428,12 +1607,12 @@ export default class ArenaScene extends Phaser.Scene {
             view.hpBarFill.setCrop(0, 0, Math.round(192 * hpRatio), 64)
 
             const shieldVal = player.shield ?? 0
+            const shieldProgress = Math.max(0, Math.min(1, player.shieldProgress ?? (shieldVal > 0 ? 1 : 0)))
             const goldenSec = player.goldenRemaining ?? 0
-            if (shieldVal > 0) {
-                const ratio = Math.max(0, Math.min(1, shieldVal / 100))
+            if (shieldVal > 0 && shieldProgress > 0) {
                 view.shieldBarBg.setVisible(true)
                 view.shieldBarFill.setVisible(true)
-                view.shieldBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * ratio), 5)
+                view.shieldBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * shieldProgress), 5)
                 view.shieldBarFill.setFillStyle(goldenSec > 0 ? 0xfacc15 : 0x38bdf8, 1)
             } else {
                 view.shieldBarBg.setVisible(false)
@@ -1509,7 +1688,6 @@ export default class ArenaScene extends Phaser.Scene {
         const endAngle = baseAngle + dir * Phaser.Math.DegToRad(75)
 
         if (isQuickMelee) {
-            // Render a brief swinging knife/axe sprite even while carrying a firearm.
             const quickSprite = this.add
                 .image(
                     view.root.x + Math.cos(attackAngle) * 16,

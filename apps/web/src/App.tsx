@@ -1,12 +1,20 @@
 import MatchResults, { type MatchResultRow } from './game/MatchResults'
 import ArenaHeader from './game/ArenaHeader'
 import MapPreview from './game/MapPreview'
+import KeybindingsModal from './game/KeybindingsModal'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
 import './game/arena-layout.css'
 import { neutralTouchInput } from './game/touchInput'
+import {
+  formatBindingLabel,
+  formatMoveGroupLabel,
+  loadPcControls,
+  savePcControls,
+  type PcControlConfig,
+} from './game/keybindings'
 import { supabase, validUsername, profileError, type Profile } from './auth/supabase'
 import ProfileAvatar from './auth/ProfileAvatar'
 import PhaserView from './game/PhaserView'
@@ -89,6 +97,7 @@ const WEAPON_OPTIONS = Object.values(weaponsConfig.weapons) as {
   cooldownMs: number
   reloadMs?: number
   damage: number
+  explosionRadius?: number
   rangePx?: number
   arcDeg?: number
   speed: number
@@ -153,6 +162,8 @@ function ArenaSession({
   playerSkin,
   playerWeapon,
   crosshairStyle,
+  pcControls,
+  onPcControlsChange,
   roomRequest,
   onExit,
   onSignOut,
@@ -162,6 +173,8 @@ function ArenaSession({
   playerSkin: PlayerSkin
   playerWeapon: WeaponType
   crosshairStyle: CrosshairStyle
+  pcControls: PcControlConfig
+  onPcControlsChange: (next: PcControlConfig) => void
   roomRequest: RoomJoinRequest
   onExit: () => void
   onSignOut: () => void
@@ -172,6 +185,7 @@ function ArenaSession({
   const [pickups, setPickups] = useState<PickupState[]>([])
   const [powerUps, setPowerUps] = useState<PowerUpState[]>([])
   const [localPaused, setLocalPaused] = useState(false)
+  const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [gamepadConnected, setGamepadConnected] = useState(false)
@@ -179,6 +193,7 @@ function ArenaSession({
   const shellRef = useRef<HTMLDivElement>(null)
   const touchInputRef = useRef<TouchInputState>(neutralTouchInput())
   const actionTriggerRef = useRef<((action: ArenaActionKind) => void) | null>(null)
+  const explosionTriggerRef = useRef<((x: number, y: number, radius: number) => void) | null>(null)
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [matchMeta, setMatchMeta] = useState<MatchMeta>({
@@ -219,6 +234,13 @@ function ArenaSession({
   const receiveTouchInput = useCallback((input: TouchInputState) => {
     const prev = touchInputRef.current
     touchInputRef.current = input
+    if (
+      input.autoAimShotSeq > prev.autoAimShotSeq ||
+      input.manualShotSeq > prev.manualShotSeq
+    ) {
+      actionTriggerRef.current?.('touchSync')
+      return
+    }
     const wasActive = prev.moveX !== 0 || prev.moveY !== 0 || prev.shoot
     if (wasActive && !input.moveX && !input.moveY && !input.shoot) {
       controls?.send({ moveX: 0, moveY: 0, aimAngle: input.aimAngle, shoot: false })
@@ -305,6 +327,21 @@ function ArenaSession({
           if (joined.connection.isOpen) joined.send('rematch')
         }
 
+        joined.onMessage<{ x?: unknown; y?: unknown; radius?: unknown }>('explosion', (payload) => {
+          if (
+            active &&
+            payload &&
+            typeof payload.x === 'number' &&
+            typeof payload.y === 'number' &&
+            typeof payload.radius === 'number' &&
+            Number.isFinite(payload.x) &&
+            Number.isFinite(payload.y) &&
+            Number.isFinite(payload.radius)
+          ) {
+            explosionTriggerRef.current?.(payload.x, payload.y, payload.radius)
+          }
+        })
+
         function syncState(state: ArenaState) {
           if (!active || !state || !state.roomCode) return
           if (state.players) {
@@ -371,6 +408,7 @@ function ArenaSession({
             touchInputRef.current = neutralTouchInput()
             if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
             setLocalPaused(paused)
+            if (!paused) setControlsModalOpen(false)
           },
         })
         setStatus('Conectado')
@@ -506,6 +544,7 @@ function ArenaSession({
   const localReloadProgress = localPlayer?.reloadProgress ?? 0
   const localDashes = localPlayer?.dashes ?? MAX_DASHES
   const localMaxDashes = localPlayer?.maxDashes ?? MAX_DASHES
+  const localDashRecharge = localPlayer?.dashRechargeProgress ?? 0
   const localShield = localPlayer?.shield ?? 0
   const localShieldSec = localPlayer?.shieldRemaining ?? 0
   const localGoldenSec = localPlayer?.goldenRemaining ?? 0
@@ -554,6 +593,14 @@ function ArenaSession({
         : matchMeta.winnerName
           ? `Ganador: ${matchMeta.winnerName}`
           : 'Partida interrumpida'
+
+  const reloadKeyLabel = formatBindingLabel(pcControls.reload)
+  const meleeKeyLabel = formatBindingLabel(pcControls.melee)
+  const dashKeyLabel = formatBindingLabel(pcControls.dash)
+  const shootKeyLabel = formatBindingLabel(pcControls.shoot)
+  const moveKeysLabel = formatMoveGroupLabel(pcControls)
+  const emote1KeyLabel = formatBindingLabel(pcControls.emote1)
+  const emote2KeyLabel = formatBindingLabel(pcControls.emote2)
 
   return (
     <div ref={shellRef} className={`arena-shell${touchMode ? ' is-touch-mode' : ''}`}>
@@ -635,10 +682,10 @@ function ArenaSession({
                     DORADO {localGoldenSec}s · Munición ∞
                   </span>
                 )}
-                {localShield > 0 && (
+                {localShield > 0 && localShieldSec > 0 && (
                   <span className="arena-status-pill is-shield">
                     <img src="/assets/ui/powerup-shield.svg" alt="" />
-                    Escudo {localShield} ({localShieldSec}s)
+                    Escudo {localShieldSec}s
                   </span>
                 )}
               </div>
@@ -660,11 +707,11 @@ function ArenaSession({
                             : needsReload
                               ? touchMode
                                 ? 'Pulsa REC'
-                                : 'Pulsa R para recargar'
+                                : `Pulsa ${reloadKeyLabel} para recargar`
                               : !isGolden && localAmmo === 0 && localReserveAmmo === 0
                                 ? touchMode
                                   ? 'Sin balas · Usa MELÉ'
-                                  : 'Sin balas · Click der. Melé'
+                                  : `Sin balas · ${meleeKeyLabel} Melé`
                                 : localWeaponSpec.name}
                         </small>
                         {localReloading && (
@@ -691,21 +738,49 @@ function ArenaSession({
 
                 <div
                   className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
-                  title={touchMode ? 'Dashes restantes' : 'Dash (Espacio)'}
+                  title={touchMode ? 'Dashes restantes (recarga 1 cada 10 s)' : `Dash (${dashKeyLabel}) · recarga 1 cada 10 s`}
                 >
                   <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
                   <div className="arena-dash-info">
                     <span className="arena-dash-label">
                       DASH {localDashes}/{localMaxDashes}
+                      {!touchMode && <kbd className="hud-kbd">{dashKeyLabel}</kbd>}
                     </span>
                     <span className="arena-dash-pips" aria-hidden="true">
                       {Array.from({ length: localMaxDashes }, (_, idx) => (
                         <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
                       ))}
                     </span>
+                    <span
+                      className="arena-dash-recharge-track"
+                      aria-label={
+                        localDashes < localMaxDashes
+                          ? `Recarga de dash ${Math.round(localDashRecharge * 100)}%`
+                          : 'Dashes completos'
+                      }
+                    >
+                      <span
+                        className={`arena-dash-recharge-fill${localDashes >= localMaxDashes ? ' is-full' : ''}`}
+                        style={{
+                          width: `${localDashes >= localMaxDashes ? 100 : Math.round(localDashRecharge * 100)}%`,
+                        }}
+                      />
+                    </span>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {controls && !touchMode && matchMeta.phase !== 'finished' && (
+            <div className="arena-pc-legend" aria-label="Leyenda de controles de PC">
+              <span><kbd>{moveKeysLabel}</kbd> Mover</span>
+              <span><kbd>{shootKeyLabel}</kbd> Disparar</span>
+              <span><kbd>{meleeKeyLabel}</kbd> Melé</span>
+              <span><kbd>{reloadKeyLabel}</kbd> Recargar</span>
+              <span><kbd>{dashKeyLabel}</kbd> Dash</span>
+              <span><kbd>{emote1KeyLabel}/{emote2KeyLabel}</kbd> Emotes</span>
+              <span><kbd>Esc</kbd> Menú</span>
             </div>
           )}
 
@@ -719,11 +794,13 @@ function ArenaSession({
               gameMode={matchMeta.gameMode}
               isPaused={localPaused}
               crosshairStyle={crosshairStyle}
+              pcControls={pcControls}
               mapSize={matchMeta.mapSize}
               environment={matchMeta.environment}
               touchMode={touchMode}
               touchInputRef={touchInputRef}
               actionTriggerRef={actionTriggerRef}
+              explosionTriggerRef={explosionTriggerRef}
               onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
               onGamepadChange={setGamepadConnected}
               resumeSignal={resumeSignal}
@@ -742,13 +819,14 @@ function ArenaSession({
             onDash={() => actionTriggerRef.current?.('dash')}
             dashes={localDashes}
             maxDashes={localMaxDashes}
+            dashRechargeProgress={localDashRecharge}
             canReload={canReload}
             isReloading={localReloading}
             needsReload={needsReload}
           />
         )}
 
-        {localPaused && matchMeta.phase !== 'finished' && (
+        {localPaused && matchMeta.phase !== 'finished' && !controlsModalOpen && (
           <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Menú personal">
             <div className="arena-pause-modal">
               <h2 className="arena-pause-title">MENÚ</h2>
@@ -766,12 +844,27 @@ function ArenaSession({
                 >
                   Continuar
                 </button>
+                <button
+                  type="button"
+                  className="kenney-btn-secondary"
+                  onClick={() => setControlsModalOpen(true)}
+                >
+                  Configurar controles PC
+                </button>
                 <button type="button" className="kenney-btn-secondary" onClick={onExit}>
                   Salir de la arena
                 </button>
               </div>
             </div>
           </div>
+        )}
+
+        {localPaused && controlsModalOpen && matchMeta.phase !== 'finished' && (
+          <KeybindingsModal
+            controls={pcControls}
+            onChange={onPcControlsChange}
+            onClose={() => setControlsModalOpen(false)}
+          />
         )}
 
         {matchMeta.phase === 'finished' && (
@@ -807,6 +900,8 @@ export default function App({
   const [skin, setSkin] = useState<PlayerSkin>(profile.preferred_skin)
   const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>(profile.preferred_weapon)
   const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>(profile.crosshair_style)
+  const [pcControls, setPcControls] = useState<PcControlConfig>(() => loadPcControls())
+  const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [rankingsOpen, setRankingsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
@@ -825,6 +920,11 @@ export default function App({
   const [roomsError, setRoomsError] = useState('')
 
   const [entryMessage, setEntryMessage] = useState('')
+
+  const updatePcControls = useCallback((next: PcControlConfig) => {
+    setPcControls(next)
+    savePcControls(next)
+  }, [])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -919,6 +1019,8 @@ export default function App({
         playerSkin={skin}
         playerWeapon={selectedWeapon}
         crosshairStyle={crosshairStyle}
+        pcControls={pcControls}
+        onPcControlsChange={updatePcControls}
         roomRequest={roomRequest}
         onExit={() => returnToForm('')}
         onSignOut={onSignOut}
@@ -1014,7 +1116,9 @@ export default function App({
                   <span className="weapon-stats">
                     {weapon.isMelee
                       ? `${weapon.damage} dmg · ${weapon.rangePx ?? 60}px · Melé`
-                      : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo}×2`}
+                      : weapon.explosionRadius
+                        ? `${weapon.damage} área · ${weapon.maxAmmo}×2`
+                        : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo}×2`}
                   </span>
                 </button>
               ))}
@@ -1053,6 +1157,9 @@ export default function App({
             <div className="profile-actions">
               <button type="submit" disabled={!validUsername(profile.username ?? '') || saving}>
                 {saving ? 'Guardando…' : 'Guardar preferencias'}
+              </button>
+              <button type="button" onClick={() => setControlsModalOpen(true)}>
+                Configurar controles PC
               </button>
             </div>
           </fieldset>
@@ -1244,11 +1351,41 @@ export default function App({
           </div>
         </section>
 
-        <p className="auth-hint" style={{ marginTop: 14 }}>
-          Controles PC: WASD mover · Clic izq. disparar · Clic der. melé · R recargar · Espacio dash (5 por partida).
-          Móvil: joysticks + botones DISPARO/MELÉ/REC/DASH. Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
-        </p>
+        <section className="pc-controls-summary" aria-label="Guía de controles">
+          <div className="pc-controls-summary-head">
+            <strong>Controles de PC activos</strong>
+            <button
+              type="button"
+              className="auth-text-button"
+              style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
+              onClick={() => setControlsModalOpen(true)}
+            >
+              Personalizar
+            </button>
+          </div>
+          <div className="pc-controls-chips">
+            <span><kbd>{formatMoveGroupLabel(pcControls)}</kbd> Mover</span>
+            <span><kbd>{formatBindingLabel(pcControls.shoot)}</kbd> Disparar</span>
+            <span><kbd>{formatBindingLabel(pcControls.melee)}</kbd> Melé</span>
+            <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
+            <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
+            <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
+            <span><kbd>Esc</kbd> Menú</span>
+          </div>
+          <p className="auth-hint" style={{ marginTop: 8 }}>
+            Móvil: joystick izquierdo para mover; botón de disparo tipo Brawl Stars (pulsa para autoapuntado, arrastra para manual) + botones MELÉ, REC y DASH.
+            Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
+          </p>
+        </section>
       </div>
+
+      {controlsModalOpen && (
+        <KeybindingsModal
+          controls={pcControls}
+          onChange={updatePcControls}
+          onClose={() => setControlsModalOpen(false)}
+        />
+      )}
     </main>
   )
 }

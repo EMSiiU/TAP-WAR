@@ -11,10 +11,10 @@ Actualizado el 25 de noviembre de 2026. Este documento resume el alcance impleme
 | Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa en todos los tamaños |
 | Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor |
 | Geometría de mapas | Catálogo compartido para arte y colisiones; spawns de jugadores, armas, power-ups y punto dorado verificados y conectados |
-| Controles | PC (WASD, clic izq. disparar, clic der. melé rápido, `R` recargar, `Espacio` dash), móvil/tablet (joysticks táctiles + botones `DISPARO`, `MELÉ`, `REC` y `DASH` + pantalla completa) y mandos USB/Bluetooth (Gamepad API) |
-| Arena | Movimiento analógico/digital, dash (5 por partida, tope de 5), colisiones (incluyendo raycast continuo de proyectiles), pickups y combate autoritativos por mapa |
-| Combate | Diez armas (`sniper = 100` daño, `axe = 90` daño), melé rápido incluso con arma de fuego equipada, cargador extra + recarga manual con `R`, daño, bajas y reaparición |
-| Power-Ups | Apariciones periódicas de cargadores, botiquines (+50 HP), escudos temporales (10 s), recargas de dash (+1 hasta 5) y Power-Up Dorado único por partida cerca del final (resaltado en minimapa; 100 HP, escudo y munición infinita por 15 s) |
+| Controles | PC configurables desde lobby y menú `Esc` con leyenda visible de cada botón; móvil/tablet con control de disparo estilo Brawl Stars (toque/mantener = autoapuntado, arrastrar = apuntado manual) + botones `MELÉ`, `REC` y `DASH`; mandos USB/Bluetooth (Gamepad API) |
+| Arena | Movimiento analógico/digital, dash (hasta 5 cargas, recarga automática de 1 cada 10 s con barra inferior de progreso), colisiones (incluyendo raycast continuo de proyectiles), spawns aleatorios escalados por jugadores y combate autoritativo |
+| Combate | Diez armas (`sniper = 100`, `axe = 90`, `launcher` con explosión animada, radio de `128 px` y daño por distancia), melé rápido incluso con arma de fuego equipada, cargador extra + recarga manual, daño, bajas y reaparición |
+| Power-Ups | Apariciones aleatorias libres de obstáculos (más frecuentes con más jugadores): cargadores, botiquines (+50 HP), escudos temporales de 10 s (no se quitan con disparos, solo al expirar), recargas de dash (+1 hasta 5) y Power-Up Dorado único por partida cerca del final (resaltado en minimapa; 100 HP, escudo y munición infinita por 15 s) |
 | Partida | Inicio manual del anfitrión con dos participantes, entrada en curso habilitada, 300 segundos o meta del modo; empate, abandono, resultados y revancha; menú personal sin pausa global |
 | Acceso | Registro/login por correo y contraseña, Google y restauración de sesión; contraseña de al menos 8 caracteres |
 | Perfil inicial | Elección obligatoria de username después de autenticar y antes del lobby |
@@ -33,9 +33,9 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 31 pruebas correctas de perfil/foto, URL, Gamepad (incluyendo melé/recarga/dash), modos de juego, mapas y entrada táctil |
+| Cliente: npm test | 36 pruebas correctas de perfil/foto, URL, Gamepad, controles PC configurables, autoapuntado, modos de juego, mapas y entrada táctil estilo Brawl Stars |
 | Cliente: npm run build | TypeScript y compilación de producción correctos |
-| Servidor: npm test | 53 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, dash, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
+| Servidor: npm test | 56 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, escudo por tiempo, explosiones con radio de lanzagranadas, spawns aleatorios escalados, dash con recarga cada 10 s, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
 | Colyseus real en desarrollo | /health respondió 200; name/userId inventados sin token fueron rechazados con AUTH_FAILED |
 | Perfiles en Supabase | Tabla, RLS, dos políticas, trigger e índice único comprobados; creación automática de perfil confirmada |

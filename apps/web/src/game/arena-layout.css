@@ -58,11 +58,35 @@
   touch-action: none;
   max-width: 100%;
 }
-.arena-shell .touch-action-btn.is-dash { width: 100%; border-color: #38bdf8; color: #bae6fd; }
-.arena-shell .touch-action-btn.is-dash.is-depleted { border-color: #64748b; color: #94a3b8; opacity: 0.55; }
+.arena-shell .touch-action-btn.is-dash {
+  width: 100%;
+  flex-direction: column;
+  gap: 3px;
+  border-color: #38bdf8;
+  color: #bae6fd;
+}
+.arena-shell .touch-dash-top { display: inline-flex; align-items: center; gap: 4px; }
+.arena-shell .touch-dash-recharge-track {
+  display: block;
+  width: 82%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.32);
+  overflow: hidden;
+}
+.arena-shell .touch-dash-recharge-fill {
+  display: block;
+  height: 100%;
+  background: #fbbf24;
+}
+.arena-shell .touch-action-btn.is-dash.is-depleted { border-color: #64748b; color: #94a3b8; opacity: 0.7; }
 .arena-shell .touch-action-btn.is-melee { border-color: #fb923c; color: #ffedd5; }
 .arena-shell .touch-action-btn.is-reload { border-color: #fbbf24; color: #fef3c7; }
 .arena-shell .touch-action-btn.is-reload.is-highlight { background: #b45309; border-color: #fef08a; color: #ffffff; }
+.arena-shell .touch-stick-aim.is-brawl { border-color: rgba(239, 68, 68, 0.92); background: rgba(127, 29, 29, 0.45); }
+.arena-shell .touch-stick-aim.is-auto { border-color: #facc15; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.4); }
+.arena-shell .touch-stick-aim.is-manual { border-color: #fb923c; box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.45); }
+.arena-shell .touch-stick-aim.is-cancel { border-color: #94a3b8; opacity: 0.72; }
 @media (orientation: landscape) {
   .arena-shell .has-touch-controls .arena-waiting-banner {
     width: calc(100% - var(--touch-rail-width) * 2 - 24px); max-width: 620px;

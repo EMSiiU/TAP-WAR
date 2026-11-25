@@ -11,6 +11,7 @@ import ArenaScene, {
   type PowerUpState,
 } from './ArenaScene'
 import type { GameMode, MapEnvironment, MapSize } from './arenaMaps'
+import type { PcControlConfig } from './keybindings'
 import type { TouchInputState } from './TouchControls'
 import arena from '../../../../packages/shared/arena.json'
 
@@ -23,11 +24,13 @@ type PhaserViewProps = {
   gameMode: GameMode
   isPaused: boolean
   crosshairStyle: CrosshairStyle
+  pcControls: PcControlConfig
   mapSize: MapSize
   environment: MapEnvironment
   touchMode: boolean
   touchInputRef: React.RefObject<TouchInputState>
   actionTriggerRef?: React.RefObject<((action: ArenaActionKind) => void) | null>
+  explosionTriggerRef?: React.RefObject<((x: number, y: number, radius: number) => void) | null>
   onMenuToggle?: () => void
   onGamepadChange?: (connected: boolean) => void
   resumeSignal: number
@@ -43,11 +46,13 @@ export default function PhaserView({
   gameMode,
   isPaused,
   crosshairStyle,
+  pcControls,
   mapSize,
   environment,
   touchMode,
   touchInputRef,
   actionTriggerRef,
+  explosionTriggerRef,
   onMenuToggle,
   onGamepadChange,
   resumeSignal,
@@ -63,6 +68,7 @@ export default function PhaserView({
   const latestGameModeRef = useRef(gameMode)
   const latestPausedRef = useRef(isPaused)
   const latestCrosshairRef = useRef(crosshairStyle)
+  const latestPcControlsRef = useRef(pcControls)
   const latestTouchModeRef = useRef(touchMode)
   const onMenuToggleRef = useRef(onMenuToggle)
   const onGamepadChangeRef = useRef(onGamepadChange)
@@ -116,6 +122,11 @@ export default function PhaserView({
   }, [crosshairStyle])
 
   useEffect(() => {
+    latestPcControlsRef.current = pcControls
+    sceneRef.current?.setPcControls(pcControls)
+  }, [pcControls])
+
+  useEffect(() => {
     latestTouchModeRef.current = touchMode
     sceneRef.current?.setTouchMode(touchMode)
   }, [touchMode])
@@ -141,9 +152,13 @@ export default function PhaserView({
     scene.setGameMode(latestGameModeRef.current)
     scene.setPaused(latestPausedRef.current)
     scene.setCrosshairStyle(latestCrosshairRef.current)
+    scene.setPcControls(latestPcControlsRef.current)
     sceneRef.current = scene
     if (actionTriggerRef) {
       actionTriggerRef.current = (action) => scene.triggerAction(action)
+    }
+    if (explosionTriggerRef) {
+      explosionTriggerRef.current = (x, y, radius) => scene.triggerExplosion(x, y, radius)
     }
 
     let game: Phaser.Game | undefined
@@ -178,13 +193,14 @@ export default function PhaserView({
 
     return () => {
       if (actionTriggerRef) actionTriggerRef.current = null
+      if (explosionTriggerRef) explosionTriggerRef.current = null
       sceneRef.current = null
       active = false
       resizeObserver?.disconnect()
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls, mapSize, environment, touchInputRef, actionTriggerRef])
+  }, [controls, mapSize, environment, touchInputRef, actionTriggerRef, explosionTriggerRef])
 
   useEffect(() => {
     if (resumeSignal > 0) {
