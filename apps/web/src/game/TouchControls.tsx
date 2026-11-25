@@ -32,13 +32,15 @@ export default function TouchControls({
   const moveKnob = useRef<HTMLDivElement>(null)
   const aimKnob = useRef<HTMLDivElement>(null)
   const publish = useRef(onTouchInput)
+  const captures = useRef(new Map<number, HTMLElement>())
+  const controller = useRef<TouchInputController | null>(null)
+
   useEffect(() => {
     publish.current = onTouchInput
   }, [onTouchInput])
-  const captures = useRef(new Map<number, HTMLElement>())
-  const controller = useRef<TouchInputController | null>(null)
+
   const getController = useCallback(() => {
-    if (controller.current == null) {
+    if (!controller.current) {
       controller.current = new TouchInputController((input) => publish.current(input))
     }
     return controller.current
