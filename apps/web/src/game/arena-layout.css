@@ -1,5 +1,4 @@
-/* The viewport is a separate size container: its area excludes the header,
-   safe areas and control rails. No viewport-height guesses are necessary. */
+/* The viewport is a separate size container so full-stage touch overlays fit cleanly. */
 .arena-shell { box-sizing: border-box; }
 .arena-shell.is-touch-mode { padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 .arena-shell .arena-stage { min-width: 0; min-height: 0; }
@@ -9,18 +8,32 @@
   max-width: 100%; max-height: 100%; aspect-ratio: 4 / 3;
 }
 .arena-shell .arena-stage.has-touch-controls {
-  --touch-rail-width: clamp(88px, 14vw, 132px);
-  display: grid; grid-template-areas: 'left arena right';
-  grid-template-columns: var(--touch-rail-width) minmax(0, 1fr) var(--touch-rail-width);
-  grid-template-rows: minmax(0, 1fr); align-items: stretch; gap: 8px; padding: 4px;
+  display: grid;
+  grid-template-areas: 'arena';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  padding: 4px;
 }
-.arena-shell .touch-rail {
-  width: 100%; height: 100%; min-width: 0; min-height: 0; max-height: 100%;
-  box-sizing: border-box; padding: 4px; gap: 6px; align-self: stretch;
-  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+.arena-shell .arena-waiting-banner,
+.arena-shell .arena-announcement-banner { z-index: 22; }
+.arena-shell .touch-overlay-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.arena-shell .touch-draggable-slot {
+  position: absolute;
+  pointer-events: auto;
+  touch-action: none;
+  transform-origin: center center;
 }
 .arena-shell .touch-stick {
-  --touch-stick-size: max(56px, min(112px, calc(100cqh - 100px), calc(var(--touch-rail-width) - 8px)));
+  --touch-stick-size: clamp(78px, min(16vw, 24vh), 112px);
   box-sizing: border-box; width: var(--touch-stick-size); height: var(--touch-stick-size);
   max-width: 100%; aspect-ratio: 1; flex: 0 0 auto;
 }
@@ -29,23 +42,18 @@
   height: clamp(28px, calc(var(--touch-stick-size) * .4), 44px); flex: 0 0 auto;
 }
 .arena-shell .touch-stick-label { font-size: 11px; bottom: 3px; letter-spacing: .3px; }
-.arena-shell .touch-left-cluster,
-.arena-shell .touch-right-cluster { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 0 0 auto; width: 100%; }
-.arena-shell .touch-combat-buttons { display: flex; flex-direction: column; gap: 5px; width: 100%; align-items: center; }
-.arena-shell .touch-secondary-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; width: 100%; }
-.arena-shell .touch-rail-actions { gap: 4px; flex: 0 0 auto; }
-.arena-shell .touch-pill-btn { box-sizing: border-box; min-height: 32px; padding: 4px 9px; font-size: 13px; }
-.arena-shell .touch-emote-icon { display: block; width: 24px; height: 24px; image-rendering: pixelated; pointer-events: none; }
+.arena-shell .touch-rail-actions { display: flex; gap: 6px; align-items: center; }
+.arena-shell .touch-pill-btn { box-sizing: border-box; min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.arena-shell .touch-emote-icon { display: block; width: 22px; height: 22px; image-rendering: pixelated; pointer-events: none; }
 .arena-shell .touch-btn-icon { display: inline-block; width: 16px; height: 16px; image-rendering: pixelated; pointer-events: none; }
-.arena-shell .touch-fire-btn { box-sizing: border-box; width: 100%; min-height: 32px; padding: 5px 8px; font-size: 12px; max-width: 100%; }
 .arena-shell .touch-action-btn {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 30px;
-  padding: 4px 6px;
+  min-height: 34px;
+  padding: 5px 10px;
   border-radius: 999px;
   border: 2px solid #f5e2cb;
   background: rgba(36, 25, 50, 0.88);
@@ -56,12 +64,17 @@
   cursor: pointer;
   pointer-events: auto;
   touch-action: none;
-  max-width: 100%;
+  white-space: nowrap;
+}
+.arena-shell .touch-action-btn.is-round-action {
+  min-width: 54px;
+  min-height: 40px;
+  padding: 6px 12px;
 }
 .arena-shell .touch-action-btn.is-dash {
-  width: 100%;
   flex-direction: column;
   gap: 3px;
+  min-width: 88px;
   border-color: #38bdf8;
   color: #bae6fd;
 }
@@ -103,18 +116,38 @@
   border-color: #f87171;
   background: rgba(239, 68, 68, 0.25);
 }
+.arena-shell.is-touch-mode .arena-hud-bottom {
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  align-items: center;
+}
 @media (orientation: landscape) {
   .arena-shell .has-touch-controls .arena-waiting-banner {
-    width: calc(100% - var(--touch-rail-width) * 2 - 24px); max-width: 620px;
-    box-sizing: border-box; padding: 6px 8px; top: 8px; border-radius: 8px; font-size: 12px;
+    width: min(92%, 620px);
+    box-sizing: border-box; padding: 6px 10px; top: 8px; border-radius: 8px; font-size: 12px;
   }
 }
 @media (orientation: portrait) {
   .arena-shell .arena-stage.has-touch-controls {
-    grid-template-areas: 'arena arena' 'left right'; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-    grid-template-rows: minmax(0,1fr) auto; gap: 6px;
+    grid-template-areas: 'arena';
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 58% 1fr;
   }
-  .arena-shell .touch-rail { height: auto; max-height: none; justify-content: flex-end; }
+  .arena-shell .arena-stage.has-touch-controls .arena-viewport {
+    height: 100%;
+    align-self: stretch;
+  }
+  .arena-shell .touch-stick {
+    --touch-stick-size: clamp(74px, 21vw, 108px);
+  }
+  .arena-shell.is-touch-mode .arena-hud-bottom {
+    top: 6px;
+    bottom: auto;
+    left: 6px;
+    transform: none;
+    align-items: flex-start;
+  }
 }
 @media (max-height: 540px) and (orientation: landscape) {
   .arena-shell.is-touch-mode .arena-header {

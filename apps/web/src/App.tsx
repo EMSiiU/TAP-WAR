@@ -2,18 +2,29 @@ import MatchResults, { type MatchResultRow } from './game/MatchResults'
 import ArenaHeader from './game/ArenaHeader'
 import MapPreview from './game/MapPreview'
 import KeybindingsModal from './game/KeybindingsModal'
+import TouchLayoutEditorModal from './game/TouchLayoutEditorModal'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
 import './game/arena-layout.css'
 import { neutralTouchInput } from './game/touchInput'
+import {
+  controlsSyncMessage,
+  loadAccountDeviceControls,
+  saveAccountDeviceControls,
+  type ControlsSyncStatus,
+} from './game/controlsSync'
+import { getOrCreateDeviceIdentity, type DeviceIdentity } from './game/deviceIdentity'
 import { detectDefaultTouchMode } from './game/deviceInput'
+import {
+  loadLocalTouchLayouts,
+  type TouchLayoutByOrientation,
+} from './game/touchLayout'
 import {
   formatBindingLabel,
   formatMoveGroupLabel,
   loadPcControls,
-  savePcControls,
   type PcControlConfig,
 } from './game/keybindings'
 import { supabase, validUsername, profileError, type Profile } from './auth/supabase'
@@ -160,6 +171,10 @@ function ArenaSession({
   crosshairStyle,
   pcControls,
   onPcControlsChange,
+  touchLayouts,
+  onTouchLayoutsChange,
+  deviceLabel,
+  controlsSyncStatus,
   roomRequest,
   onExit,
   onSignOut,
@@ -171,6 +186,10 @@ function ArenaSession({
   crosshairStyle: CrosshairStyle
   pcControls: PcControlConfig
   onPcControlsChange: (next: PcControlConfig) => void
+  touchLayouts: TouchLayoutByOrientation
+  onTouchLayoutsChange: (next: TouchLayoutByOrientation) => void
+  deviceLabel: string
+  controlsSyncStatus: ControlsSyncStatus
   roomRequest: RoomJoinRequest
   onExit: () => void
   onSignOut: () => void
@@ -182,6 +201,7 @@ function ArenaSession({
   const [powerUps, setPowerUps] = useState<PowerUpState[]>([])
   const [localPaused, setLocalPaused] = useState(false)
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
+  const [touchEditorOpen, setTouchEditorOpen] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [gamepadConnected, setGamepadConnected] = useState(false)
@@ -404,7 +424,10 @@ function ArenaSession({
             touchInputRef.current = neutralTouchInput()
             if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
             setLocalPaused(paused)
-            if (!paused) setControlsModalOpen(false)
+            if (!paused) {
+              setControlsModalOpen(false)
+              setTouchEditorOpen(false)
+            }
           },
         })
         setStatus('Conectado')
@@ -807,6 +830,7 @@ function ArenaSession({
 
         {showTouchControls && controls && (
           <TouchControls
+            layout={touchLayouts}
             onTouchInput={receiveTouchInput}
             onEmote={(emote) => controls.sendEmote?.(emote)}
             onMenu={() => { resetTouchInput(); setLocalPaused(true) }}
@@ -822,7 +846,7 @@ function ArenaSession({
           />
         )}
 
-        {localPaused && matchMeta.phase !== 'finished' && !controlsModalOpen && (
+        {localPaused && matchMeta.phase !== 'finished' && !controlsModalOpen && !touchEditorOpen && (
           <div className="arena-results-overlay" role="dialog" aria-modal="true" aria-label="Menú personal">
             <div className="arena-pause-modal">
               <h2 className="arena-pause-title">MENÚ</h2>
@@ -846,6 +870,13 @@ function ArenaSession({
                   onClick={() => setControlsModalOpen(true)}
                 >
                   Configurar controles PC
+                </button>
+                <button
+                  type="button"
+                  className="kenney-btn-secondary"
+                  onClick={() => setTouchEditorOpen(true)}
+                >
+                  Personalizar controles táctiles
                 </button>
                 <button type="button" className="kenney-btn-secondary" onClick={onExit}>
                   Salir de la arena
@@ -872,8 +903,20 @@ function ArenaSession({
       {localPaused && controlsModalOpen && matchMeta.phase !== 'finished' && (
         <KeybindingsModal
           controls={pcControls}
+          deviceLabel={deviceLabel}
+          syncStatus={controlsSyncStatus}
           onChange={onPcControlsChange}
           onClose={() => setControlsModalOpen(false)}
+        />
+      )}
+
+      {localPaused && touchEditorOpen && matchMeta.phase !== 'finished' && (
+        <TouchLayoutEditorModal
+          layouts={touchLayouts}
+          deviceLabel={deviceLabel}
+          syncStatus={controlsSyncStatus}
+          onSave={onTouchLayoutsChange}
+          onClose={() => setTouchEditorOpen(false)}
         />
       )}
     </div>
@@ -896,14 +939,23 @@ export default function App({
   const [skin, setSkin] = useState<PlayerSkin>(profile.preferred_skin)
   const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>(profile.preferred_weapon)
   const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>(profile.crosshair_style)
-  const [pcControls, setPcControls] = useState<PcControlConfig>(() => loadPcControls())
+  const [deviceIdentity] = useState<DeviceIdentity>(() => getOrCreateDeviceIdentity())
+  const [pcControls, setPcControls] = useState<PcControlConfig>(() => loadPcControls(undefined, profile.id))
+  const [touchLayouts, setTouchLayouts] = useState<TouchLayoutByOrientation>(() =>
+    loadLocalTouchLayouts(profile.id),
+  )
+  const [controlsSyncStatus, setControlsSyncStatus] = useState<ControlsSyncStatus>('local')
   const [defaultTouchOnDevice] = useState<boolean>(() => detectDefaultTouchMode())
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
+  const [touchEditorOpen, setTouchEditorOpen] = useState(false)
   const [rankingsOpen, setRankingsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedMessage, setSavedMessage] = useState('')
   const [playerName, setPlayerName] = useState<string | null>(null)
   const [roomRequest, setRoomRequest] = useState<RoomJoinRequest | null>(null)
+  const latestPcControlsRef = useRef(pcControls)
+  const latestTouchLayoutsRef = useRef(touchLayouts)
+  const dirtyControlsRef = useRef(false)
 
   const [createGameMode, setCreateGameMode] = useState<GameMode>('ffa')
   const [createEnvironment, setCreateEnvironment] = useState<MapEnvironment>('desert')
@@ -918,10 +970,60 @@ export default function App({
 
   const [entryMessage, setEntryMessage] = useState('')
 
-  const updatePcControls = useCallback((next: PcControlConfig) => {
-    setPcControls(next)
-    savePcControls(next)
-  }, [])
+  useEffect(() => {
+    let active = true
+    void loadAccountDeviceControls({
+      client: supabase,
+      accountId: profile.id,
+      identity: deviceIdentity,
+    }).then((result) => {
+      if (!active || dirtyControlsRef.current) return
+      latestPcControlsRef.current = result.pcControls
+      latestTouchLayoutsRef.current = result.touchLayouts
+      setPcControls(result.pcControls)
+      setTouchLayouts(result.touchLayouts)
+      setControlsSyncStatus(result.syncStatus)
+    })
+    return () => {
+      active = false
+    }
+  }, [profile.id, deviceIdentity])
+
+  const updatePcControls = useCallback(
+    (next: PcControlConfig) => {
+      dirtyControlsRef.current = true
+      latestPcControlsRef.current = next
+      setPcControls(next)
+      void saveAccountDeviceControls({
+        client: supabase,
+        accountId: profile.id,
+        identity: deviceIdentity,
+        pcControls: next,
+        touchLayouts: latestTouchLayoutsRef.current,
+      }).then((nextStatus) => {
+        setControlsSyncStatus(nextStatus)
+      })
+    },
+    [profile.id, deviceIdentity],
+  )
+
+  const updateTouchLayouts = useCallback(
+    (next: TouchLayoutByOrientation) => {
+      dirtyControlsRef.current = true
+      latestTouchLayoutsRef.current = next
+      setTouchLayouts(next)
+      void saveAccountDeviceControls({
+        client: supabase,
+        accountId: profile.id,
+        identity: deviceIdentity,
+        pcControls: latestPcControlsRef.current,
+        touchLayouts: next,
+      }).then((nextStatus) => {
+        setControlsSyncStatus(nextStatus)
+      })
+    },
+    [profile.id, deviceIdentity],
+  )
 
   useEffect(() => {
     const controller = new AbortController()
@@ -1018,6 +1120,10 @@ export default function App({
         crosshairStyle={crosshairStyle}
         pcControls={pcControls}
         onPcControlsChange={updatePcControls}
+        touchLayouts={touchLayouts}
+        onTouchLayoutsChange={updateTouchLayouts}
+        deviceLabel={deviceIdentity.deviceLabel}
+        controlsSyncStatus={controlsSyncStatus}
         roomRequest={roomRequest}
         onExit={() => returnToForm('')}
         onSignOut={onSignOut}
@@ -1167,7 +1273,10 @@ export default function App({
                     {saving ? 'Guardando…' : 'Guardar preferencias'}
                   </button>
                   <button type="button" onClick={() => setControlsModalOpen(true)}>
-                    Configurar controles PC
+                    Controles PC
+                  </button>
+                  <button type="button" onClick={() => setTouchEditorOpen(true)}>
+                    Personalizar táctil
                   </button>
                 </div>
               </fieldset>
@@ -1362,18 +1471,28 @@ export default function App({
 
           <section className="pc-controls-summary lobby-controls-panel" aria-label="Guía de controles">
             <div className="pc-controls-summary-head">
-              <strong>Controles de PC activos</strong>
+              <strong>Controles activos</strong>
               <span className="device-default-pill">
-                Predeterminado aquí: {defaultTouchOnDevice ? 'Controles táctiles' : 'Teclado y ratón'}
+                {deviceIdentity.deviceLabel} · {defaultTouchOnDevice ? 'Táctil por defecto' : 'Teclado y ratón'}
               </span>
-              <button
-                type="button"
-                className="auth-text-button"
-                style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
-                onClick={() => setControlsModalOpen(true)}
-              >
-                Personalizar
-              </button>
+              <div className="pc-controls-summary-buttons">
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => setControlsModalOpen(true)}
+                >
+                  Controles PC
+                </button>
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
+                  onClick={() => setTouchEditorOpen(true)}
+                >
+                  Táctil
+                </button>
+              </div>
             </div>
             <div className="pc-controls-chips">
               <span><kbd>{formatMoveGroupLabel(pcControls)}</kbd> Mover</span>
@@ -1385,8 +1504,8 @@ export default function App({
               <span><kbd>Esc</kbd> Menú</span>
             </div>
             <p className="auth-hint" style={{ marginTop: 8 }}>
-              Móvil / Tablet (táctil por defecto; alternable en partida con «Táctil»): joystick izquierdo para mover; botón de disparo tipo Brawl Stars (pulsa para autoapuntado, arrastra para manual) + botones MELÉ, REC y DASH.
-              PC / Laptop con pantalla táctil usa teclado y ratón por defecto. Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
+              Móvil / Tablet: joystick izquierdo; disparo estilo Brawl Stars con deadzone + botones DASH, MELÉ y REC a la derecha, reposicionables a tu gusto.{' '}
+              {controlsSyncMessage(controlsSyncStatus, deviceIdentity.deviceLabel)}
             </p>
           </section>
         </div>
@@ -1395,8 +1514,20 @@ export default function App({
       {controlsModalOpen && (
         <KeybindingsModal
           controls={pcControls}
+          deviceLabel={deviceIdentity.deviceLabel}
+          syncStatus={controlsSyncStatus}
           onChange={updatePcControls}
           onClose={() => setControlsModalOpen(false)}
+        />
+      )}
+
+      {touchEditorOpen && (
+        <TouchLayoutEditorModal
+          layouts={touchLayouts}
+          deviceLabel={deviceIdentity.deviceLabel}
+          syncStatus={controlsSyncStatus}
+          onSave={updateTouchLayouts}
+          onClose={() => setTouchEditorOpen(false)}
         />
       )}
     </main>
