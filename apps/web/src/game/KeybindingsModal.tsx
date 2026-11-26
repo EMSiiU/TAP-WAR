@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { controlsSyncMessage, type ControlsSyncStatus } from './controlsSync'
 import {
   DEFAULT_PC_CONTROLS,
   PC_CONTROL_LABELS,
@@ -11,12 +12,16 @@ import {
 
 type KeybindingsModalProps = {
   controls: PcControlConfig
+  deviceLabel?: string
+  syncStatus?: ControlsSyncStatus
   onChange: (next: PcControlConfig) => void
   onClose: () => void
 }
 
 export default function KeybindingsModal({
   controls,
+  deviceLabel = 'PC',
+  syncStatus = 'local',
   onChange,
   onClose,
 }: KeybindingsModalProps) {
@@ -152,7 +157,7 @@ export default function KeybindingsModal({
 
         <div className="keybindings-footer">
           <p className="keybindings-storage-note">
-            Se guardan automáticamente en este navegador (<code>localStorage</code>).
+            {controlsSyncMessage(syncStatus, deviceLabel)}
           </p>
           <div className="keybindings-actions">
             <button

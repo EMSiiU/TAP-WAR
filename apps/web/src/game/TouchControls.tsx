@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   AIM_CANCEL_EXIT_PX,
   AIM_DRAG_ENTER_PX,
@@ -9,11 +16,17 @@ import {
   type TouchControl,
   type TouchInputState,
 } from './touchInput'
+import {
+  DEFAULT_TOUCH_LAYOUTS,
+  type TouchControlSlotId,
+  type TouchLayoutByOrientation,
+} from './touchLayout'
 export type { TouchInputState } from './touchInput'
 
 const AUTO_HOLD_DELAY_MS = 210
 
 type TouchControlsProps = {
+  layout?: TouchLayoutByOrientation
   onTouchInput: (input: TouchInputState) => void
   onEmote: (emote: 'dots' | 'alert') => void
   onMenu: () => void
@@ -28,7 +41,14 @@ type TouchControlsProps = {
   needsReload: boolean
 }
 
+function readIsPortrait(): boolean {
+  if (typeof window === 'undefined') return false
+  if (window.matchMedia?.('(orientation: portrait)')?.matches) return true
+  return window.innerHeight > window.innerWidth
+}
+
 export default function TouchControls({
+  layout = DEFAULT_TOUCH_LAYOUTS,
   onTouchInput,
   onEmote,
   onMenu,
@@ -51,10 +71,21 @@ export default function TouchControls({
   const aimOriginRef = useRef<{ x: number; y: number } | null>(null)
   const aimDraggedRef = useRef(false)
   const [aimHint, setAimHint] = useState<'idle' | 'auto' | 'manual' | 'cancel'>('idle')
+  const [isPortrait, setIsPortrait] = useState<boolean>(() => readIsPortrait())
 
   useEffect(() => {
     publish.current = onTouchInput
   }, [onTouchInput])
+
+  useEffect(() => {
+    const syncOrientation = () => setIsPortrait(readIsPortrait())
+    window.addEventListener('resize', syncOrientation)
+    window.addEventListener('orientationchange', syncOrientation)
+    return () => {
+      window.removeEventListener('resize', syncOrientation)
+      window.removeEventListener('orientationchange', syncOrientation)
+    }
+  }, [])
 
   const clearAutoHold = useCallback(() => {
     if (autoHoldTimer.current !== null) {
@@ -202,6 +233,16 @@ export default function TouchControls({
     action()
   }
 
+  const activeSlots = isPortrait ? layout.portrait : layout.landscape
+  function slotStyle(id: TouchControlSlotId): CSSProperties {
+    const slot = activeSlots[id]
+    return {
+      left: `${slot.x * 100}%`,
+      top: `${slot.y * 100}%`,
+      transform: `translate(-50%, -50%) scale(${slot.scale})`,
+    }
+  }
+
   const aimPadLabel =
     aimHint === 'auto'
       ? 'AUTO'
@@ -212,118 +253,123 @@ export default function TouchControls({
           : 'DISPARO'
 
   return (
-    <>
-      <div className="touch-rail touch-rail-left" aria-label="Controles táctiles izquierda">
-        <div className="touch-rail-actions">
-          <button
-            type="button"
-            className="touch-pill-btn"
-            aria-label="Enviar risa"
-            title="Risa (1)"
-            onClick={() => onEmote('dots')}
-          >
-            <img className="touch-emote-icon" src="/assets/ui/emote-laugh.svg" alt="" draggable={false} />
-          </button>
-          <button
-            type="button"
-            className="touch-pill-btn"
-            aria-label="Enviar corazón"
-            title="Corazón (2)"
-            onClick={() => onEmote('alert')}
-          >
-            <img className="touch-emote-icon" src="/assets/ui/emote-heart.svg" alt="" draggable={false} />
-          </button>
-        </div>
-        <div className="touch-left-cluster">
-          <div
-            className="touch-stick touch-stick-move"
-            role="application"
-            aria-label="Joystick de movimiento"
-            onPointerDown={(e) => start('move', e)}
-            onPointerMove={(e) => move('move', e)}
-            onPointerUp={(e) => end('move', e)}
-            onPointerCancel={(e) => end('move', e, true)}
-            onLostPointerCapture={(e) => end('move', e, true)}
-          >
-            <div ref={moveKnob} className="touch-stick-knob" />
-            <span className="touch-stick-label">MOVER</span>
-          </div>
+    <div className="touch-overlay-layer" aria-label="Controles táctiles">
+      <div className="touch-draggable-slot touch-rail-actions" style={slotStyle('emotes')}>
+        <button
+          type="button"
+          className="touch-pill-btn"
+          aria-label="Enviar risa"
+          title="Risa (1)"
+          onClick={() => onEmote('dots')}
+        >
+          <img className="touch-emote-icon" src="/assets/ui/emote-laugh.svg" alt="" draggable={false} />
+        </button>
+        <button
+          type="button"
+          className="touch-pill-btn"
+          aria-label="Enviar corazón"
+          title="Corazón (2)"
+          onClick={() => onEmote('alert')}
+        >
+          <img className="touch-emote-icon" src="/assets/ui/emote-heart.svg" alt="" draggable={false} />
+        </button>
+      </div>
+
+      <div className="touch-draggable-slot" style={slotStyle('menu')}>
+        <button
+          type="button"
+          className="touch-pill-btn"
+          onClick={() => {
+            reset()
+            onMenu()
+          }}
+        >
+          Menú
+        </button>
+      </div>
+
+      <div className="touch-draggable-slot" style={slotStyle('move')}>
+        <div
+          className="touch-stick touch-stick-move"
+          role="application"
+          aria-label="Joystick de movimiento"
+          onPointerDown={(e) => start('move', e)}
+          onPointerMove={(e) => move('move', e)}
+          onPointerUp={(e) => end('move', e)}
+          onPointerCancel={(e) => end('move', e, true)}
+          onLostPointerCapture={(e) => end('move', e, true)}
+        >
+          <div ref={moveKnob} className="touch-stick-knob" />
+          <span className="touch-stick-label">MOVER</span>
         </div>
       </div>
 
-      <div className="touch-rail touch-rail-right" aria-label="Controles táctiles derecha">
-        <div className="touch-rail-actions">
-          <button
-            type="button"
-            className="touch-pill-btn"
-            onClick={() => {
-              reset()
-              onMenu()
-            }}
-          >
-            Menú
-          </button>
-        </div>
-        <div className="touch-right-cluster">
-          <button
-            type="button"
-            className={`touch-action-btn is-dash${dashes <= 0 ? ' is-depleted' : ''}`}
-            aria-label={`Dash (${dashes} de ${maxDashes} disponibles)`}
-            disabled={dashes <= 0}
-            onPointerDown={(e) => {
-              if (dashes > 0) triggerInstant(e, onDash)
-            }}
-          >
-            <span className="touch-dash-top">
-              <img className="touch-btn-icon" src="/assets/ui/powerup-dash.svg" alt="" draggable={false} />
-              <span>DASH {dashes}/{maxDashes}</span>
+      <div className="touch-draggable-slot" style={slotStyle('dash')}>
+        <button
+          type="button"
+          className={`touch-action-btn is-dash${dashes <= 0 ? ' is-depleted' : ''}`}
+          aria-label={`Dash (${dashes} de ${maxDashes} disponibles)`}
+          disabled={dashes <= 0}
+          onPointerDown={(e) => {
+            if (dashes > 0) triggerInstant(e, onDash)
+          }}
+        >
+          <span className="touch-dash-top">
+            <img className="touch-btn-icon" src="/assets/ui/powerup-dash.svg" alt="" draggable={false} />
+            <span>DASH {dashes}/{maxDashes}</span>
+          </span>
+          {dashes < maxDashes && (
+            <span className="touch-dash-recharge-track" aria-hidden="true">
+              <span
+                className="touch-dash-recharge-fill"
+                style={{ width: `${Math.round(dashRechargeProgress * 100)}%` }}
+              />
             </span>
-            {dashes < maxDashes && (
-              <span className="touch-dash-recharge-track" aria-hidden="true">
-                <span
-                  className="touch-dash-recharge-fill"
-                  style={{ width: `${Math.round(dashRechargeProgress * 100)}%` }}
-                />
-              </span>
-            )}
-          </button>
-          <div className="touch-secondary-row">
-            <button
-              type="button"
-              className="touch-action-btn is-melee"
-              aria-label="Ataque melé"
-              onPointerDown={(e) => triggerInstant(e, onMelee)}
-            >
-              MELÉ
-            </button>
-            <button
-              type="button"
-              className={`touch-action-btn is-reload${needsReload ? ' is-highlight' : ''}`}
-              aria-label="Recargar arma"
-              disabled={!canReload || isReloading}
-              onPointerDown={(e) => {
-                if (canReload && !isReloading) triggerInstant(e, onReload)
-              }}
-            >
-              {isReloading ? 'REC…' : 'REC'}
-            </button>
-          </div>
-          <div
-            className={`touch-stick touch-stick-aim is-brawl${aimHint !== 'idle' ? ` is-${aimHint}` : ''}`}
-            role="application"
-            aria-label="Botón de disparo tipo Brawl Stars: pulsa para autoapuntado o arrastra para apuntado manual"
-            onPointerDown={(e) => start('aim', e)}
-            onPointerMove={(e) => move('aim', e)}
-            onPointerUp={(e) => end('aim', e)}
-            onPointerCancel={(e) => end('aim', e, true)}
-            onLostPointerCapture={(e) => end('aim', e, true)}
-          >
-            <span className="touch-deadzone-ring" aria-hidden="true" />
-            <div ref={aimKnob} className="touch-stick-knob is-aim" />
-            <span className="touch-stick-label">{aimPadLabel}</span>
-          </div>
+          )}
+        </button>
+      </div>
+
+      <div className="touch-draggable-slot" style={slotStyle('melee')}>
+        <button
+          type="button"
+          className="touch-action-btn is-melee is-round-action"
+          aria-label="Ataque melé"
+          onPointerDown={(e) => triggerInstant(e, onMelee)}
+        >
+          MELÉ
+        </button>
+      </div>
+
+      <div className="touch-draggable-slot" style={slotStyle('reload')}>
+        <button
+          type="button"
+          className={`touch-action-btn is-reload is-round-action${needsReload ? ' is-highlight' : ''}`}
+          aria-label="Recargar arma"
+          disabled={!canReload || isReloading}
+          onPointerDown={(e) => {
+            if (canReload && !isReloading) triggerInstant(e, onReload)
+          }}
+        >
+          {isReloading ? 'REC…' : 'REC'}
+        </button>
+      </div>
+
+      <div className="touch-draggable-slot" style={slotStyle('aim')}>
+        <div
+          className={`touch-stick touch-stick-aim is-brawl${aimHint !== 'idle' ? ` is-${aimHint}` : ''}`}
+          role="application"
+          aria-label="Botón de disparo tipo Brawl Stars: pulsa para autoapuntado o arrastra para apuntado manual"
+          onPointerDown={(e) => start('aim', e)}
+          onPointerMove={(e) => move('aim', e)}
+          onPointerUp={(e) => end('aim', e)}
+          onPointerCancel={(e) => end('aim', e, true)}
+          onLostPointerCapture={(e) => end('aim', e, true)}
+        >
+          <span className="touch-deadzone-ring" aria-hidden="true" />
+          <div ref={aimKnob} className="touch-stick-knob is-aim" />
+          <span className="touch-stick-label">{aimPadLabel}</span>
         </div>
       </div>
-    </>
+    </div>
   )
 }
