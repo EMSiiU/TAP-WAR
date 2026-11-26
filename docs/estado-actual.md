@@ -67,7 +67,7 @@ Se verificó el escenario industrial con dos clientes reales de Colyseus (Auth/g
 - Subida, reemplazo, eliminación y persistencia real de fotos; permisos de Storage entre dos cuentas.
 - Partida completa con dos o más cuentas independientes en salas públicas/privadas (4, 10 y 20 jugadores), logout y renovación prolongada del token.
 - Pruebas en dispositivos móviles (controles táctiles y pantalla completa) y mandos físicos USB/Bluetooth.
-- Aplicar las migraciones [`20261123000200_expand_match_capacity.sql`](../supabase/migrations/20261123000200_expand_match_capacity.sql) y [`20261126000100_user_device_controls.sql`](../supabase/migrations/20261126000100_user_device_controls.sql) en Supabase remoto: pipeline automatizado listo en [`.github/workflows/supabase-migrations.yml`](../.github/workflows/supabase-migrations.yml) al fusionarse en `main`.
+- Confirmar/aplicar [`20261123000200_expand_match_capacity.sql`](../supabase/migrations/20261123000200_expand_match_capacity.sql) en Supabase remoto para persistir partidas de 5 a 20 jugadores ([`20261126000100_user_device_controls.sql`](../supabase/migrations/20261126000100_user_device_controls.sql) ya aplicada manualmente; pendiente probar sincronización en cuentas reales).
 
 ## Trabajo pendiente de implementación
 

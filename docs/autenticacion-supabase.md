@@ -112,16 +112,6 @@ Crea la tabla `public.user_device_controls` (`primary key (account_id, device_ke
 
 Prueba SQL de verificación: [user_device_controls_manual.sql](../supabase/tests/user_device_controls_manual.sql) (ejecutar completo en SQL Editor; termina con `ROLLBACK`).
 
-### 4. Despliegue automático con GitHub Actions
-
-El workflow [supabase-migrations.yml](../.github/workflows/supabase-migrations.yml) aplica automáticamente las migraciones de `supabase/migrations/` al proyecto remoto de Supabase cuando entra un commit a `main` (o manualmente desde GitHub → **Actions** → *Supabase Migrations* con opción `dry_run`):
-
-- Secretos requeridos en **GitHub → Settings → Secrets and variables → Actions**:
-  - `SUPABASE_ACCESS_TOKEN`
-  - `SUPABASE_PROJECT_REF`
-  - `SUPABASE_DB_PASSWORD`
-- Antes de ejecutar `supabase db push --remote --yes --include-all`, [bootstrap-legacy-migrations.mjs](../supabase/scripts/bootstrap-legacy-migrations.mjs) inspecciona en modo solo lectura si las tablas heredadas iniciales (`20261120000100`, `20261120000200`, `20261123000100`) ya fueron creadas manualmente en SQL Editor y registra solo las faltantes en `supabase_migrations.schema_migrations` para evitar colisiones, aplicando después de forma automática las migraciones recientes pendientes (`20261123000200` y `20261126000100`).
-
 El bucket avatars es privado, admite WebP hasta 2 MiB y usa `<UUID-cuenta>/<UUID-archivo>.webp`. CHECK de profiles impide apuntar a otra carpeta. Las políticas de Storage permiten SELECT/INSERT/DELETE en la carpeta propia; no se añade UPDATE porque se usan nombres nuevos al reemplazar. El privilegio de UPDATE de avatar_path se añade a los permisos de perfil existentes.
 
 La interfaz acepta JPG/PNG/WebP hasta 2 MiB, decodifica y recorta al centro a 512 × 512 y convierte a WebP. La foto aparece en el perfil/lobby propio, separada del personaje. No se publica en el estado de la arena.
