@@ -104,6 +104,14 @@ Ejecutar cada archivo completo desde SQL Editor como postgres. Cambian al rol au
 2. Ejecutar [20261120000200_profile_avatars.sql](../supabase/migrations/20261120000200_profile_avatars.sql).
 3. Ejecutar [profile_avatars_verify.sql](../supabase/tests/profile_avatars_verify.sql). Todos los valores deben ser true. Esta inspección confirma estructura, no las operaciones reales ni su aislamiento.
 
+### 3. Controles por cuenta y dispositivo
+
+Archivo: [20261126000100_user_device_controls.sql](../supabase/migrations/20261126000100_user_device_controls.sql).
+
+Crea la tabla `public.user_device_controls` (`primary key (account_id, device_key)`) para guardar configuraciones de teclado/ratón (`pc_controls`) y distribución táctil personalizada (`touch_layout`) separadas por cuenta y dispositivo (`desktop` | `mobile` | `tablet`). Incluye políticas RLS para que cada usuario autenticado (no anónimo) lea y edite solo sus filas, validación de tamaño JSON y poda automática a un máximo de 20 dispositivos por cuenta. Si aún no se ha aplicado en el proyecto remoto de Supabase, el cliente degrada de forma segura a caché local (`localStorage`).
+
+Prueba SQL de verificación: [user_device_controls_manual.sql](../supabase/tests/user_device_controls_manual.sql) (ejecutar completo en SQL Editor; termina con `ROLLBACK`).
+
 El bucket avatars es privado, admite WebP hasta 2 MiB y usa `<UUID-cuenta>/<UUID-archivo>.webp`. CHECK de profiles impide apuntar a otra carpeta. Las políticas de Storage permiten SELECT/INSERT/DELETE en la carpeta propia; no se añade UPDATE porque se usan nombres nuevos al reemplazar. El privilegio de UPDATE de avatar_path se añade a los permisos de perfil existentes.
 
 La interfaz acepta JPG/PNG/WebP hasta 2 MiB, decodifica y recorta al centro a 512 × 512 y convierte a WebP. La foto aparece en el perfil/lobby propio, separada del personaje. No se publica en el estado de la arena.

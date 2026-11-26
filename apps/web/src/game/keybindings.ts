@@ -39,10 +39,18 @@ export const PC_CONTROL_LABELS: { action: PcControlAction; label: string; shortL
 ]
 
 const STORAGE_KEY = 'tapwar.pcControls.v1'
+const ACCOUNT_ID_PATTERN = /^[0-9a-f-]{36}$/i
 
 // Strict allow-list for keyboard Event.code values and Mouse0/Mouse1/Mouse2.
 const ALLOWED_BINDING_PATTERN =
   /^(Key[A-Z]|Digit[0-9]|Numpad[0-9]|Arrow(Up|Down|Left|Right)|Space|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Tab|Enter|Backquote|Minus|Equal|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Mouse[0-2])$/
+
+export function pcControlsStorageKey(accountId?: string | null): string {
+  if (typeof accountId === 'string' && ACCOUNT_ID_PATTERN.test(accountId)) {
+    return `${STORAGE_KEY}.${accountId.toLowerCase()}`
+  }
+  return STORAGE_KEY
+}
 
 export function isValidPcBinding(code: unknown): code is string {
   return typeof code === 'string' && ALLOWED_BINDING_PATTERN.test(code)
@@ -92,11 +100,15 @@ export function rebindPcControl(
   return next
 }
 
-export function loadPcControls(storage?: Pick<Storage, 'getItem'>): PcControlConfig {
+export function loadPcControls(
+  storage?: Pick<Storage, 'getItem'>,
+  accountId?: string | null,
+): PcControlConfig {
   try {
     const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined)
     if (!target) return { ...DEFAULT_PC_CONTROLS }
-    const raw = target.getItem(STORAGE_KEY)
+    const scopedKey = pcControlsStorageKey(accountId)
+    const raw = target.getItem(scopedKey) ?? (scopedKey !== STORAGE_KEY ? target.getItem(STORAGE_KEY) : null)
     if (!raw) return { ...DEFAULT_PC_CONTROLS }
     return sanitizePcControls(JSON.parse(raw))
   } catch {
@@ -107,11 +119,17 @@ export function loadPcControls(storage?: Pick<Storage, 'getItem'>): PcControlCon
 export function savePcControls(
   controls: PcControlConfig,
   storage?: Pick<Storage, 'setItem'>,
+  accountId?: string | null,
 ): void {
   try {
     const target = storage ?? (typeof window !== 'undefined' ? window.localStorage : undefined)
     if (!target) return
-    target.setItem(STORAGE_KEY, JSON.stringify(sanitizePcControls(controls)))
+    const serialized = JSON.stringify(sanitizePcControls(controls))
+    const scopedKey = pcControlsStorageKey(accountId)
+    target.setItem(scopedKey, serialized)
+    if (scopedKey !== STORAGE_KEY) {
+      target.setItem(STORAGE_KEY, serialized)
+    }
   } catch {
     // Ignore storage quota or private-mode restrictions.
   }

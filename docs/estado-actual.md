@@ -11,7 +11,7 @@ Actualizado el 26 de noviembre de 2026. Este documento resume el alcance impleme
 | Capacidad y mapas | Tres tamaños sincronizados: 4 jugadores (Pequeño `1024×768`), 10 (Mediano `1600×1152`) y 20 (Grande `2240×1600`), con cámara seguidora y minimapa en todos los tamaños |
 | Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor |
 | Geometría de mapas | Catálogo compartido para arte y colisiones; spawns de jugadores, armas, power-ups y punto dorado verificados y conectados |
-| Controles | Detección automática del modo por defecto según dispositivo (PC/laptops con pantalla táctil o monitor táctil usan teclado y ratón por defecto; teléfonos y tablets usan táctil por defecto, siempre alternable con `Táctil ON/OFF`). Controles de PC personalizables en popup modal desde lobby o menú `Esc` (guardados localmente en `localStorage` bajo `tapwar.pcControls.v1`) con leyenda visible en sala de espera (se oculta automáticamente al iniciar la partida); móvil/tablet estilo Brawl Stars con origen flotante y deadzone (`20 px` arrastre / `14 px` cancelación) y botones `DASH`, `MELÉ` y `REC` a la derecha; mandos USB/Bluetooth (Gamepad API) |
+| Controles | Detección automática del modo por defecto según dispositivo (PC/laptops con pantalla táctil o monitor táctil usan teclado y ratón por defecto; teléfonos y tablets usan táctil por defecto, siempre alternable con `Táctil ON/OFF`). Controles de PC personalizables en popup modal (`KeybindingsModal`) con leyenda solo en sala de espera; controles táctiles estilo Brawl Stars (`20 px` arrastre / `14 px` cancelación, `DASH` a la derecha) personalizables y redimensionables por orientación desde `TouchLayoutEditorModal`. Persistencia en Supabase por cuenta y dispositivo (`user_device_controls`, UUID + `desktop`/`mobile`/`tablet`) con respaldo inmediato en `localStorage`; mandos USB/Bluetooth (Gamepad API) |
 | Arena | Movimiento analógico/digital, dash (hasta 5 cargas, recarga automática de 1 cada 10 s con barra inferior de progreso), colisiones (incluyendo raycast continuo de proyectiles), spawns aleatorios escalados por jugadores y combate autoritativo |
 | Combate | Diez armas (`sniper = 100`, `axe = 90`, `launcher` con explosión animada, radio de `128 px` y daño por distancia), melé rápido incluso con arma de fuego equipada, cargador extra + recarga manual, daño, bajas y reaparición |
 | Power-Ups | Apariciones aleatorias libres de obstáculos (más frecuentes con más jugadores): cargadores, botiquines (+50 HP), escudos temporales de 10 s (no se quitan con disparos, solo al expirar), recargas de dash (+1 hasta 5) y Power-Up Dorado único por partida cerca del final (resaltado en minimapa; 100 HP, escudo y munición infinita por 15 s) |
@@ -33,7 +33,7 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 39 pruebas correctas de perfil/foto, URL, Gamepad, controles PC configurables, detección de dispositivo táctil/PC, autoapuntado, modos de juego, mapas y entrada táctil estilo Brawl Stars |
+| Cliente: npm test | 44 pruebas correctas de perfil/foto, URL, Gamepad, controles PC configurables, layout táctil personalizable, sincronización por dispositivo en Supabase, detección de dispositivo táctil/PC, autoapuntado, modos de juego, mapas y entrada táctil estilo Brawl Stars |
 | Cliente: npm run build | TypeScript y compilación de producción correctos |
 | Servidor: npm test | 56 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, escudo por tiempo, explosiones con radio de lanzagranadas, spawns aleatorios escalados, dash con recarga cada 10 s, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
@@ -68,6 +68,7 @@ Se verificó el escenario industrial con dos clientes reales de Colyseus (Auth/g
 - Partida completa con dos o más cuentas independientes en salas públicas/privadas (4, 10 y 20 jugadores), logout y renovación prolongada del token.
 - Pruebas en dispositivos móviles (controles táctiles y pantalla completa) y mandos físicos USB/Bluetooth.
 - Aplicar la migración [`20261123000200_expand_match_capacity.sql`](../supabase/migrations/20261123000200_expand_match_capacity.sql) en Supabase remoto para persistir partidas de 5 a 20 jugadores.
+- Aplicar la migración [`20261126000100_user_device_controls.sql`](../supabase/migrations/20261126000100_user_device_controls.sql) en Supabase remoto para sincronizar controles de PC y layouts táctiles entre sesiones por dispositivo (mientras tanto persiste en `localStorage`).
 
 ## Trabajo pendiente de implementación
 
