@@ -24,7 +24,27 @@ export default function KeybindingsModal({
   const [hint, setHint] = useState('')
 
   useEffect(() => {
-    if (!listeningAction) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!listeningAction) {
+      const onCloseKey = (event: KeyboardEvent) => {
+        if (event.code === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          onClose()
+        }
+      }
+      window.addEventListener('keydown', onCloseKey, true)
+      return () => {
+        window.removeEventListener('keydown', onCloseKey, true)
+      }
+    }
 
     const onKeyDown = (event: KeyboardEvent) => {
       event.preventDefault()
@@ -68,20 +88,39 @@ export default function KeybindingsModal({
       window.removeEventListener('mousedown', onMouseDown, true)
       window.removeEventListener('contextmenu', onContextMenu, true)
     }
-  }, [listeningAction, controls, onChange])
+  }, [listeningAction, controls, onChange, onClose])
 
   return (
     <div
-      className="arena-results-overlay keybindings-overlay"
+      className="keybindings-overlay"
       role="dialog"
       aria-modal="true"
       aria-labelledby="keybindings-title"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !listeningAction) {
+          onClose()
+        }
+      }}
     >
       <div className="keybindings-modal">
-        <h2 id="keybindings-title">Controles de PC</h2>
+        <div className="keybindings-header">
+          <h2 id="keybindings-title">Controles de PC</h2>
+          <button
+            type="button"
+            className="keybindings-close"
+            aria-label="Cerrar configuración de controles"
+            onClick={() => {
+              setListeningAction(null)
+              onClose()
+            }}
+          >
+            ×
+          </button>
+        </div>
+
         <p className="keybindings-subtitle">
-          Pulsa cualquier acción y luego presiona la tecla o botón del ratón que deseas usar.
-          <code>Esc</code> siempre abre el menú.
+          Pulsa cualquier acción y luego presiona la tecla o botón del ratón que deseas usar.{' '}
+          <code>Esc</code> siempre abre o cierra el menú.
         </p>
 
         {hint && (
@@ -111,28 +150,33 @@ export default function KeybindingsModal({
           })}
         </ul>
 
-        <div className="keybindings-actions">
-          <button
-            type="button"
-            className="kenney-btn-secondary"
-            onClick={() => {
-              setListeningAction(null)
-              setHint('Controles restablecidos a los valores predeterminados.')
-              onChange({ ...DEFAULT_PC_CONTROLS })
-            }}
-          >
-            Restablecer predeterminados
-          </button>
-          <button
-            type="button"
-            className="kenney-btn-primary"
-            onClick={() => {
-              setListeningAction(null)
-              onClose()
-            }}
-          >
-            Listo
-          </button>
+        <div className="keybindings-footer">
+          <p className="keybindings-storage-note">
+            Se guardan automáticamente en este navegador (<code>localStorage</code>).
+          </p>
+          <div className="keybindings-actions">
+            <button
+              type="button"
+              className="kenney-btn-secondary"
+              onClick={() => {
+                setListeningAction(null)
+                setHint('Controles restablecidos a los valores predeterminados.')
+                onChange({ ...DEFAULT_PC_CONTROLS })
+              }}
+            >
+              Restablecer predeterminados
+            </button>
+            <button
+              type="button"
+              className="kenney-btn-primary"
+              onClick={() => {
+                setListeningAction(null)
+                onClose()
+              }}
+            >
+              Listo
+            </button>
+          </div>
         </div>
       </div>
     </div>
