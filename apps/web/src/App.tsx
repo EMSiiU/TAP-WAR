@@ -8,6 +8,7 @@ import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
 import './App.css'
 import './game/arena-layout.css'
 import { neutralTouchInput } from './game/touchInput'
+import { detectDefaultTouchMode } from './game/deviceInput'
 import {
   formatBindingLabel,
   formatMoveGroupLabel,
@@ -142,11 +143,6 @@ function formatClock(seconds: number): string {
   const mins = Math.floor(total / 60)
   const secs = total % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-}
-
-function detectDefaultTouchMode(): boolean {
-  if (typeof window === 'undefined') return false
-  return Boolean(window.matchMedia?.('(pointer: coarse)')?.matches || navigator.maxTouchPoints > 0)
 }
 
 const GAME_SERVER_URL = resolveGameServerUrl(
@@ -859,14 +855,6 @@ function ArenaSession({
           </div>
         )}
 
-        {localPaused && controlsModalOpen && matchMeta.phase !== 'finished' && (
-          <KeybindingsModal
-            controls={pcControls}
-            onChange={onPcControlsChange}
-            onClose={() => setControlsModalOpen(false)}
-          />
-        )}
-
         {matchMeta.phase === 'finished' && (
           <MatchResults
             title={resultsTitle}
@@ -880,6 +868,14 @@ function ArenaSession({
           />
         )}
       </div>
+
+      {localPaused && controlsModalOpen && matchMeta.phase !== 'finished' && (
+        <KeybindingsModal
+          controls={pcControls}
+          onChange={onPcControlsChange}
+          onClose={() => setControlsModalOpen(false)}
+        />
+      )}
     </div>
   )
 }
@@ -901,6 +897,7 @@ export default function App({
   const [selectedWeapon, setSelectedWeapon] = useState<WeaponType>(profile.preferred_weapon)
   const [crosshairStyle, setCrosshairStyle] = useState<CrosshairStyle>(profile.crosshair_style)
   const [pcControls, setPcControls] = useState<PcControlConfig>(() => loadPcControls())
+  const [defaultTouchOnDevice] = useState<boolean>(() => detectDefaultTouchMode())
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [rankingsOpen, setRankingsOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -1035,348 +1032,364 @@ export default function App({
 
   return (
     <main className="lobby-page">
-      <div className="lobby-card">
-        <h1 className="lobby-title">TAP-WAR</h1>
-        <div className="account-heading">
-          <div className="account-details">
-            <ProfileAvatar profile={profile} />
-            <p>
-              <strong>{profile.username}</strong>
-              <br />
-              Listo para la arena
-            </p>
+      <div className="lobby-card is-main-menu">
+        <header className="lobby-topbar">
+          <div className="lobby-topbar-brand">
+            <h1 className="lobby-title">TAP-WAR</h1>
+            <div className="account-details">
+              <ProfileAvatar profile={profile} />
+              <p>
+                <strong>{profile.username}</strong>
+                <br />
+                Listo para la arena
+              </p>
+            </div>
           </div>
-          <button type="button" className="auth-text-button" onClick={() => setRankingsOpen(true)}>
-            Rankings y estadísticas
-          </button>
-          <button type="button" className="auth-text-button" onClick={onOpenProfile}>
-            Mi perfil
-          </button>
-          <button type="button" className="auth-text-button" onClick={onSignOut}>
-            Cerrar sesión
-          </button>
-        </div>
-
-        <form
-          onSubmit={(event) => {
-            event.preventDefault()
-            void saveProfile()
-          }}
-        >
-          {entryMessage && (
-            <p className="lobby-alert" role="alert">
-              {entryMessage}
-            </p>
-          )}
-
-          {accountNotice && (
-            <p className="auth-notice" role="status">
-              {accountNotice}
-            </p>
-          )}
-          {savedMessage && (
-            <p className="auth-notice" role="status">
-              {savedMessage}
-            </p>
-          )}
-          <fieldset className="auth-fields" disabled={saving}>
-            <span className="skin-grid-label">Elige tu personaje</span>
-            <div className="skin-grid" role="radiogroup" aria-label="Selector de personaje">
-              {SKIN_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={skin === option.id}
-                  className={`skin-option${skin === option.id ? ' is-selected' : ''}`}
-                  onClick={() => setSkin(option.id)}
-                >
-                  <img src={`/assets/characters/player-${option.id}-idle.png`} alt={option.label} />
-                  <span>{option.label}</span>
-                </button>
-              ))}
-            </div>
-
-            <span className="skin-grid-label">Elige tu arma inicial</span>
-            <div className="weapon-grid" role="radiogroup" aria-label="Selector de arma">
-              {WEAPON_OPTIONS.map((weapon) => (
-                <button
-                  key={weapon.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={selectedWeapon === weapon.id}
-                  className={`weapon-option${selectedWeapon === weapon.id ? ' is-selected' : ''}`}
-                  onClick={() => setSelectedWeapon(weapon.id)}
-                >
-                  <img
-                    src={`/assets/weapons/weapon-${weapon.id}-${currentTeamColor}.png`}
-                    alt={weapon.name}
-                  />
-                  <span>{weapon.name}</span>
-                  <span className="weapon-stats">
-                    {weapon.isMelee
-                      ? `${weapon.damage} dmg · ${weapon.rangePx ?? 60}px · Melé`
-                      : weapon.explosionRadius
-                        ? `${weapon.damage} área · ${weapon.maxAmmo}×2`
-                        : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo}×2`}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <span className="skin-grid-label">Estilo de mira</span>
-            <div className="crosshair-grid" role="radiogroup" aria-label="Estilo de mira">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={crosshairStyle === 'outline'}
-                className={`crosshair-option${crosshairStyle === 'outline' ? ' is-selected' : ''}`}
-                onClick={() => setCrosshairStyle('outline')}
-              >
-                <img
-                  src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-orange.png`}
-                  alt="Con contorno"
-                />
-                <span>Con contorno</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={crosshairStyle === 'plain'}
-                className={`crosshair-option${crosshairStyle === 'plain' ? ' is-selected' : ''}`}
-                onClick={() => setCrosshairStyle('plain')}
-              >
-                <img
-                  src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-blue.png`}
-                  alt="Sin contorno"
-                />
-                <span>Sin contorno</span>
-              </button>
-            </div>
-
-            <div className="profile-actions">
-              <button type="submit" disabled={!validUsername(profile.username ?? '') || saving}>
-                {saving ? 'Guardando…' : 'Guardar preferencias'}
-              </button>
-              <button type="button" onClick={() => setControlsModalOpen(true)}>
-                Configurar controles PC
-              </button>
-            </div>
-          </fieldset>
-        </form>
-
-        <section className="rooms-section" aria-label="Salas de juego">
-          <h2 className="rooms-heading">Salas de juego</h2>
-
-          <div className="rooms-panel">
-            <span className="skin-grid-label">Crear nueva sala</span>
-            <div className="room-toggle-grid" role="radiogroup" aria-label="Visibilidad de sala">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={!createPrivate}
-                className={`crosshair-option${!createPrivate ? ' is-selected' : ''}`}
-                onClick={() => setCreatePrivate(false)}
-              >
-                <span>Pública (visible en la lista)</span>
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={createPrivate}
-                className={`crosshair-option${createPrivate ? ' is-selected' : ''}`}
-                onClick={() => setCreatePrivate(true)}
-              >
-                <span>Privada (solo por código)</span>
-              </button>
-            </div>
-
-            <span className="skin-grid-label">Modo de juego</span>
-            <div className="room-mode-grid" role="radiogroup" aria-label="Modo de juego">
-              {GAME_MODE_OPTIONS.map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={createGameMode === mode.id}
-                  className={`room-mode-option${createGameMode === mode.id ? ' is-selected' : ''}`}
-                  onClick={() => setCreateGameMode(mode.id)}
-                >
-                  <strong>{mode.label}</strong>
-                  <span>{mode.description}</span>
-                </button>
-              ))}
-            </div>
-
-            <span className="skin-grid-label">Escenario</span>
-            <div className="room-environment-grid" role="radiogroup" aria-label="Escenario de la sala">
-              {ENVIRONMENT_OPTIONS.map(option => (
-                <button type="button" key={option.id} role="radio" aria-checked={createEnvironment === option.id}
-                  className={`room-environment-option${createEnvironment === option.id ? ' is-selected' : ''}`}
-                  onClick={() => setCreateEnvironment(option.id)}>
-                  <MapPreview map={getArenaMap(createMaxPlayers === 20 ? 'large' : createMaxPlayers === 10 ? 'medium' : 'small', option.id)} />
-                  <strong>{option.label}</strong><span>{option.description}</span>
-                </button>
-              ))}
-            </div>
-            <span className="skin-grid-label">Capacidad y tamaño de mapa</span>
-            <div className="room-capacity-grid" role="radiogroup" aria-label="Capacidad y mapa">
-              {MAP_OPTIONS.map((opt) => (
-                <button
-                  key={opt.maxPlayers}
-                  type="button"
-                  role="radio"
-                  aria-checked={createMaxPlayers === opt.maxPlayers}
-                  className={`weapon-option${createMaxPlayers === opt.maxPlayers ? ' is-selected' : ''}`}
-                  onClick={() => setCreateMaxPlayers(opt.maxPlayers)}
-                >
-                  <span>{opt.label}</span>
-                  <span className="weapon-stats">{opt.dimensionsLabel}</span>
-                </button>
-              ))}
-            </div>
-
-            <div className="lobby-field">
-              <label htmlFor="room-name-input">Nombre de la sala (opcional)</label>
-              <input
-                id="room-name-input"
-                type="text"
-                maxLength={32}
-                placeholder="Ej. Duelo del desierto"
-                value={createRoomName}
-                onChange={(e) => setCreateRoomName(e.target.value)}
-              />
-            </div>
-
-            <button
-              type="button"
-              className="lobby-submit"
-              disabled={!validUsername(profile.username ?? '') || saving}
-              onClick={() => {
-                void saveProfile({
-                  mode: 'create',
-                  maxPlayers: createMaxPlayers,
-                  environment: createEnvironment,
-                  gameMode: createGameMode,
-                  isPrivate: createPrivate,
-                  roomName: createRoomName,
-                })
-              }}
-            >
-              Crear sala
+          <div className="lobby-topbar-actions">
+            <button type="button" className="auth-text-button" onClick={() => setRankingsOpen(true)}>
+              Rankings y estadísticas
+            </button>
+            <button type="button" className="auth-text-button" onClick={onOpenProfile}>
+              Mi perfil
+            </button>
+            <button type="button" className="auth-text-button" onClick={onSignOut}>
+              Cerrar sesión
             </button>
           </div>
+        </header>
 
-          <div className="rooms-panel">
-            <span className="skin-grid-label">Unirse con código</span>
-            <div className="room-join-row">
-              <input
-                type="text"
-                aria-label="Código de sala"
-                maxLength={12}
-                placeholder="Ej. K7MP2A"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              />
+        {(entryMessage || accountNotice || savedMessage) && (
+          <div className="lobby-messages">
+            {entryMessage && (
+              <p className="lobby-alert" role="alert">
+                {entryMessage}
+              </p>
+            )}
+            {accountNotice && (
+              <p className="auth-notice" role="status">
+                {accountNotice}
+              </p>
+            )}
+            {savedMessage && (
+              <p className="auth-notice" role="status">
+                {savedMessage}
+              </p>
+            )}
+          </div>
+        )}
+
+        <div className="lobby-grid">
+          <section className="lobby-panel lobby-loadout-panel" aria-label="Equipamiento del jugador">
+            <h2 className="lobby-section-heading">Tu equipamiento</h2>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault()
+                void saveProfile()
+              }}
+            >
+              <fieldset className="auth-fields" disabled={saving}>
+                <span className="skin-grid-label">Elige tu personaje</span>
+                <div className="skin-grid" role="radiogroup" aria-label="Selector de personaje">
+                  {SKIN_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={skin === option.id}
+                      className={`skin-option${skin === option.id ? ' is-selected' : ''}`}
+                      onClick={() => setSkin(option.id)}
+                    >
+                      <img src={`/assets/characters/player-${option.id}-idle.png`} alt={option.label} />
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <span className="skin-grid-label">Elige tu arma inicial</span>
+                <div className="weapon-grid" role="radiogroup" aria-label="Selector de arma">
+                  {WEAPON_OPTIONS.map((weapon) => (
+                    <button
+                      key={weapon.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedWeapon === weapon.id}
+                      className={`weapon-option${selectedWeapon === weapon.id ? ' is-selected' : ''}`}
+                      onClick={() => setSelectedWeapon(weapon.id)}
+                    >
+                      <img
+                        src={`/assets/weapons/weapon-${weapon.id}-${currentTeamColor}.png`}
+                        alt={weapon.name}
+                      />
+                      <span>{weapon.name}</span>
+                      <span className="weapon-stats">
+                        {weapon.isMelee
+                          ? `${weapon.damage} dmg · ${weapon.rangePx ?? 60}px · Melé`
+                          : weapon.explosionRadius
+                            ? `${weapon.damage} área · ${weapon.maxAmmo}×2`
+                            : `${weapon.pellets > 1 ? `${weapon.damage}×${weapon.pellets}` : weapon.damage} dmg · ${weapon.maxAmmo}×2`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <span className="skin-grid-label">Estilo de mira</span>
+                <div className="crosshair-grid" role="radiogroup" aria-label="Estilo de mira">
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={crosshairStyle === 'outline'}
+                    className={`crosshair-option${crosshairStyle === 'outline' ? ' is-selected' : ''}`}
+                    onClick={() => setCrosshairStyle('outline')}
+                  >
+                    <img
+                      src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-orange.png`}
+                      alt="Con contorno"
+                    />
+                    <span>Con contorno</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={crosshairStyle === 'plain'}
+                    className={`crosshair-option${crosshairStyle === 'plain' ? ' is-selected' : ''}`}
+                    onClick={() => setCrosshairStyle('plain')}
+                  >
+                    <img
+                      src={`/assets/ui/crosshair-${selectedWeapon === 'knife' || selectedWeapon === 'axe' ? 'rifle' : selectedWeapon}-blue.png`}
+                      alt="Sin contorno"
+                    />
+                    <span>Sin contorno</span>
+                  </button>
+                </div>
+
+                <div className="profile-actions">
+                  <button type="submit" disabled={!validUsername(profile.username ?? '') || saving}>
+                    {saving ? 'Guardando…' : 'Guardar preferencias'}
+                  </button>
+                  <button type="button" onClick={() => setControlsModalOpen(true)}>
+                    Configurar controles PC
+                  </button>
+                </div>
+              </fieldset>
+            </form>
+          </section>
+
+          <section className="rooms-section lobby-rooms-panel" aria-label="Salas de juego">
+            <h2 className="lobby-section-heading">Salas de juego</h2>
+
+            <div className="rooms-panel">
+              <span className="skin-grid-label">Unirse con código</span>
+              <div className="room-join-row">
+                <input
+                  type="text"
+                  aria-label="Código de sala"
+                  maxLength={12}
+                  placeholder="Ej. K7MP2A"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                />
+                <button
+                  type="button"
+                  className="kenney-btn-primary"
+                  disabled={!validUsername(profile.username ?? '') || saving}
+                  onClick={() => {
+                    const normalized = normalizeRoomCode(joinCode)
+                    void saveProfile({ mode: 'join', code: normalized })
+                  }}
+                >
+                  Unirse
+                </button>
+              </div>
+            </div>
+
+            <div className="rooms-panel">
+              <div className="rooms-list-header">
+                <span className="skin-grid-label" style={{ marginBottom: 0 }}>
+                  Salas públicas abiertas
+                </span>
+                <button
+                  type="button"
+                  className="auth-text-button"
+                  style={{ margin: 0, padding: '6px 12px' }}
+                  disabled={roomsLoading}
+                  onClick={() => {
+                    void loadPublicRooms()
+                  }}
+                >
+                  {roomsLoading ? 'Actualizando…' : 'Actualizar'}
+                </button>
+              </div>
+
+              {roomsError && <p className="lobby-alert">{roomsError}</p>}
+              {!roomsError && publicRooms.length === 0 && (
+                <p className="auth-hint" style={{ marginTop: 10 }}>
+                  No hay salas públicas disponibles. Crea una nueva para empezar.
+                </p>
+              )}
+              {publicRooms.length > 0 && (
+                <ul className="public-rooms-list">
+                  {publicRooms.map((room) => (
+                    <li key={room.code} className="public-room-item">
+                      <div className="public-room-info">
+                        <strong>
+                          {room.name}{' '}
+                          <span className={`room-phase-tag is-${room.phase}`}>
+                            {room.phase === 'playing' ? 'En curso' : 'En espera'}
+                          </span>
+                        </strong>
+                        <span>
+                          Código: {room.code} · {gameModeLabel(normalizeGameMode(room.gameMode))} ·{' '}
+                          {ENVIRONMENT_OPTIONS.find(option => option.id === normalizeEnvironment(room.environment))?.label} ·{' '}
+                          {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/{room.maxClients}
+                          {room.hostName ? ` · Anfitrión: ${room.hostName}` : ''}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="kenney-btn-primary"
+                        disabled={!validUsername(profile.username ?? '') || saving}
+                        onClick={() => {
+                          void saveProfile({ mode: 'join', code: room.code })
+                        }}
+                      >
+                        Entrar
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="rooms-panel">
+              <span className="skin-grid-label">Crear nueva sala</span>
+              <div className="room-toggle-grid" role="radiogroup" aria-label="Visibilidad de sala">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={!createPrivate}
+                  className={`crosshair-option${!createPrivate ? ' is-selected' : ''}`}
+                  onClick={() => setCreatePrivate(false)}
+                >
+                  <span>Pública (visible en la lista)</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={createPrivate}
+                  className={`crosshair-option${createPrivate ? ' is-selected' : ''}`}
+                  onClick={() => setCreatePrivate(true)}
+                >
+                  <span>Privada (solo por código)</span>
+                </button>
+              </div>
+
+              <span className="skin-grid-label">Modo de juego</span>
+              <div className="room-mode-grid" role="radiogroup" aria-label="Modo de juego">
+                {GAME_MODE_OPTIONS.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={createGameMode === mode.id}
+                    className={`room-mode-option${createGameMode === mode.id ? ' is-selected' : ''}`}
+                    onClick={() => setCreateGameMode(mode.id)}
+                  >
+                    <strong>{mode.label}</strong>
+                    <span>{mode.description}</span>
+                  </button>
+                ))}
+              </div>
+
+              <span className="skin-grid-label">Escenario</span>
+              <div className="room-environment-grid" role="radiogroup" aria-label="Escenario de la sala">
+                {ENVIRONMENT_OPTIONS.map(option => (
+                  <button type="button" key={option.id} role="radio" aria-checked={createEnvironment === option.id}
+                    className={`room-environment-option${createEnvironment === option.id ? ' is-selected' : ''}`}
+                    onClick={() => setCreateEnvironment(option.id)}>
+                    <MapPreview map={getArenaMap(createMaxPlayers === 20 ? 'large' : createMaxPlayers === 10 ? 'medium' : 'small', option.id)} />
+                    <strong>{option.label}</strong><span>{option.description}</span>
+                  </button>
+                ))}
+              </div>
+              <span className="skin-grid-label">Capacidad y tamaño de mapa</span>
+              <div className="room-capacity-grid" role="radiogroup" aria-label="Capacidad y mapa">
+                {MAP_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.maxPlayers}
+                    type="button"
+                    role="radio"
+                    aria-checked={createMaxPlayers === opt.maxPlayers}
+                    className={`weapon-option${createMaxPlayers === opt.maxPlayers ? ' is-selected' : ''}`}
+                    onClick={() => setCreateMaxPlayers(opt.maxPlayers)}
+                  >
+                    <span>{opt.label}</span>
+                    <span className="weapon-stats">{opt.dimensionsLabel}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="lobby-field">
+                <label htmlFor="room-name-input">Nombre de la sala (opcional)</label>
+                <input
+                  id="room-name-input"
+                  type="text"
+                  maxLength={32}
+                  placeholder="Ej. Duelo del desierto"
+                  value={createRoomName}
+                  onChange={(e) => setCreateRoomName(e.target.value)}
+                />
+              </div>
+
               <button
                 type="button"
-                className="kenney-btn-primary"
+                className="lobby-submit"
                 disabled={!validUsername(profile.username ?? '') || saving}
                 onClick={() => {
-                  const normalized = normalizeRoomCode(joinCode)
-                  void saveProfile({ mode: 'join', code: normalized })
+                  void saveProfile({
+                    mode: 'create',
+                    maxPlayers: createMaxPlayers,
+                    environment: createEnvironment,
+                    gameMode: createGameMode,
+                    isPrivate: createPrivate,
+                    roomName: createRoomName,
+                  })
                 }}
               >
-                Unirse
+                Crear sala
               </button>
             </div>
-          </div>
+          </section>
 
-          <div className="rooms-panel">
-            <div className="rooms-list-header">
-              <span className="skin-grid-label" style={{ marginBottom: 0 }}>
-                Salas públicas abiertas
+          <section className="pc-controls-summary lobby-controls-panel" aria-label="Guía de controles">
+            <div className="pc-controls-summary-head">
+              <strong>Controles de PC activos</strong>
+              <span className="device-default-pill">
+                Predeterminado aquí: {defaultTouchOnDevice ? 'Controles táctiles' : 'Teclado y ratón'}
               </span>
               <button
                 type="button"
                 className="auth-text-button"
-                style={{ margin: 0, padding: '6px 12px' }}
-                disabled={roomsLoading}
-                onClick={() => {
-                  void loadPublicRooms()
-                }}
+                style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
+                onClick={() => setControlsModalOpen(true)}
               >
-                {roomsLoading ? 'Actualizando…' : 'Actualizar'}
+                Personalizar
               </button>
             </div>
-
-            {roomsError && <p className="lobby-alert">{roomsError}</p>}
-            {!roomsError && publicRooms.length === 0 && (
-              <p className="auth-hint" style={{ marginTop: 10 }}>
-                No hay salas públicas disponibles. Crea una nueva para empezar.
-              </p>
-            )}
-            {publicRooms.length > 0 && (
-              <ul className="public-rooms-list">
-                {publicRooms.map((room) => (
-                  <li key={room.code} className="public-room-item">
-                    <div className="public-room-info">
-                      <strong>
-                        {room.name}{' '}
-                        <span className={`room-phase-tag is-${room.phase}`}>
-                          {room.phase === 'playing' ? 'En curso' : 'En espera'}
-                        </span>
-                      </strong>
-                      <span>
-                        Código: {room.code} · {gameModeLabel(normalizeGameMode(room.gameMode))} ·{' '}
-                        {ENVIRONMENT_OPTIONS.find(option => option.id === normalizeEnvironment(room.environment))?.label} ·{' '}
-                        {MAP_LABEL_BY_SIZE[room.mapSize]} · {room.clients}/{room.maxClients}
-                        {room.hostName ? ` · Anfitrión: ${room.hostName}` : ''}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      className="kenney-btn-primary"
-                      disabled={!validUsername(profile.username ?? '') || saving}
-                      onClick={() => {
-                        void saveProfile({ mode: 'join', code: room.code })
-                      }}
-                    >
-                      Entrar
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        <section className="pc-controls-summary" aria-label="Guía de controles">
-          <div className="pc-controls-summary-head">
-            <strong>Controles de PC activos</strong>
-            <button
-              type="button"
-              className="auth-text-button"
-              style={{ margin: 0, padding: '4px 10px', fontSize: '0.78rem' }}
-              onClick={() => setControlsModalOpen(true)}
-            >
-              Personalizar
-            </button>
-          </div>
-          <div className="pc-controls-chips">
-            <span><kbd>{formatMoveGroupLabel(pcControls)}</kbd> Mover</span>
-            <span><kbd>{formatBindingLabel(pcControls.shoot)}</kbd> Disparar</span>
-            <span><kbd>{formatBindingLabel(pcControls.melee)}</kbd> Melé</span>
-            <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
-            <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
-            <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
-            <span><kbd>Esc</kbd> Menú</span>
-          </div>
-          <p className="auth-hint" style={{ marginTop: 8 }}>
-            Móvil: joystick izquierdo para mover; botón de disparo tipo Brawl Stars (pulsa para autoapuntado, arrastra para manual) + botones MELÉ, REC y DASH.
-            Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
-          </p>
-        </section>
+            <div className="pc-controls-chips">
+              <span><kbd>{formatMoveGroupLabel(pcControls)}</kbd> Mover</span>
+              <span><kbd>{formatBindingLabel(pcControls.shoot)}</kbd> Disparar</span>
+              <span><kbd>{formatBindingLabel(pcControls.melee)}</kbd> Melé</span>
+              <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
+              <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
+              <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
+              <span><kbd>Esc</kbd> Menú</span>
+            </div>
+            <p className="auth-hint" style={{ marginTop: 8 }}>
+              Móvil / Tablet (táctil por defecto; alternable en partida con «Táctil»): joystick izquierdo para mover; botón de disparo tipo Brawl Stars (pulsa para autoapuntado, arrastra para manual) + botones MELÉ, REC y DASH.
+              PC / Laptop con pantalla táctil usa teclado y ratón por defecto. Mando: sticks + RT/RB disparar, B melé, X recargar, A dash.
+            </p>
+          </section>
+        </div>
       </div>
 
       {controlsModalOpen && (
