@@ -768,7 +768,7 @@ function ArenaSession({
             </div>
           )}
 
-          {controls && !touchMode && matchMeta.phase !== 'finished' && (
+          {controls && !touchMode && matchMeta.phase === 'waiting' && (
             <div className="arena-pc-legend" aria-label="Leyenda de controles de PC">
               <span><kbd>{moveKeysLabel}</kbd> Mover</span>
               <span><kbd>{shootKeyLabel}</kbd> Disparar</span>

@@ -87,6 +87,22 @@
 .arena-shell .touch-stick-aim.is-auto { border-color: #facc15; box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.4); }
 .arena-shell .touch-stick-aim.is-manual { border-color: #fb923c; box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.45); }
 .arena-shell .touch-stick-aim.is-cancel { border-color: #94a3b8; opacity: 0.72; }
+.arena-shell .touch-deadzone-ring {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(245, 226, 203, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease, border-color 0.1s ease;
+}
+.arena-shell .touch-stick-aim.is-manual .touch-deadzone-ring,
+.arena-shell .touch-stick-aim.is-cancel .touch-deadzone-ring { opacity: 1; }
+.arena-shell .touch-stick-aim.is-cancel .touch-deadzone-ring {
+  border-color: #f87171;
+  background: rgba(239, 68, 68, 0.25);
+}
 @media (orientation: landscape) {
   .arena-shell .has-touch-controls .arena-waiting-banner {
     width: calc(100% - var(--touch-rail-width) * 2 - 24px); max-width: 620px;

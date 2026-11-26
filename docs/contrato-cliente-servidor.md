@@ -52,8 +52,8 @@ Cada eje `moveX`/`moveY` acepta números finitos continuos en `[-1, 1]` (teclado
 
 En el cliente se admiten tres modos de entrada con la misma frecuencia de envío (`20 Hz`):
 - **Detección automática de modo por defecto**: mediante User-Agent Client Hints (`navigator.userAgentData`), heurísticas de iPadOS/User-Agent y media queries primarias de puntero, teléfonos y tablets activan los controles táctiles por defecto, mientras que PCs y laptops (incluidas laptops con pantalla táctil o monitores táctiles) inician con teclado y ratón por defecto sin deshabilitar el botón manual `Táctil ON/OFF`.
-- **PC (personalizable)**: controles configurables desde el popup modal del lobby o el menú `Esc`, guardados automáticamente en el navegador (`localStorage`, clave `tapwar.pcControls.v1`) y visibles en la leyenda en pantalla (predeterminados: `WASD` mover, clic izq. disparar, clic der. melé rápido, `R` recargar, `Espacio` dash, `1`/`2` emotes, `Esc` menú).
-- **Móvil/tablet (estilo Brawl Stars)**: joystick izquierdo para mover, botón de disparo derecho con **apuntado semiautomático** al pulsar/mantener y **apuntado manual** al arrastrar (suelta para disparar o regresa al centro para cancelar), más botones `MELÉ`, `REC` y `DASH`.
+- **PC (personalizable)**: controles configurables desde el popup modal del lobby o el menú `Esc`, guardados automáticamente en el navegador (`localStorage`, clave `tapwar.pcControls.v1`) y visibles en la leyenda mientras esperas en sala (desaparece al iniciar la partida para no estorbar; predeterminados: `WASD` mover, clic izq. disparar, clic der. melé rápido, `R` recargar, `Espacio` dash, `1`/`2` emotes, `Esc` menú).
+- **Móvil/tablet (estilo Brawl Stars)**: joystick izquierdo para mover (`MOVER`); a la derecha botón de disparo con **origen flotante y deadzone** (`20 px` para diferenciar toque de autoapuntado vs arrastre manual, `14 px` en zona central para cancelar sin disparar), más **`DASH`** (movido al lateral derecho sobre los botones secundarios), **`MELÉ`** y **`REC`**.
 - **Mando USB/Bluetooth**: Gamepad API (`RT`/`RB` disparo, `B`/`R3` melé, `X` recarga, `A` dash).
 
 ## Sesión durante el juego
