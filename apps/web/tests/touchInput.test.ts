@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  AIM_CANCEL_EXIT_PX,
+  AIM_DRAG_ENTER_PX,
+  aimDragOffset,
   bindTouchResetEvents,
   neutralTouchInput,
   stickOffset,
@@ -9,6 +12,8 @@ import {
 } from '../src/game/touchInput.ts'
 
 const offset = (x: number, y: number) => stickOffset({ left: 0, top: 0, width: 80, height: 80 }, 32, x, y)
+const dragOffset = (dx: number, dy: number) => aimDragOffset(100, 100, 100 + dx, 100 + dy, 38)
+
 function setup() {
   let input = neutralTouchInput()
   const messages: TouchInputState[] = []
@@ -19,23 +24,31 @@ function setup() {
   return { controller, messages, current: () => input }
 }
 
-test('estilo Brawl Stars: toque rapido en centro dispara con autoapuntado; mantener dispara continuo', () => {
+test('estilo Brawl Stars: tocar en el borde con micro-movimiento menor a la deadzone dispara autoapuntado', () => {
   const { controller, current } = setup()
-  // Tap near center (no drag)
-  controller.press('aim', 1, offset(40, 40))
+  // Pressing anywhere on the pad (even off-center) starts from floating origin in auto mode
+  controller.press('aim', 1)
   assert.equal(current().aimActive, true)
   assert.equal(current().aimMode, 'auto')
+  assert.equal(current().aimCancelling, false)
   assert.equal(current().shoot, false)
   assert.equal(current().autoAimShotSeq, 0)
+
+  // Slight thumb jitter within deadzone (< AIM_DRAG_ENTER_PX) must NOT switch to manual slide
+  controller.move('aim', 1, dragOffset(AIM_DRAG_ENTER_PX - 5, 4))
+  assert.equal(current().aimMode, 'auto')
+  assert.equal(current().aimCancelling, false)
+  assert.equal(current().shoot, false)
 
   // Quick release triggers immediate semi-auto shot
   controller.release('aim', 1)
   assert.equal(current().autoAimShotSeq, 1)
+  assert.equal(current().manualShotSeq, 0)
   assert.equal(current().aimActive, false)
   assert.equal(current().aimMode, 'none')
 
-  // Hold in center enables continuous auto-aim fire
-  controller.press('aim', 2, offset(40, 40))
+  // Hold inside deadzone enables continuous auto-aim fire
+  controller.press('aim', 2)
   controller.enableAutoHoldFire(2)
   assert.equal(current().aimMode, 'auto')
   assert.equal(current().shoot, true)
@@ -44,49 +57,59 @@ test('estilo Brawl Stars: toque rapido en centro dispara con autoapuntado; mante
   assert.equal(current().shoot, false)
 })
 
-test('estilo Brawl Stars: arrastrar cambia a apuntado manual, dispara al soltar o en el borde, y cancelar al volver al centro', () => {
+test('estilo Brawl Stars: deslizar entra a manual sin disparar antes de tiempo y cancela al volver al centro con histeresis', () => {
   const { controller, current } = setup()
-  controller.press('aim', 1, offset(40, 40))
-  // Drag moderately right (manual aim, not yet continuous fire)
-  controller.move('aim', 1, offset(50, 40))
+  controller.press('aim', 1)
+
+  // Slide past AIM_DRAG_ENTER_PX right -> manual mode, holds aim without misfiring during drag
+  controller.move('aim', 1, dragOffset(AIM_DRAG_ENTER_PX + 2, 0))
   assert.equal(current().aimMode, 'manual')
+  assert.equal(current().aimCancelling, false)
   assert.equal(current().aimAngle, 0)
-  assert.equal(current().shoot, false)
+  assert.equal(current().shoot, false, 'Arrastrar apunta sin disparar hasta soltar')
 
-  // Push to outer rim: continuous manual fire
-  controller.move('aim', 1, offset(80, 40))
+  // Hysteresis band between AIM_CANCEL_EXIT_PX (14) and AIM_DRAG_ENTER_PX (20) stays manual
+  controller.move('aim', 1, dragOffset(AIM_CANCEL_EXIT_PX + 2, 0))
   assert.equal(current().aimMode, 'manual')
-  assert.equal(current().shoot, true)
+  assert.equal(current().aimCancelling, false)
 
-  // Release while dragged: triggers manual precision shot
+  // Push further out and release -> fires manual precision shot
+  controller.move('aim', 1, dragOffset(38, 0))
   controller.release('aim', 1)
   assert.equal(current().manualShotSeq, 1)
+  assert.equal(current().autoAimShotSeq, 0)
   assert.equal(current().shoot, false)
 
-  // Drag out then return to dead-center before release: cancels without firing
-  controller.press('aim', 2, offset(40, 40))
-  controller.move('aim', 2, offset(80, 40))
-  controller.move('aim', 2, offset(40, 40))
-  assert.equal(current().shoot, false)
+  // Drag out then pull back inside cancel deadzone (< AIM_CANCEL_EXIT_PX) -> cancels shot on release
+  controller.press('aim', 2)
+  controller.move('aim', 2, dragOffset(30, 0))
+  assert.equal(current().aimCancelling, false)
+  controller.move('aim', 2, dragOffset(AIM_CANCEL_EXIT_PX - 4, 0))
+  assert.equal(current().aimMode, 'manual')
+  assert.equal(current().aimCancelling, true)
   controller.release('aim', 2)
-  assert.equal(current().manualShotSeq, 1, 'Soltar en el centro tras arrastrar cancela el disparo')
+  assert.equal(current().manualShotSeq, 1, 'Soltar dentro de la deadzone central cancela el disparo')
+  assert.equal(current().autoAimShotSeq, 0)
 })
 
 test('movimiento y disparo simultáneos se detienen al abrir menú o desmontar controles', () => {
   const { controller, current } = setup()
   controller.press('move', 1, offset(80, 40))
-  controller.press('aim', 2, offset(80, 40))
+  controller.press('aim', 2)
+  controller.move('aim', 2, dragOffset(35, 0))
   controller.press('fire', 3)
   assert.equal(current().moveX, 1)
+  assert.equal(current().aimMode, 'manual')
   assert.equal(current().shoot, true)
   controller.reset()
   assert.equal(current().moveX, 0)
   assert.equal(current().moveY, 0)
   assert.equal(current().shoot, false)
   assert.equal(current().aimActive, false)
+  assert.equal(current().aimCancelling, false)
   // Pointer events from the destroyed controls cannot revive their input.
   controller.move('move', 1, offset(80, 40))
-  controller.move('aim', 2, offset(80, 40))
+  controller.move('aim', 2, dragOffset(35, 0))
   assert.equal(current().moveX, 0)
   assert.equal(current().shoot, false)
 })
@@ -94,10 +117,12 @@ test('movimiento y disparo simultáneos se detienen al abrir menú o desmontar c
 test('cancelar o perder captura detiene el control correspondiente sin cancelar otros dedos', () => {
   const { controller, current } = setup()
   controller.press('move', 1, offset(80, 40))
-  controller.press('aim', 2, offset(80, 40))
+  controller.press('aim', 2)
+  controller.move('aim', 2, dragOffset(35, 0))
   controller.release('aim', 2, true)
   assert.equal(current().shoot, false)
   assert.equal(current().aimActive, false)
+  assert.equal(current().manualShotSeq, 0)
   assert.equal(current().moveX, 1)
   controller.release('move', 1)
   assert.equal(current().moveX, 0)
@@ -116,7 +141,8 @@ test('otro dedo no reemplaza al dueño del botón de disparo', () => {
 
 test('soltar apuntado no cancela el botón de disparo que sigue pulsado', () => {
   const { controller, current } = setup()
-  controller.press('aim', 1, offset(80, 40))
+  controller.press('aim', 1)
+  controller.move('aim', 1, dragOffset(35, 0))
   controller.press('fire', 2)
   controller.release('aim', 1, true)
   assert.equal(current().shoot, true)
@@ -135,7 +161,8 @@ test('un pointerup antiguo no cancela un gesto nuevo después de reanudar', () =
 
 test('apuntado hacia la izquierda emite un ángulo aceptado por el servidor', () => {
   const { controller, current } = setup()
-  controller.press('aim', 1, offset(0, 40))
+  controller.press('aim', 1)
+  controller.move('aim', 1, dragOffset(-35, 0))
   assert.equal(current().aimAngle, -Math.PI)
 })
 
@@ -163,7 +190,8 @@ for (const name of ['blur', 'resize', 'orientationchange', 'pagehide', 'visibili
     const documentTarget = Object.assign(new EventTarget(), { hidden: false })
     const detach = bindTouchResetEvents(windowTarget, documentTarget, () => controller.reset())
     controller.press('move', 1, offset(80, 40))
-    controller.press('aim', 2, offset(80, 40))
+    controller.press('aim', 2)
+    controller.move('aim', 2, dragOffset(35, 0))
     controller.press('fire', 3)
     if (name === 'visibilitychange') {
       documentTarget.hidden = true

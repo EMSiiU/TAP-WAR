@@ -12,7 +12,7 @@ import {
 import { findAutoAimAngle } from './autoAim'
 import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
 import { DEFAULT_PC_CONTROLS, type PcControlConfig } from './keybindings'
-import { MANUAL_DRAG_THRESHOLD, type TouchInputState } from './touchInput'
+import type { TouchInputState } from './touchInput'
 
 export type MatchPhase = 'waiting' | 'playing' | 'finished'
 export type PlayerSkin = 'fox' | 'squirrel' | 'mouse' | 'rabbit'
@@ -485,7 +485,7 @@ export default class ArenaScene extends Phaser.Scene {
         const startY = localPlayer.y + WEAPON_BASE_Y
 
         if (touch.aimMode === 'manual') {
-            const cancelling = touch.aimMagnitude < MANUAL_DRAG_THRESHOLD
+            const cancelling = touch.aimCancelling
             const beamLen = cancelling ? 60 : Math.max(130, touch.aimMagnitude * MAX_AIM_RADIUS)
             const endX = startX + Math.cos(touch.aimAngle) * beamLen
             const endY = startY + Math.sin(touch.aimAngle) * beamLen
