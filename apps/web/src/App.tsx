@@ -3,6 +3,7 @@ import ArenaHeader from './game/ArenaHeader'
 import MapPreview from './game/MapPreview'
 import KeybindingsModal from './game/KeybindingsModal'
 import TouchLayoutEditorModal from './game/TouchLayoutEditorModal'
+import PracticeArsenalModal, { type PracticeUtilityAction } from './game/PracticeArsenalModal'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
@@ -180,6 +181,7 @@ function ArenaSession({
   })
   const worldPushRef = useRef<((snapshot: ArenaWorldSnapshot) => void) | null>(null)
   const [localPaused, setLocalPaused] = useState(false)
+  const [practiceArsenalOpen, setPracticeArsenalOpen] = useState(false)
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [touchEditorOpen, setTouchEditorOpen] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
@@ -190,6 +192,12 @@ function ArenaSession({
   const touchInputRef = useRef<TouchInputState>(neutralTouchInput())
   const actionTriggerRef = useRef<((action: ArenaActionKind) => void) | null>(null)
   const explosionTriggerRef = useRef<((x: number, y: number, radius: number) => void) | null>(null)
+  const damageFeedbackTriggerRef = useRef<
+    ((x: number, y: number, damage: number, blocked: boolean) => void) | null
+  >(null)
+  const practiceActionRef = useRef<
+    ((payload: { action: 'equip_weapon'; weapon: WeaponType } | { action: PracticeUtilityAction }) => void) | null
+  >(null)
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [status, setStatus] = useState('Conectando…')
@@ -291,6 +299,9 @@ function ArenaSession({
         rematchRef.current = () => {
           if (joined.connection.isOpen) joined.send('rematch')
         }
+        practiceActionRef.current = (payload) => {
+          if (joined.connection.isOpen) joined.send('practice_action', payload)
+        }
 
         joined.onMessage<{ x?: unknown; y?: unknown; radius?: unknown }>('explosion', (payload) => {
           if (
@@ -306,6 +317,25 @@ function ArenaSession({
             explosionTriggerRef.current?.(payload.x, payload.y, payload.radius)
           }
         })
+
+        joined.onMessage<{ x?: unknown; y?: unknown; damage?: unknown; blocked?: unknown }>(
+          'damage_feedback',
+          (payload) => {
+            if (
+              active &&
+              payload &&
+              typeof payload.x === 'number' &&
+              typeof payload.y === 'number' &&
+              typeof payload.damage === 'number' &&
+              typeof payload.blocked === 'boolean' &&
+              Number.isFinite(payload.x) &&
+              Number.isFinite(payload.y) &&
+              Number.isFinite(payload.damage)
+            ) {
+              damageFeedbackTriggerRef.current?.(payload.x, payload.y, payload.damage, payload.blocked)
+            }
+          },
+        )
 
         let markedReady = false
 
@@ -356,6 +386,7 @@ function ArenaSession({
           sendPause: (paused) => {
             touchInputRef.current = neutralTouchInput()
             if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
+            setPracticeArsenalOpen(false)
             setLocalPaused(paused)
             if (!paused) {
               setControlsModalOpen(false)
@@ -400,9 +431,27 @@ function ArenaSession({
     return () => {
       active = false
       rematchRef.current = null
+      practiceActionRef.current = null
       disconnect?.()
     }
   }, [playerName, playerSkin, playerWeapon, roomRequest, onEnd])
+
+  const closePracticeArsenal = useCallback(() => {
+    setPracticeArsenalOpen(false)
+    setResumeSignal((n) => n + 1)
+  }, [])
+
+  const togglePracticeArsenal = useCallback(() => {
+    if (hud.matchMeta.gameMode !== 'practice' || hud.matchMeta.phase === 'finished') return
+    setControlsModalOpen(false)
+    setTouchEditorOpen(false)
+    setLocalPaused(false)
+    setPracticeArsenalOpen((prev) => {
+      const next = !prev
+      if (!next) setResumeSignal((n) => n + 1)
+      return next
+    })
+  }, [hud.matchMeta.gameMode, hud.matchMeta.phase])
 
   const localHud = hud.localPlayer
   const localTeam = localHud?.team
@@ -509,7 +558,7 @@ function ArenaSession({
     } as Record<string, string>
   )[hud.matchMeta.saveStatus]
   const showTouchControls = Boolean(
-    controls && touchMode && !localPaused && hud.matchMeta.phase !== 'finished',
+    controls && touchMode && !localPaused && !practiceArsenalOpen && hud.matchMeta.phase !== 'finished',
   )
   const resultsTitle =
     hud.matchMeta.gameMode === 'tdm'
@@ -538,6 +587,7 @@ function ArenaSession({
         roomCode={hud.matchMeta.roomCode}
         roomName={hud.matchMeta.roomName}
         isPrivate={hud.matchMeta.isPrivate}
+        hideRoomCode={hud.matchMeta.gameMode === 'practice'}
         gameModeLabel={gameModeLabel(hud.matchMeta.gameMode)}
         environmentLabel={ENVIRONMENT_OPTIONS.find(option => option.id === hud.matchMeta.environment)?.label || ''}
         sizeLabel={MAP_LABEL_BY_SIZE[hud.matchMeta.mapSize]}
@@ -714,13 +764,25 @@ function ArenaSession({
             </div>
           )}
 
+          {controls && hud.matchMeta.gameMode === 'practice' && hud.matchMeta.phase === 'playing' && (
+            <button
+              type="button"
+              className="arena-practice-fab"
+              onClick={togglePracticeArsenal}
+              title="Abrir arsenal de práctica (B)"
+            >
+              <span>Arsenal</span>
+              {!touchMode && <kbd>B</kbd>}
+            </button>
+          )}
+
           {controls && stateReady && (
             <PhaserView
               worldStateRef={worldStateRef}
               worldPushRef={worldPushRef}
               phase={hud.matchMeta.phase}
               gameMode={hud.matchMeta.gameMode}
-              isPaused={localPaused}
+              isPaused={localPaused || practiceArsenalOpen}
               crosshairStyle={crosshairStyle}
               pcControls={pcControls}
               mapSize={hud.matchMeta.mapSize}
@@ -729,7 +791,9 @@ function ArenaSession({
               touchInputRef={touchInputRef}
               actionTriggerRef={actionTriggerRef}
               explosionTriggerRef={explosionTriggerRef}
+              damageFeedbackTriggerRef={damageFeedbackTriggerRef}
               onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
+              onPracticeArsenalToggle={togglePracticeArsenal}
               onGamepadChange={setGamepadConnected}
               resumeSignal={resumeSignal}
               controls={controls}
@@ -773,6 +837,20 @@ function ArenaSession({
                 >
                   Continuar
                 </button>
+                {hud.matchMeta.gameMode === 'practice' && (
+                  <button
+                    type="button"
+                    className="kenney-btn-secondary"
+                    onClick={() => {
+                      setLocalPaused(false)
+                      setControlsModalOpen(false)
+                      setTouchEditorOpen(false)
+                      setPracticeArsenalOpen(true)
+                    }}
+                  >
+                    Arsenal de práctica
+                  </button>
+                )}
                 <button
                   type="button"
                   className="kenney-btn-secondary"
@@ -826,6 +904,21 @@ function ArenaSession({
           syncStatus={controlsSyncStatus}
           onSave={onTouchLayoutsChange}
           onClose={() => setTouchEditorOpen(false)}
+        />
+      )}
+
+      {practiceArsenalOpen && hud.matchMeta.gameMode === 'practice' && hud.matchMeta.phase !== 'finished' && (
+        <PracticeArsenalModal
+          weapons={WEAPON_OPTIONS}
+          currentWeapon={localHud?.weaponType}
+          teamColor={localTeamColor}
+          onSelectWeapon={(weapon) => {
+            practiceActionRef.current?.({ action: 'equip_weapon', weapon })
+          }}
+          onAction={(action) => {
+            practiceActionRef.current?.({ action })
+          }}
+          onClose={closePracticeArsenal}
         />
       )}
     </div>
@@ -1194,6 +1287,53 @@ export default function App({
 
           <section className="rooms-section lobby-rooms-panel" aria-label="Salas de juego">
             <h2 className="lobby-section-heading">Salas de juego</h2>
+
+            <div className="rooms-panel practice-lobby-card">
+              <div className="practice-lobby-head">
+                <div>
+                  <span className="skin-grid-label" style={{ marginBottom: 4 }}>
+                    Campo de tiro
+                  </span>
+                  <p className="practice-lobby-desc">
+                    Entrena movimiento, dashes, las 10 armas, todos los power-ups y daño real sobre 4 NPCs sin afectar estadísticas.
+                  </p>
+                </div>
+                <span className="practice-lobby-badge">1 jugador · Práctica</span>
+              </div>
+              <div className="practice-lobby-controls">
+                <div className="practice-env-pills" role="radiogroup" aria-label="Escenario del campo de tiro">
+                  {ENVIRONMENT_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={createEnvironment === option.id}
+                      className={`crosshair-option practice-env-pill${createEnvironment === option.id ? ' is-selected' : ''}`}
+                      onClick={() => setCreateEnvironment(option.id)}
+                    >
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="kenney-btn-primary practice-enter-btn"
+                  disabled={!validUsername(profile.username ?? '') || saving}
+                  onClick={() => {
+                    void saveProfile({
+                      mode: 'create',
+                      maxPlayers: 4,
+                      environment: createEnvironment,
+                      gameMode: 'practice',
+                      isPrivate: true,
+                      roomName: 'Campo de tiro',
+                    })
+                  }}
+                >
+                  Entrar al Campo de tiro
+                </button>
+              </div>
+            </div>
 
             <div className="rooms-panel">
               <span className="skin-grid-label">Unirse con código</span>

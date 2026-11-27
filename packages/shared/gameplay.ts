@@ -1,4 +1,4 @@
-export type GameMode = 'ffa' | 'tdm' | 'gungame'
+export type GameMode = 'ffa' | 'tdm' | 'gungame' | 'practice'
 export type PowerUpKind = 'ammo' | 'medkit' | 'shield' | 'dash' | 'golden'
 export type TeamId = 'orange' | 'blue'
 
@@ -58,11 +58,12 @@ export const LAUNCHER_INNER_RADIUS = 32
 export const LAUNCHER_MIN_DAMAGE_RATIO = 0.25
 
 export function normalizeGameMode(value: unknown): GameMode {
-  if (value === 'tdm' || value === 'gungame') return value
+  if (value === 'tdm' || value === 'gungame' || value === 'practice') return value
   return 'ffa'
 }
 
 export function gameModeLabel(mode: GameMode): string {
+  if (mode === 'practice') return 'Campo de tiro'
   return GAME_MODE_OPTIONS.find((option) => option.id === mode)?.label ?? 'Todos contra todos'
 }
 

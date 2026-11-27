@@ -103,6 +103,11 @@ export function buildScoreLine(
   players: readonly PlayerState[],
   localPlayer: PlayerState | undefined,
 ): string {
+  if (gameMode === 'practice') {
+    const npcCount = players.filter((p) => p.isBot).length
+    return `Bajas práctica: ${localPlayer?.kills ?? 0} · ${npcCount} NPCs`
+  }
+
   if (gameMode === 'tdm') {
     return `Naranja ${orangeScore} — ${blueScore} Azul`
   }
@@ -130,17 +135,20 @@ export function buildScoreLine(
 }
 
 export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHudSnapshot {
-  const timeRemaining = 300
-  const mapSize: MapSize =
-    roomRequest.mode === 'create'
-      ? roomRequest.maxPlayers === 20
-        ? 'large'
-        : roomRequest.maxPlayers === 10
-          ? 'medium'
-          : 'small'
-      : 'small'
   const gameMode: GameMode =
     roomRequest.mode === 'create' ? normalizeGameMode(roomRequest.gameMode) : 'ffa'
+  const isPractice = gameMode === 'practice'
+  const timeRemaining = isPractice ? 0 : 300
+  const mapSize: MapSize =
+    isPractice
+      ? 'small'
+      : roomRequest.mode === 'create'
+        ? roomRequest.maxPlayers === 20
+          ? 'large'
+          : roomRequest.maxPlayers === 10
+            ? 'medium'
+            : 'small'
+        : 'small'
 
   return {
     matchMeta: {
@@ -150,7 +158,7 @@ export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHud
       environment:
         roomRequest.mode === 'create' ? normalizeEnvironment(roomRequest.environment) : 'desert',
       gameMode,
-      maxPlayers: roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
+      maxPlayers: isPractice ? 1 : roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
       isPrivate: roomRequest.mode === 'create' ? roomRequest.isPrivate : false,
       hostId: '',
       notice: '',
@@ -162,14 +170,14 @@ export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHud
       isPaused: false,
       pausedByName: '',
       timeRemaining,
-      killsToWin: 20,
+      killsToWin: isPractice ? 0 : 20,
       orangeScore: 0,
       blueScore: 0,
       winnerId: '',
       winnerName: '',
     },
     playerCount: 0,
-    clock: formatClock(timeRemaining),
+    clock: isPractice ? '∞' : formatClock(timeRemaining),
     scoreLine: buildScoreLine(gameMode, 0, 0, [], undefined),
     localPlayer: null,
   }
@@ -190,6 +198,9 @@ export function extractArenaHudSnapshot(
 
   const playerList = state.players ? Array.from(state.players.values()) : []
   const local = state.players?.get(localPlayerId) ?? playerList.find((p) => p.id === localPlayerId)
+  const humanCount =
+    gameMode === 'practice' ? playerList.filter((p) => !p.isBot).length : playerList.length
+  const clock = gameMode === 'practice' ? '∞' : formatClock(wholeTime)
 
   const localPlayer: LocalHudState | null = local
     ? {
@@ -244,8 +255,8 @@ export function extractArenaHudSnapshot(
       winnerId: state.winnerId ?? '',
       winnerName: state.winnerName ?? '',
     },
-    playerCount: playerList.length,
-    clock: formatClock(wholeTime),
+    playerCount: humanCount,
+    clock,
     scoreLine: buildScoreLine(gameMode, orangeScore, blueScore, playerList, local),
     localPlayer,
   }

@@ -14,6 +14,17 @@ import {
     type WeaponType,
 } from './ArenaState.js'
 import { parseArenaInput, type ArenaInput } from './ArenaInput.js'
+import {
+    PRACTICE_ACTION_COOLDOWN_MS,
+    PRACTICE_BOT_IDLE_HEAL_MS,
+    PRACTICE_BOT_RESPAWN_MS,
+    PRACTICE_DUMMY_SPECS,
+    PRACTICE_PLAYER_SPAWN,
+    PRACTICE_POWERUP_RESPAWN_MS,
+    PRACTICE_POWERUP_STATIONS,
+    PRACTICE_SAMPLE_PICKUPS,
+    parsePracticeAction,
+} from './PracticeMode.js'
 import { verifyArenaAccount, type VerifiedAccount } from '../auth.js'
 import weaponsConfig from '../../../../packages/shared/weapons.json' with { type: 'json' }
 import {
@@ -129,10 +140,284 @@ export class ArenaRoom extends Room {
     private announcementUntil = 0
     private accounts = new Map<string, { accountId: string; expiresAt: number; timer: ReturnType<typeof setTimeout> }>()
     private refreshRequests = new Map<string, { pending: boolean; at: number }>()
+    private humanClients = new Map<string, Client>()
+    private practiceBotMeta = new Map<
+        string,
+        {
+            homeX: number
+            homeY: number
+            endX: number
+            endY: number
+            speed: number
+            towardEnd: boolean
+            lastDamagedAt: number
+        }
+    >()
+    private practicePowerUpPads = new Map<
+        string,
+        { kind: PowerUpKind; x: number; y: number; activeId: string; respawnAt: number }
+    >()
+    private lastPracticeActionAt = new Map<string, number>()
 
     constructor(resultStore?: ResultStore) {
         super()
         this.resultStore = resultStore
+    }
+
+    private isPracticeMode(): boolean {
+        return this.state.gameMode === 'practice'
+    }
+
+    private emitDamageFeedback(
+        attackerId: string,
+        x: number,
+        y: number,
+        damage: number,
+        blocked: boolean,
+        usedWeapon?: WeaponType,
+    ) {
+        const targetClient =
+            this.clients?.find((c) => c.sessionId === attackerId) ?? this.humanClients.get(attackerId)
+        if (!targetClient || typeof targetClient.send !== 'function') return
+        try {
+            targetClient.send('damage_feedback', {
+                x: Math.round(x),
+                y: Math.round(y),
+                damage: Math.round(damage),
+                blocked,
+                weaponType: usedWeapon ?? '',
+            })
+        } catch {
+            // Isolated unit tests without an attached Colyseus transport.
+        }
+    }
+
+    private clearPracticeEntities() {
+        for (const botId of this.practiceBotMeta.keys()) {
+            this.inputs.delete(botId)
+            this.state.players.delete(botId)
+        }
+        this.practiceBotMeta.clear()
+        this.practicePowerUpPads.clear()
+        this.lastPracticeActionAt.clear()
+    }
+
+    private startPracticeSession() {
+        const now = performance.now()
+        this.clearCombatEntities()
+        this.clearPracticeEntities()
+        this.state.phase = 'playing'
+        this.state.isPaused = false
+        this.state.pausedByName = ''
+        this.remainingSeconds = 0
+        this.state.timeRemaining = 0
+        this.state.killsToWin = 0
+        this.state.orangeScore = 0
+        this.state.blueScore = 0
+        this.state.winnerId = ''
+        this.state.winnerName = ''
+
+        for (const spec of PRACTICE_DUMMY_SPECS) {
+            const bot = new Player()
+            bot.id = spec.id
+            bot.name = spec.name
+            bot.skin = spec.skin
+            bot.teamColor = spec.teamColor
+            bot.team = ''
+            bot.startingWeapon = 'rifle'
+            bot.weaponType = 'rifle'
+            bot.x = spec.homeX
+            bot.y = spec.homeY
+            bot.hp = 100
+            bot.isDead = false
+            bot.isBot = true
+            bot.dashes = 0
+            bot.maxDashes = MAX_DASHES
+            bot.dashRechargeProgress = 0
+            this.state.players.set(bot.id, bot)
+            this.practiceBotMeta.set(bot.id, {
+                homeX: spec.homeX,
+                homeY: spec.homeY,
+                endX: spec.patrol?.endX ?? spec.homeX,
+                endY: spec.patrol?.endY ?? spec.homeY,
+                speed: spec.patrol?.speed ?? 0,
+                towardEnd: true,
+                lastDamagedAt: now,
+            })
+        }
+
+        for (const station of PRACTICE_POWERUP_STATIONS) {
+            const pu = new PowerUpState()
+            pu.id = `pu-${++this.nextPowerUpId}`
+            pu.kind = station.kind
+            pu.x = station.x
+            pu.y = station.y
+            this.state.powerUps.set(pu.id, pu)
+            this.practicePowerUpPads.set(station.id, {
+                kind: station.kind,
+                x: station.x,
+                y: station.y,
+                activeId: pu.id,
+                respawnAt: 0,
+            })
+        }
+
+        for (const sample of PRACTICE_SAMPLE_PICKUPS) {
+            const pickup = new WeaponPickup()
+            pickup.id = `pk-${++this.nextPickupId}`
+            pickup.weaponType = sample.weaponType
+            pickup.x = sample.x
+            pickup.y = sample.y
+            this.state.pickups.set(pickup.id, pickup)
+        }
+    }
+
+    private handlePracticeAction(client: Client, message: unknown) {
+        if (!this.isPracticeMode() || this.state.phase !== 'playing') return
+        if (!this.accounts.has(client.sessionId)) return
+        const player = this.state.players.get(client.sessionId)
+        if (!player || player.isBot) return
+
+        const now = performance.now()
+        const prevAt = this.lastPracticeActionAt.get(client.sessionId) ?? -1000
+        if (now - prevAt < PRACTICE_ACTION_COOLDOWN_MS) return
+
+        const parsed = parsePracticeAction(message, weaponsConfig.weapons)
+        if (!parsed) return
+        this.lastPracticeActionAt.set(client.sessionId, now)
+
+        switch (parsed.action) {
+            case 'equip_weapon': {
+                this.equipWeapon(player, parsed.weapon, true)
+                if (!this.isMeleeWeapon(parsed.weapon) && player.maxAmmo > 0) {
+                    player.reserveAmmo = player.maxAmmo * 2
+                }
+                break
+            }
+            case 'refill': {
+                player.hp = 100
+                player.isDead = false
+                player.dashes = MAX_DASHES
+                player.dashRechargeStartAt = 0
+                player.dashRechargeProgress = 0
+                this.cancelReload(player)
+                if (!this.isMeleeWeapon(player.weaponType) && player.maxAmmo > 0) {
+                    player.ammo = player.maxAmmo
+                    player.reserveAmmo = player.maxAmmo * MAX_RESERVE_MAGAZINES
+                }
+                break
+            }
+            case 'self_damage': {
+                this.clearBuffs(player)
+                player.hp = Math.max(10, player.hp - 50)
+                break
+            }
+            case 'reset_dummies': {
+                for (const spec of PRACTICE_DUMMY_SPECS) {
+                    const bot = this.state.players.get(spec.id)
+                    const meta = this.practiceBotMeta.get(spec.id)
+                    if (!bot || !meta) continue
+                    bot.x = meta.homeX
+                    bot.y = meta.homeY
+                    bot.hp = 100
+                    bot.isDead = false
+                    bot.respawnAt = 0
+                    this.clearBuffs(bot)
+                    meta.towardEnd = true
+                    meta.lastDamagedAt = now
+                }
+                player.kills = 0
+                break
+            }
+            case 'toggle_dummy_shield': {
+                const closeBot = this.state.players.get('bot-static-close')
+                if (!closeBot || closeBot.isDead) break
+                if (closeBot.shield > 0 && now < closeBot.shieldUntil) {
+                    this.clearBuffs(closeBot)
+                } else {
+                    this.activateShield(closeBot, SHIELD_DURATION_MS, now)
+                }
+                break
+            }
+        }
+    }
+
+    private updatePracticeBots(dt: number, now: number) {
+        let human: Player | undefined
+        for (const candidate of this.state.players.values()) {
+            if (!candidate.isBot && !candidate.isDead) {
+                human = candidate
+                break
+            }
+        }
+
+        for (const [botId, meta] of this.practiceBotMeta) {
+            const bot = this.state.players.get(botId)
+            if (!bot) continue
+
+            if (bot.isDead) {
+                if (now >= bot.respawnAt) {
+                    bot.x = meta.homeX
+                    bot.y = meta.homeY
+                    bot.hp = 100
+                    bot.isDead = false
+                    bot.respawnAt = 0
+                    this.clearBuffs(bot)
+                    meta.towardEnd = true
+                    meta.lastDamagedAt = now
+                }
+                continue
+            }
+
+            if (bot.hp < 100 && now - meta.lastDamagedAt >= PRACTICE_BOT_IDLE_HEAL_MS) {
+                bot.hp = 100
+            }
+
+            if (meta.speed > 0) {
+                const targetX = meta.towardEnd ? meta.endX : meta.homeX
+                const targetY = meta.towardEnd ? meta.endY : meta.homeY
+                const dx = targetX - bot.x
+                const dy = targetY - bot.y
+                const dist = Math.hypot(dx, dy)
+                const step = meta.speed * dt
+                if (dist <= 6 || step >= dist) {
+                    if (bot.x !== targetX) bot.x = targetX
+                    if (bot.y !== targetY) bot.y = targetY
+                    meta.towardEnd = !meta.towardEnd
+                } else {
+                    const next = moveInsideArena(
+                        bot,
+                        (dx / dist) * step,
+                        (dy / dist) * step,
+                        this.arenaMap,
+                    )
+                    if (bot.x !== next.x) bot.x = next.x
+                    if (bot.y !== next.y) bot.y = next.y
+                }
+            }
+
+            if (human) {
+                const angle = Math.atan2(human.y - bot.y, human.x - bot.x)
+                const q = Math.round((angle === Math.PI ? -Math.PI : angle) * 50) / 50
+                if (Math.abs(bot.aimAngle - q) > 0.001) {
+                    bot.aimAngle = q
+                }
+            }
+        }
+    }
+
+    private updatePracticePowerUps(now: number) {
+        for (const pad of this.practicePowerUpPads.values()) {
+            if (pad.activeId || now < pad.respawnAt) continue
+            const pu = new PowerUpState()
+            pu.id = `pu-${++this.nextPowerUpId}`
+            pu.kind = pad.kind
+            pu.x = pad.x
+            pu.y = pad.y
+            this.state.powerUps.set(pu.id, pu)
+            pad.activeId = pu.id
+            pad.respawnAt = 0
+        }
     }
 
     private isBulletRelevantToClient(bullet: BulletState, clientSessionId: string): boolean {
@@ -181,6 +466,7 @@ export class ArenaRoom extends Room {
     }
 
     private targetKillsForMode(mode: GameMode, maxPlayers: number): number {
+        if (mode === 'practice') return 0
         if (mode === 'gungame') return GUN_GAME_LADDER.length
         if (mode === 'tdm') return teamKillTargetForCapacity(maxPlayers)
         return KILLS_TO_WIN_FFA
@@ -225,6 +511,10 @@ export class ArenaRoom extends Room {
         for (const account of this.accounts.values()) clearTimeout(account.timer)
         this.accounts.clear()
         this.refreshRequests.clear()
+        this.humanClients.clear()
+        this.practiceBotMeta.clear()
+        this.practicePowerUpPads.clear()
+        this.lastPracticeActionAt.clear()
     }
 
     async onCreate(options?: ArenaRoomOptions) {
@@ -232,9 +522,12 @@ export class ArenaRoom extends Room {
             throw new ServerError(503, 'Se alcanzó el límite de salas activas. Inténtalo más tarde.')
         }
 
-        const { maxPlayers, mapSize } = mapSizeForCapacity(options?.maxPlayers)
         const gameMode = normalizeGameMode(options?.gameMode)
-        const isPrivate = options?.isPrivate === true
+        const isPractice = gameMode === 'practice'
+        const capacity = mapSizeForCapacity(options?.maxPlayers)
+        const maxPlayers = isPractice ? 1 : capacity.maxPlayers
+        const mapSize = isPractice ? 'small' : capacity.mapSize
+        const isPrivate = isPractice || options?.isPrivate === true
         const code = allocateRoomCode()
 
         this.roomId = code
@@ -242,13 +535,17 @@ export class ArenaRoom extends Room {
         this.maxClients = maxPlayers
 
         this.state.roomCode = code
-        this.state.roomName = sanitizeRoomName(options?.roomName, code)
+        this.state.roomName = isPractice ? 'Campo de tiro' : sanitizeRoomName(options?.roomName, code)
         this.state.environment = normalizeEnvironment(options?.environment)
         this.state.gameMode = gameMode
         this.state.mapSize = mapSize
         this.state.maxPlayers = maxPlayers
         this.state.killsToWin = this.targetKillsForMode(gameMode, maxPlayers)
         this.state.isPrivate = isPrivate
+        if (isPractice) {
+            this.state.timeRemaining = 0
+            this.remainingSeconds = 0
+        }
 
         await this.setPrivate?.(isPrivate)?.catch?.(() => {})
         this.syncMetadata()
@@ -339,6 +636,7 @@ export class ArenaRoom extends Room {
 
         this.onMessage('start', (client) => {
             if (
+                !this.isPracticeMode() &&
                 client.sessionId === this.state.hostId &&
                 this.state.phase === 'waiting' &&
                 this.state.players.size >= 2 &&
@@ -350,6 +648,7 @@ export class ArenaRoom extends Room {
 
         this.onMessage('rematch', (client) => {
             if (
+                this.isPracticeMode() ||
                 client.sessionId !== this.state.hostId ||
                 this.state.phase !== 'finished' ||
                 ['saving', 'failed'].includes(this.state.saveStatus)
@@ -357,6 +656,10 @@ export class ArenaRoom extends Room {
                 return
             }
             this.resetToWaiting()
+        })
+
+        this.onMessage<unknown>('practice_action', (client, message) => {
+            this.handlePracticeAction(client, message)
         })
 
         this.onMessage<unknown>('emote', (client, message) => {
@@ -794,15 +1097,27 @@ export class ArenaRoom extends Room {
 
         // Timed shield blocks all incoming damage without breaking; it only expires on timer end.
         if (target.shield > 0 && now < target.shieldUntil) {
+            if (this.isPracticeMode() && target.isBot && attacker && !attacker.isBot) {
+                this.emitDamageFeedback(attackerId, target.x, target.y, 0, true, usedWeapon)
+            }
             return false
         }
 
         target.hp = Math.max(0, target.hp - damage)
 
+        if (this.isPracticeMode() && target.isBot) {
+            const botMeta = this.practiceBotMeta.get(targetId)
+            if (botMeta) botMeta.lastDamagedAt = now
+            if (attacker && !attacker.isBot) {
+                this.emitDamageFeedback(attackerId, target.x, target.y, damage, false, usedWeapon)
+            }
+        }
+
         if (target.hp <= 0) {
             target.hp = 0
             target.isDead = true
-            target.respawnAt = now + RESPAWN_DELAY_MS
+            target.respawnAt =
+                this.isPracticeMode() && target.isBot ? now + PRACTICE_BOT_RESPAWN_MS : now + RESPAWN_DELAY_MS
             target.deaths += 1
             this.clearBuffs(target)
             this.cancelReload(target)
@@ -810,6 +1125,10 @@ export class ArenaRoom extends Room {
 
             if (attacker) {
                 attacker.kills += 1
+
+                if (this.isPracticeMode()) {
+                    return false
+                }
 
                 if (this.state.gameMode === 'tdm') {
                     if (attacker.team === 'orange') {
@@ -1253,39 +1572,41 @@ export class ArenaRoom extends Room {
 
         // Update reload, shield durability, golden, and dash recharge timers.
         for (const [sessionId, player] of this.state.players) {
-            // Dash recharges 1 charge every 10 seconds up to MAX_DASHES.
-            if (player.dashes < MAX_DASHES) {
-                if (player.dashRechargeStartAt === 0) {
-                    player.dashRechargeStartAt = now
-                }
-                const elapsed = now - player.dashRechargeStartAt
-                if (elapsed >= DASH_RECHARGE_MS) {
-                    const gained = Math.floor(elapsed / DASH_RECHARGE_MS)
-                    player.dashes = Math.min(MAX_DASHES, player.dashes + gained)
-                    const accountId = this.accounts.get(sessionId)?.accountId
-                    if (accountId) this.dashesByAccount.set(accountId, player.dashes)
-                    if (player.dashes >= MAX_DASHES) {
-                        player.dashRechargeStartAt = 0
-                        if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
+            // Dash recharges 1 charge every 10 seconds up to MAX_DASHES (humans only).
+            if (!player.isBot) {
+                if (player.dashes < MAX_DASHES) {
+                    if (player.dashRechargeStartAt === 0) {
+                        player.dashRechargeStartAt = now
+                    }
+                    const elapsed = now - player.dashRechargeStartAt
+                    if (elapsed >= DASH_RECHARGE_MS) {
+                        const gained = Math.floor(elapsed / DASH_RECHARGE_MS)
+                        player.dashes = Math.min(MAX_DASHES, player.dashes + gained)
+                        const accountId = this.accounts.get(sessionId)?.accountId
+                        if (accountId) this.dashesByAccount.set(accountId, player.dashes)
+                        if (player.dashes >= MAX_DASHES) {
+                            player.dashRechargeStartAt = 0
+                            if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
+                        } else {
+                            player.dashRechargeStartAt += gained * DASH_RECHARGE_MS
+                            const nextProgress = quantizeProgress(
+                                (now - player.dashRechargeStartAt) / DASH_RECHARGE_MS,
+                                50,
+                            )
+                            if (player.dashRechargeProgress !== nextProgress) {
+                                player.dashRechargeProgress = nextProgress
+                            }
+                        }
                     } else {
-                        player.dashRechargeStartAt += gained * DASH_RECHARGE_MS
-                        const nextProgress = quantizeProgress(
-                            (now - player.dashRechargeStartAt) / DASH_RECHARGE_MS,
-                            50,
-                        )
+                        const nextProgress = quantizeProgress(elapsed / DASH_RECHARGE_MS, 50)
                         if (player.dashRechargeProgress !== nextProgress) {
                             player.dashRechargeProgress = nextProgress
                         }
                     }
                 } else {
-                    const nextProgress = quantizeProgress(elapsed / DASH_RECHARGE_MS, 50)
-                    if (player.dashRechargeProgress !== nextProgress) {
-                        player.dashRechargeProgress = nextProgress
-                    }
+                    player.dashRechargeStartAt = 0
+                    if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
                 }
-            } else {
-                player.dashRechargeStartAt = 0
-                if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
             }
 
             if (player.isDead) continue
@@ -1345,13 +1666,15 @@ export class ArenaRoom extends Room {
             }
         }
 
-        if (Math.ceil(this.remainingSeconds) !== this.state.timeRemaining) {
-            this.remainingSeconds = this.state.timeRemaining
-        }
-        this.remainingSeconds = Math.max(0, this.remainingSeconds - dt)
-        const displaySeconds = Math.ceil(this.remainingSeconds)
-        if (displaySeconds !== this.state.timeRemaining) {
-            this.state.timeRemaining = displaySeconds
+        if (!this.isPracticeMode()) {
+            if (Math.ceil(this.remainingSeconds) !== this.state.timeRemaining) {
+                this.remainingSeconds = this.state.timeRemaining
+            }
+            this.remainingSeconds = Math.max(0, this.remainingSeconds - dt)
+            const displaySeconds = Math.ceil(this.remainingSeconds)
+            if (displaySeconds !== this.state.timeRemaining) {
+                this.state.timeRemaining = displaySeconds
+            }
         }
 
         for (const [bulletId, bullet] of this.state.bullets) {
@@ -1446,9 +1769,9 @@ export class ArenaRoom extends Room {
 
         const activePlayerCount = this.state.players.size
 
-        // Weapon pickups (disabled in Gun Game).
+        // Weapon pickups (disabled in Gun Game; static sample pickups in practice).
         if (this.state.gameMode !== 'gungame') {
-            if (now >= this.nextPickupAt) {
+            if (!this.isPracticeMode() && now >= this.nextPickupAt) {
                 this.nextPickupAt =
                     now + scaledSpawnIntervalMs(this.arenaMap.pickupIntervalMs, activePlayerCount)
                 this.spawnWeaponPickup()
@@ -1456,7 +1779,7 @@ export class ArenaRoom extends Room {
 
             for (const [pickupId, pickup] of this.state.pickups) {
                 for (const player of this.state.players.values()) {
-                    if (player.isDead) continue
+                    if (player.isDead || player.isBot) continue
                     const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y)
                     if (dist <= weaponsConfig.pickupRadius) {
                         this.equipWeapon(player, pickup.weaponType, true)
@@ -1467,32 +1790,49 @@ export class ArenaRoom extends Room {
             }
         }
 
-        // Power-Ups (enabled in all modes) + one-time Golden Power-Up near match end.
-        if (now >= this.nextPowerUpAt) {
-            this.nextPowerUpAt =
-                now + scaledSpawnIntervalMs(this.arenaMap.powerUpIntervalMs, activePlayerCount)
-            this.spawnPowerUp()
-        }
+        // Power-Ups: respawning stations in practice, dynamic spawns in normal modes.
+        if (this.isPracticeMode()) {
+            this.updatePracticePowerUps(now)
+        } else {
+            if (now >= this.nextPowerUpAt) {
+                this.nextPowerUpAt =
+                    now + scaledSpawnIntervalMs(this.arenaMap.powerUpIntervalMs, activePlayerCount)
+                this.spawnPowerUp()
+            }
 
-        if (this.shouldSpawnGolden()) {
-            this.spawnGoldenPowerUp(now)
+            if (this.shouldSpawnGolden()) {
+                this.spawnGoldenPowerUp(now)
+            }
         }
 
         for (const [powerUpId, powerUp] of this.state.powerUps) {
             for (const [sessionId, player] of this.state.players) {
-                if (player.isDead) continue
+                if (player.isDead || player.isBot) continue
                 const dist = Math.hypot(player.x - powerUp.x, player.y - powerUp.y)
                 if (dist <= weaponsConfig.pickupRadius) {
                     if (this.applyPowerUp(sessionId, player, powerUp.kind, now)) {
                         this.state.powerUps.delete(powerUpId)
+                        if (this.isPracticeMode()) {
+                            for (const pad of this.practicePowerUpPads.values()) {
+                                if (pad.activeId === powerUpId) {
+                                    pad.activeId = ''
+                                    pad.respawnAt = now + PRACTICE_POWERUP_RESPAWN_MS
+                                    break
+                                }
+                            }
+                        }
                         break
                     }
                 }
             }
         }
 
+        if (this.isPracticeMode()) {
+            this.updatePracticeBots(dt, now)
+        }
+
         for (const [playerId, player] of this.state.players) {
-            if (!player.isDead || now < player.respawnAt) continue
+            if (player.isBot || !player.isDead || now < player.respawnAt) continue
 
             const spawn = this.selectSafestSpawnPoint(playerId)
             player.x = spawn.x
@@ -1504,7 +1844,7 @@ export class ArenaRoom extends Room {
             player.respawnAt = 0
         }
 
-        if (this.remainingSeconds <= 0 || this.state.timeRemaining <= 0) {
+        if (!this.isPracticeMode() && (this.remainingSeconds <= 0 || this.state.timeRemaining <= 0)) {
             this.state.timeRemaining = 0
             this.finishMatchByTime()
         }
@@ -1617,11 +1957,40 @@ export class ArenaRoom extends Room {
         if (this.state.phase === 'finished' || this.starting) {
             throw new ServerError(400, 'La partida ya terminó; espera la siguiente ronda.')
         }
-        if (this.state.players.size >= this.maxClients) {
+        if (this.accounts.size >= this.maxClients) {
             throw new ServerError(400, 'La sala está llena.')
         }
         if ([...this.accounts.values()].some((a) => a.accountId === auth.accountId)) {
             throw new ServerError(400, 'Esta cuenta ya ocupa una plaza.')
+        }
+
+        const player = new Player()
+        player.id = client.sessionId
+        player.name = auth.name
+        player.skin = auth.skin
+        player.startingWeapon = auth.weapon
+        player.isBot = false
+
+        if (this.isPracticeMode()) {
+            player.team = ''
+            player.teamColor = auth.teamColor
+            player.dashes = MAX_DASHES
+            player.maxDashes = MAX_DASHES
+            this.resetPlayerLoadout(player)
+            if (!this.isMeleeWeapon(player.weaponType) && player.maxAmmo > 0) {
+                player.reserveAmmo = player.maxAmmo * 2
+            }
+            player.x = PRACTICE_PLAYER_SPAWN.x
+            player.y = PRACTICE_PLAYER_SPAWN.y
+            this.state.players.set(player.id, player)
+            this.humanClients.set(client.sessionId, client)
+            client.view = new StateView()
+            client.view.add(player)
+            this.trackAccount(client, auth)
+            if (!this.state.hostId) this.state.hostId = client.sessionId
+            this.startPracticeSession()
+            this.syncMetadata()
+            return
         }
 
         let returningParticipant: Participant | undefined
@@ -1638,12 +2007,6 @@ export class ArenaRoom extends Room {
                 throw new ServerError(400, 'La partida alcanzó el límite de participantes.')
             }
         }
-
-        const player = new Player()
-        player.id = client.sessionId
-        player.name = auth.name
-        player.skin = auth.skin
-        player.startingWeapon = auth.weapon
 
         if (this.state.gameMode === 'tdm') {
             const assignedTeam =
@@ -1720,6 +2083,7 @@ export class ArenaRoom extends Room {
         player.y = spawn.y
 
         this.state.players.set(player.id, player)
+        this.humanClients.set(client.sessionId, client)
         client.view = new StateView()
         client.view.add(player)
         if (this.state.phase === 'playing') {
@@ -1739,6 +2103,7 @@ export class ArenaRoom extends Room {
         if (account) clearTimeout(account.timer)
         this.accounts.delete(client.sessionId)
         this.refreshRequests.delete(client.sessionId)
+        this.humanClients.delete(client.sessionId)
         const leavingPlayer = this.state.players.get(client.sessionId)
         this.inputs.delete(client.sessionId)
         this.state.players.delete(client.sessionId)
@@ -1746,6 +2111,13 @@ export class ArenaRoom extends Room {
         if (this.state.isPaused && leavingPlayer && leavingPlayer.name === this.state.pausedByName) {
             this.state.isPaused = false
             this.state.pausedByName = ''
+        }
+
+        if (this.isPracticeMode()) {
+            this.clearPracticeEntities()
+            this.clearCombatEntities()
+            this.resetToWaiting()
+            return
         }
 
         if (this.state.hostId === client.sessionId) {

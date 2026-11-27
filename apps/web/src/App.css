@@ -2119,3 +2119,129 @@
     padding: 14px;
   }
 }
+
+/* Campo de tiro (Firing Range) */
+.practice-lobby-card {
+  background: linear-gradient(135deg, #fff4df 0%, #fde6c4 100%);
+  border-color: #d97706;
+}
+
+.practice-lobby-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.practice-lobby-desc {
+  margin: 0 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: #4f3a65;
+  font-weight: 600;
+}
+
+.practice-lobby-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #241932;
+  border: 2px solid #241932;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.practice-lobby-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.practice-env-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-env-pill {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.practice-enter-btn {
+  padding: 9px 16px;
+}
+
+.arena-practice-fab {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 16;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 2px solid #241932;
+  background: rgba(245, 158, 11, 0.94);
+  color: #241932;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #241932;
+}
+
+.arena-practice-fab:hover {
+  background: #fbbf24;
+}
+
+.arena-practice-fab kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #241932;
+  color: #fde68a;
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
+@media (orientation: portrait) {
+  .arena-shell.is-touch-mode .arena-practice-fab {
+    top: auto;
+    bottom: 10px;
+    left: 10px;
+  }
+}
+
+.practice-arsenal-modal {
+  max-width: 720px;
+}
+
+.practice-weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.practice-utility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.practice-utility-grid .kenney-btn-secondary {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 0.84rem;
+}
