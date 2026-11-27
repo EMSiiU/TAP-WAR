@@ -103,8 +103,8 @@
             "reloadMs": 1300,
             "damage": 18,
             "speed": 650,
-            "pellets": 3,
-            "spreadDeg": 12,
+            "pellets": 4,
+            "spreadDeg": 6,
             "bulletScale": 0.9,
             "maxAmmo": 6
         },

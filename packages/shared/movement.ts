@@ -4,6 +4,8 @@ export const PLAYER_DASH_DURATION_MS = 160
 export const PLAYER_DASH_COOLDOWN_MS = 450
 export const INPUT_TIMEOUT_MS = 300
 export const BULLET_LIFETIME_MS = 2000
+export const PLAYER_HIT_RADIUS = 23
+export const PLAYER_HITBOX_OFFSET_Y = -20
 
 export type Position = { x: number; y: number }
 

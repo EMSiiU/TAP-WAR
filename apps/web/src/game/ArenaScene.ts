@@ -1,5 +1,7 @@
 import Phaser from 'phaser'
+import { isSafeCustomEmoteDataUrl } from '../auth/customEmote'
 import {
+    PLAYER_HITBOX_OFFSET_Y,
     POWERUP_META,
     buildMapLayers,
     getArenaMap,
@@ -64,6 +66,7 @@ export type PlayerState = {
     deaths: number
     isDead: boolean
     isBot?: boolean
+    hasCustomEmote?: boolean
     emote: string
     meleeAttackSeq?: number
     lastMeleeAngle?: number
@@ -119,7 +122,7 @@ export type ArenaControls = {
         dash?: boolean
         seq?: number
     }) => void
-    sendEmote?: (emote: 'dots' | 'alert') => void
+    sendEmote?: (emote: 'dots' | 'alert' | 'custom') => void
     sendPause?: (paused: boolean) => void
 }
 
@@ -138,6 +141,7 @@ const SHELL_SHOTGUN_SIZE = 16
 const PICKUP_DISPLAY_SIZE = 44
 const POWERUP_DISPLAY_SIZE = 34
 const EMOTE_DISPLAY_SIZE = 32
+const CUSTOM_EMOTE_DISPLAY_SIZE = 38
 const EMOTE_OFFSET_Y = -110
 const HP_BAR_WIDTH = 56
 const HP_BAR_HEIGHT = 16
@@ -263,6 +267,8 @@ export default class ArenaScene extends Phaser.Scene {
     private activeBulletIds = new Set<string>()
     private activePickupIds = new Set<string>()
     private activePowerUpIds = new Set<string>()
+    private customEmoteDataUrls = new Map<string, string>()
+    private customEmoteLoadedKeys = new Set<string>()
     private lastShellAtByOwner = new Map<string, number>()
     private lastSoundAtByKey = new Map<string, number>()
     private lastEmptyClickAt = 0
@@ -384,6 +390,10 @@ export default class ArenaScene extends Phaser.Scene {
             this.powerUpViews.clear()
             this.lastShellAtByOwner.clear()
             this.lastSoundAtByKey.clear()
+            for (const key of this.customEmoteLoadedKeys) {
+                if (this.textures.exists(key)) this.textures.remove(key)
+            }
+            this.customEmoteLoadedKeys.clear()
         })
 
         this.renderArenaMap()
@@ -417,6 +427,9 @@ export default class ArenaScene extends Phaser.Scene {
         this.applyBullets(this.bullets)
         this.applyPickups(this.pickups)
         this.applyPowerUps(this.powerUps)
+        for (const [sessionId, dataUrl] of this.customEmoteDataUrls) {
+            this.loadCustomEmoteTexture(sessionId, dataUrl)
+        }
         if (this.arenaMap.id !== 'small') {
             const localView = this.playerViews.get(this.controls.playerId)
             if (localView) {
@@ -843,6 +856,30 @@ export default class ArenaScene extends Phaser.Scene {
         this.onPracticeArsenalToggle = handler
     }
 
+    setPlayerCustomEmote(sessionId: string, dataUrl: string) {
+        if (!sessionId || !isSafeCustomEmoteDataUrl(dataUrl)) return
+        this.customEmoteDataUrls.set(sessionId, dataUrl)
+        if (this.isReady && this.sys?.isActive() && this.textures) {
+            this.loadCustomEmoteTexture(sessionId, dataUrl)
+        }
+    }
+
+    private loadCustomEmoteTexture(sessionId: string, dataUrl: string) {
+        if (!this.isReady || !this.textures || !isSafeCustomEmoteDataUrl(dataUrl)) return
+        const key = `emote-custom-${sessionId}`
+        const img = new Image()
+        img.onload = () => {
+            if (!this.isReady || !this.sys?.isActive() || !this.textures) return
+            if (this.customEmoteDataUrls.get(sessionId) !== dataUrl) return
+            if (this.textures.exists(key)) {
+                this.textures.remove(key)
+            }
+            this.textures.addImage(key, img)
+            this.customEmoteLoadedKeys.add(key)
+        }
+        img.src = dataUrl
+    }
+
     triggerDamageFeedback(x: number, y: number, damage: number, blocked: boolean) {
         if (!this.isReady || !this.sys.isActive()) return
         const textValue = blocked ? 'ESCUDO' : `-${Math.max(1, Math.round(damage))}`
@@ -1087,7 +1124,15 @@ export default class ArenaScene extends Phaser.Scene {
                     const aimSource = localView
                         ? { ...player, x: localView.root.x, y: localView.root.y }
                         : player
-                    const auto = findAutoAimAngle(aimSource, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                    const auto = findAutoAimAngle(
+                        aimSource,
+                        this.players,
+                        this.gameMode,
+                        aimAngle,
+                        WEAPON_BASE_Y,
+                        undefined,
+                        PLAYER_HITBOX_OFFSET_Y,
+                    )
                     aimAngle = auto.angle
                     this.aimOffsetX = Math.cos(aimAngle) * 140
                     this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
@@ -1173,7 +1218,15 @@ export default class ArenaScene extends Phaser.Scene {
                     const aimSource = localView
                         ? { ...player, x: localView.root.x, y: localView.root.y }
                         : player
-                    const auto = findAutoAimAngle(aimSource, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                    const auto = findAutoAimAngle(
+                        aimSource,
+                        this.players,
+                        this.gameMode,
+                        aimAngle,
+                        WEAPON_BASE_Y,
+                        undefined,
+                        PLAYER_HITBOX_OFFSET_Y,
+                    )
                     aimAngle = auto.angle
                     this.aimOffsetX = Math.cos(aimAngle) * 140
                     this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
@@ -1271,6 +1324,9 @@ export default class ArenaScene extends Phaser.Scene {
                 return true
             } else if (code === binds.emote2) {
                 this.controls.sendEmote?.('alert')
+                return true
+            } else if (code === binds.emote3) {
+                this.controls.sendEmote?.('custom')
                 return true
             }
             return false
@@ -1846,6 +1902,12 @@ export default class ArenaScene extends Phaser.Scene {
             if (!this.activePlayerIds.has(id)) {
                 view.root.destroy()
                 this.playerViews.delete(id)
+                this.customEmoteDataUrls.delete(id)
+                const emoteKey = `emote-custom-${id}`
+                if (this.textures.exists(emoteKey)) {
+                    this.textures.remove(emoteKey)
+                    this.customEmoteLoadedKeys.delete(emoteKey)
+                }
             }
         }
 
@@ -2056,6 +2118,7 @@ export default class ArenaScene extends Phaser.Scene {
                 if (view.emoteSprite.texture.key !== 'emote-skull') {
                     view.emoteSprite.setTexture('emote-skull')
                 }
+                view.emoteSprite.setDisplaySize(EMOTE_DISPLAY_SIZE, EMOTE_DISPLAY_SIZE)
                 view.emoteSprite.setVisible(true)
                 if (isNewView || !wasDead) {
                     this.tweens.killTweensOf(view.emoteSprite)
@@ -2074,11 +2137,19 @@ export default class ArenaScene extends Phaser.Scene {
                     this.tweens.killTweensOf(view.emoteSprite)
                     view.emoteSprite.setY(EMOTE_OFFSET_Y)
                 }
-                if (player.emote === 'dots' || player.emote === 'alert') {
+                const customKey = `emote-custom-${player.id}`
+                if (player.emote === 'custom' && this.textures.exists(customKey)) {
+                    if (view.emoteSprite.texture.key !== customKey) {
+                        view.emoteSprite.setTexture(customKey)
+                    }
+                    view.emoteSprite.setDisplaySize(CUSTOM_EMOTE_DISPLAY_SIZE, CUSTOM_EMOTE_DISPLAY_SIZE)
+                    view.emoteSprite.setVisible(true)
+                } else if (player.emote === 'dots' || player.emote === 'alert') {
                     const emoteKey = `emote-${player.emote}`
                     if (view.emoteSprite.texture.key !== emoteKey) {
                         view.emoteSprite.setTexture(emoteKey)
                     }
+                    view.emoteSprite.setDisplaySize(EMOTE_DISPLAY_SIZE, EMOTE_DISPLAY_SIZE)
                     view.emoteSprite.setVisible(true)
                 } else {
                     view.emoteSprite.setVisible(false)

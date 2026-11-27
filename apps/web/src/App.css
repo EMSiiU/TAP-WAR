@@ -2419,3 +2419,127 @@
   background: #991b1b;
   color: #fecaca;
 }
+
+/* Custom Emote Slot (Lobby + Touch HUD) */
+.custom-emote-block {
+  margin: 14px 0 6px;
+}
+
+.custom-emote-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(90px, auto)) minmax(0, 1fr);
+  gap: 8px;
+  align-items: stretch;
+}
+
+.custom-emote-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 2px solid #bca28e;
+  background: #fff9ef;
+  color: #3d2e4f;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.custom-emote-slot.is-custom {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.custom-emote-slot.is-custom.is-filled {
+  border-color: #c85a3f;
+  background: #fff4e6;
+}
+
+.custom-emote-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 8px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
+.custom-emote-slot.is-custom.is-filled .custom-emote-thumb {
+  image-rendering: auto;
+}
+
+.custom-emote-empty {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 2px dashed #bca28e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  color: #8e739a;
+  flex-shrink: 0;
+}
+
+.custom-emote-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.custom-emote-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.custom-emote-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+.custom-emote-upload {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 2px solid #3d2e4f;
+  background: #fff9f2;
+  color: #3d2e4f;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+
+.custom-emote-upload.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-text-button.custom-emote-remove {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 0.76rem;
+}
+
+.touch-emote-icon.is-custom-emote {
+  image-rendering: auto;
+  border-radius: 4px;
+}
+
+@media (max-width: 520px) {
+  .custom-emote-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .custom-emote-slot.is-custom {
+    grid-column: 1 / -1;
+  }
+}

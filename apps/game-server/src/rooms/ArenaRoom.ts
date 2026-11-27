@@ -49,6 +49,8 @@ import {
     PLAYER_DASH_COOLDOWN_MS,
     PLAYER_DASH_DURATION_MS,
     PLAYER_DASH_SPEED,
+    PLAYER_HITBOX_OFFSET_Y,
+    PLAYER_HIT_RADIUS,
     PLAYER_MOVE_SPEED,
     isBulletTrajectoryRelevantToViewer,
 } from '../../../../packages/shared/movement.js'
@@ -74,7 +76,6 @@ import {
 const STEP_MS = 1000 / 30
 const MUZZLE_OFFSET = 38
 const MUZZLE_OFFSET_Y = -12
-const PLAYER_HIT_RADIUS = 30
 const RESPAWN_DELAY_MS = 3000
 const MATCH_DURATION_SECONDS = 300
 const KILLS_TO_WIN_FFA = 20
@@ -158,6 +159,41 @@ export class ArenaRoom extends Room {
         { kind: PowerUpKind; x: number; y: number; activeId: string; respawnAt: number }
     >()
     private lastPracticeActionAt = new Map<string, number>()
+    private customEmoteBySession = new Map<string, string>()
+
+    private registerCustomEmoteOnJoin(client: Client, player: Player, dataUrl?: string) {
+        if (!dataUrl) {
+            for (const [sid, url] of this.customEmoteBySession) {
+                try {
+                    client.send?.('custom_emote_asset', { sessionId: sid, dataUrl: url })
+                } catch {
+                    // Isolated unit tests without attached transport.
+                }
+            }
+            return
+        }
+
+        player.hasCustomEmote = true
+        for (const [sid, url] of this.customEmoteBySession) {
+            if (sid === client.sessionId) continue
+            try {
+                client.send?.('custom_emote_asset', { sessionId: sid, dataUrl: url })
+            } catch {
+                // Isolated unit tests without attached transport.
+            }
+        }
+        this.customEmoteBySession.set(client.sessionId, dataUrl)
+        try {
+            client.send?.('custom_emote_asset', { sessionId: client.sessionId, dataUrl })
+        } catch {
+            // Isolated unit tests without attached transport.
+        }
+        try {
+            this.broadcast?.('custom_emote_asset', { sessionId: client.sessionId, dataUrl }, { except: client })
+        } catch {
+            // Isolated unit tests without attached transport.
+        }
+    }
 
     constructor(resultStore?: ResultStore) {
         super()
@@ -515,6 +551,7 @@ export class ArenaRoom extends Room {
         this.practiceBotMeta.clear()
         this.practicePowerUpPads.clear()
         this.lastPracticeActionAt.clear()
+        this.customEmoteBySession.clear()
     }
 
     async onCreate(options?: ArenaRoomOptions) {
@@ -663,16 +700,21 @@ export class ArenaRoom extends Room {
         })
 
         this.onMessage<unknown>('emote', (client, message) => {
-            if (message !== 'dots' && message !== 'alert') return
-            const player = this.state.players.get(client.sessionId)
-            if (!player) return
-
-            player.emote = message
-            player.emoteUntil = Date.now() + 2000
+            this.handleEmote(client, message)
         })
 
         // ESC is a personal menu: it never freezes a competitive round.
         this.setSimulationInterval((deltaMs) => this.simulate(deltaMs), STEP_MS)
+    }
+
+    private handleEmote(client: Client, message: unknown) {
+        if (message !== 'dots' && message !== 'alert' && message !== 'custom') return
+        const player = this.state.players.get(client.sessionId)
+        if (!player) return
+        if (message === 'custom' && !player.hasCustomEmote) return
+
+        player.emote = message
+        player.emoteUntil = Date.now() + 2000
     }
 
     private clearCombatEntities() {
@@ -1216,11 +1258,12 @@ export class ArenaRoom extends Room {
             if (playerId === ownerId || target.isDead || target.hp <= 0) continue
             if (this.isFriendly(owner, target)) continue
 
-            const dist = Math.hypot(target.x - x, target.y - y)
+            const targetY = target.y + PLAYER_HITBOX_OFFSET_Y
+            const dist = Math.hypot(target.x - x, targetY - y)
             if (dist > radius) continue
             if (
                 dist > PLAYER_HIT_RADIUS &&
-                segmentBlockedByObstacle(x, y, target.x, target.y, this.arenaMap)
+                segmentBlockedByObstacle(x, y, target.x, targetY, this.arenaMap)
             ) {
                 continue
             }
@@ -1305,12 +1348,20 @@ export class ArenaRoom extends Room {
                     spawnX,
                     spawnY,
                     target.x,
-                    target.y,
+                    target.y + PLAYER_HITBOX_OFFSET_Y,
                     PLAYER_HIT_RADIUS,
                 )
             ) {
                 if (explosionRadius > 0) {
-                    this.detonateExplosion(target.x, target.y, explosionRadius, damage, ownerId, player.weaponType, now)
+                    this.detonateExplosion(
+                        target.x,
+                        target.y + PLAYER_HITBOX_OFFSET_Y,
+                        explosionRadius,
+                        damage,
+                        ownerId,
+                        player.weaponType,
+                        now,
+                    )
                 } else {
                     this.applyDamageToPlayer(playerId, target, ownerId, damage, now, player.weaponType)
                 }
@@ -1729,7 +1780,7 @@ export class ArenaRoom extends Room {
                         bullet.simX,
                         bullet.simY,
                         target.x,
-                        target.y,
+                        target.y + PLAYER_HITBOX_OFFSET_Y,
                         PLAYER_HIT_RADIUS,
                     )
                 ) {
@@ -1740,7 +1791,7 @@ export class ArenaRoom extends Room {
                         if (
                             this.detonateExplosion(
                                 target.x,
-                                target.y,
+                                target.y + PLAYER_HITBOX_OFFSET_Y,
                                 bullet.explosionRadius,
                                 bullet.damage,
                                 bullet.ownerId,
@@ -1970,6 +2021,7 @@ export class ArenaRoom extends Room {
         player.skin = auth.skin
         player.startingWeapon = auth.weapon
         player.isBot = false
+        this.registerCustomEmoteOnJoin(client, player, auth.customEmoteDataUrl)
 
         if (this.isPracticeMode()) {
             player.team = ''
@@ -2104,6 +2156,7 @@ export class ArenaRoom extends Room {
         this.accounts.delete(client.sessionId)
         this.refreshRequests.delete(client.sessionId)
         this.humanClients.delete(client.sessionId)
+        this.customEmoteBySession.delete(client.sessionId)
         const leavingPlayer = this.state.players.get(client.sessionId)
         this.inputs.delete(client.sessionId)
         this.state.players.delete(client.sessionId)

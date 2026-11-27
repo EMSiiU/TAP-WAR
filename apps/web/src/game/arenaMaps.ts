@@ -6,6 +6,8 @@ export {
   BULLET_LIFETIME_MS,
   PLAYER_DASH_DURATION_MS,
   PLAYER_DASH_SPEED,
+  PLAYER_HITBOX_OFFSET_Y,
+  PLAYER_HIT_RADIUS,
   PLAYER_MOVE_SPEED,
   isBulletHittingObstacle,
   segmentBlockedByObstacle,

@@ -42,12 +42,13 @@ export function findAutoAimAngle(
   fallbackAngle: number,
   weaponOffsetY = -10,
   maxRange = AUTO_AIM_MAX_RANGE,
+  targetOffsetY = weaponOffsetY,
 ): { angle: number; target: AutoAimCandidate | null } {
   const target = findAutoAimTarget(local, players, gameMode, maxRange)
   if (!target) {
     return { angle: fallbackAngle, target: null }
   }
-  const raw = Math.atan2(target.y - (local.y + weaponOffsetY), target.x - local.x)
+  const raw = Math.atan2(target.y + targetOffsetY - (local.y + weaponOffsetY), target.x - local.x)
   return {
     angle: raw === Math.PI ? -Math.PI : raw,
     target,

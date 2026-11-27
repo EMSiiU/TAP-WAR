@@ -19,4 +19,5 @@ export type Profile = {
   created_at: string
   updated_at: string
   avatar_path?: string | null
+  custom_emote_path?: string | null
 }

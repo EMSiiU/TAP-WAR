@@ -9,6 +9,7 @@ export type PcControlAction =
   | 'dash'
   | 'emote1'
   | 'emote2'
+  | 'emote3'
 
 export type PcControlConfig = Record<PcControlAction, string>
 
@@ -23,6 +24,7 @@ export const DEFAULT_PC_CONTROLS: PcControlConfig = {
   dash: 'Space',
   emote1: 'Digit1',
   emote2: 'Digit2',
+  emote3: 'Digit3',
 }
 
 export const PC_CONTROL_LABELS: { action: PcControlAction; label: string; shortLabel: string }[] = [
@@ -36,6 +38,7 @@ export const PC_CONTROL_LABELS: { action: PcControlAction; label: string; shortL
   { action: 'dash', label: 'Dash', shortLabel: 'Dash' },
   { action: 'emote1', label: 'Emote Risa', shortLabel: 'Risa' },
   { action: 'emote2', label: 'Emote Corazón', shortLabel: 'Corazón' },
+  { action: 'emote3', label: 'Emote Personalizado', shortLabel: 'Emote 3' },
 ]
 
 const STORAGE_KEY = 'tapwar.pcControls.v1'
