@@ -1,3 +1,4 @@
+import { StateView } from '@colyseus/schema'
 import { randomUUID } from 'node:crypto'
 import { getResultStore, resolveResults, type Participant, type ResultStore } from '../results.js'
 import { ErrorCode, Room, ServerError, type Client } from 'colyseus'
@@ -32,6 +33,15 @@ import {
     type PowerUpKind,
 } from '../../../../packages/shared/gameplay.js'
 import {
+    BULLET_LIFETIME_MS,
+    INPUT_TIMEOUT_MS,
+    PLAYER_DASH_COOLDOWN_MS,
+    PLAYER_DASH_DURATION_MS,
+    PLAYER_DASH_SPEED,
+    PLAYER_MOVE_SPEED,
+    isBulletTrajectoryRelevantToViewer,
+} from '../../../../packages/shared/movement.js'
+import {
     isBulletHittingObstacle,
     moveInsideArena,
     pickRandomFreeArenaPoint,
@@ -51,12 +61,6 @@ import {
 } from './ArenaMaps.js'
 
 const STEP_MS = 1000 / 30
-const INPUT_TIMEOUT_MS = 300
-const SPEED = 220
-const DASH_SPEED = 880
-const DASH_DURATION_MS = 160
-const DASH_COOLDOWN_MS = 450
-const BULLET_LIFETIME_MS = 2000
 const MUZZLE_OFFSET = 38
 const MUZZLE_OFFSET_Y = -12
 const PLAYER_HIT_RADIUS = 30
@@ -65,8 +69,15 @@ const MATCH_DURATION_SECONDS = 300
 const KILLS_TO_WIN_FFA = 20
 const GOLDEN_TIME_THRESHOLD_SECONDS = 60
 const MAX_MATCH_PARTICIPANTS = 20
+const BULLET_VIEW_HALF_W = 860
+const BULLET_VIEW_HALF_H = 720
+const EXPLOSION_INTEREST_RADIUS = 1100
 const PICKUP_WEAPONS: WeaponType[] = ['shotgun', 'sniper', 'smg', 'launcher', 'plasma', 'axe']
 const NORMAL_POWERUPS: Exclude<PowerUpKind, 'golden'>[] = ['ammo', 'medkit', 'shield', 'dash']
+
+function quantizeProgress(value: number, steps: number): number {
+    return Math.round(Math.max(0, Math.min(1, value)) * steps) / steps
+}
 
 type WeaponSpec = {
     id: string
@@ -103,6 +114,7 @@ export class ArenaRoom extends Room {
     private matchId = ''
     private startedAt = ''
     private starting = false
+    private remainingSeconds = MATCH_DURATION_SECONDS
     private resultStore?: ResultStore
     private participants = new Map<string, Participant>()
     private dashesByAccount = new Map<string, number>()
@@ -121,6 +133,43 @@ export class ArenaRoom extends Room {
     constructor(resultStore?: ResultStore) {
         super()
         this.resultStore = resultStore
+    }
+
+    private isBulletRelevantToClient(bullet: BulletState, clientSessionId: string): boolean {
+        if (this.arenaMap.id === 'small' || clientSessionId === bullet.ownerId) {
+            return true
+        }
+        const viewer = this.state.players.get(clientSessionId)
+        if (!viewer) return true
+        return isBulletTrajectoryRelevantToViewer(
+            bullet.simX,
+            bullet.simY,
+            bullet.vx,
+            bullet.vy,
+            BULLET_LIFETIME_MS / 1000,
+            viewer.x,
+            viewer.y,
+            BULLET_VIEW_HALF_W,
+            BULLET_VIEW_HALF_H,
+        )
+    }
+
+    private addBulletToInterestedViews(bullet: BulletState) {
+        for (const client of this.clients ?? []) {
+            if (!client.view) continue
+            if (this.isBulletRelevantToClient(bullet, client.sessionId)) {
+                client.view.add(bullet)
+            }
+        }
+    }
+
+    private addExistingBulletsToView(client: Client) {
+        if (!client.view) return
+        for (const bullet of this.state.bullets.values()) {
+            if (this.isBulletRelevantToClient(bullet, client.sessionId)) {
+                client.view.add(bullet)
+            }
+        }
     }
 
     private weaponSpec(weaponType: WeaponType): WeaponSpec {
@@ -248,7 +297,10 @@ export class ArenaRoom extends Room {
                 ...input,
                 receivedAt: now,
             })
-            player.aimAngle = input.aimAngle
+            const quantizedAim = Math.round(input.aimAngle * 50) / 50
+            if (Math.abs(player.aimAngle - quantizedAim) > 0.001) {
+                player.aimAngle = quantizedAim
+            }
 
             if (this.state.phase !== 'playing') return
 
@@ -450,8 +502,8 @@ export class ArenaRoom extends Room {
 
         player.dashDirX = dirX
         player.dashDirY = dirY
-        player.dashUntil = now + DASH_DURATION_MS
-        player.dashCooldownUntil = now + DASH_COOLDOWN_MS
+        player.dashUntil = now + PLAYER_DASH_DURATION_MS
+        player.dashCooldownUntil = now + PLAYER_DASH_COOLDOWN_MS
         player.dashSeq += 1
         player.dashAngle = Math.atan2(dirY, dirX)
     }
@@ -523,6 +575,7 @@ export class ArenaRoom extends Room {
         this.state.phase = 'playing'
         this.state.isPaused = false
         this.state.pausedByName = ''
+        this.remainingSeconds = MATCH_DURATION_SECONDS
         this.state.timeRemaining = MATCH_DURATION_SECONDS
         this.state.killsToWin = this.targetKillsForMode(this.state.gameMode, this.state.maxPlayers)
         this.state.orangeScore = 0
@@ -573,6 +626,7 @@ export class ArenaRoom extends Room {
         this.state.phase = 'waiting'
         this.state.isPaused = false
         this.state.pausedByName = ''
+        this.remainingSeconds = MATCH_DURATION_SECONDS
         this.state.timeRemaining = MATCH_DURATION_SECONDS
         this.state.killsToWin = this.targetKillsForMode(this.state.gameMode, this.state.maxPlayers)
         this.state.orangeScore = 0
@@ -814,8 +868,26 @@ export class ArenaRoom extends Room {
         weaponType: WeaponType,
         now: number,
     ): boolean {
+        const payload = { x: Math.round(x), y: Math.round(y), radius }
         try {
-            this.broadcast?.('explosion', { x: Math.round(x), y: Math.round(y), radius })
+            const connectedClients = this.clients ?? []
+            if (this.arenaMap.id !== 'small' && connectedClients.length > 0) {
+                const maxDistSq = EXPLOSION_INTEREST_RADIUS * EXPLOSION_INTEREST_RADIUS
+                for (const client of connectedClients) {
+                    const viewer = this.state.players.get(client.sessionId)
+                    if (!viewer) {
+                        client.send('explosion', payload)
+                        continue
+                    }
+                    const dx = viewer.x - x
+                    const dy = viewer.y - y
+                    if (dx * dx + dy * dy <= maxDistSq) {
+                        client.send('explosion', payload)
+                    }
+                }
+            } else {
+                this.broadcast?.('explosion', payload)
+            }
         } catch {
             // Isolated unit tests without an attached Colyseus transport.
         }
@@ -927,6 +999,9 @@ export class ArenaRoom extends Room {
             }
         }
 
+        const vx = Math.round(Math.cos(angle) * speed)
+        const vy = Math.round(Math.sin(angle) * speed)
+
         const bullet = new BulletState()
         bullet.id = `b-${++this.nextBulletId}`
         bullet.ownerId = ownerId
@@ -934,8 +1009,10 @@ export class ArenaRoom extends Room {
         bullet.angle = angle
         bullet.x = spawnX
         bullet.y = spawnY
-        bullet.vx = Math.cos(angle) * speed
-        bullet.vy = Math.sin(angle) * speed
+        bullet.simX = spawnX
+        bullet.simY = spawnY
+        bullet.vx = vx
+        bullet.vy = vy
         bullet.damage = damage
         bullet.explosionRadius = explosionRadius
         bullet.scale = scale
@@ -943,6 +1020,7 @@ export class ArenaRoom extends Room {
 
         this.state.bullets.set(bullet.id, bullet)
         this.bulletCreatedAt.set(bullet.id, now)
+        this.addBulletToInterestedViews(bullet)
     }
 
     private collectOccupiedItemPoints() {
@@ -957,7 +1035,12 @@ export class ArenaRoom extends Room {
 
     private shouldSpawnGolden(): boolean {
         if (this.goldenSpawned) return false
-        if (this.state.timeRemaining <= GOLDEN_TIME_THRESHOLD_SECONDS) return true
+        if (
+            this.remainingSeconds <= GOLDEN_TIME_THRESHOLD_SECONDS ||
+            this.state.timeRemaining <= GOLDEN_TIME_THRESHOLD_SECONDS
+        ) {
+            return true
+        }
 
         if (this.state.gameMode === 'tdm') {
             const threshold = Math.ceil(this.state.killsToWin * 0.75)
@@ -1033,7 +1116,7 @@ export class ArenaRoom extends Room {
         player.shieldUntil = nextUntil
         player.shieldDurationMs = Math.max(durationMs, remainingMs)
         player.shieldRemaining = Math.max(1, Math.ceil(remainingMs / 1000))
-        player.shieldProgress = Math.max(0, Math.min(1, remainingMs / player.shieldDurationMs))
+        player.shieldProgress = quantizeProgress(remainingMs / player.shieldDurationMs, 50)
     }
 
     private applyPowerUp(sessionId: string, player: Player, kind: PowerUpKind, now: number): boolean {
@@ -1127,40 +1210,43 @@ export class ArenaRoom extends Room {
         for (const [id, player] of this.state.players) {
             if (player.isDead) continue
 
+            const input = this.inputs.get(id)
+            const activeInput = input && now - input.receivedAt < INPUT_TIMEOUT_MS ? input : undefined
+            if (activeInput?.seq !== undefined && activeInput.seq > player.lastInputSeq) {
+                player.lastInputSeq = activeInput.seq
+            } else if (input && !activeInput) {
+                this.inputs.delete(id)
+            }
+
             if (now < player.dashUntil) {
-                const dashDist = DASH_SPEED * dt
+                const dashDist = PLAYER_DASH_SPEED * dt
                 const next = moveInsideArena(
                     player,
                     player.dashDirX * dashDist,
                     player.dashDirY * dashDist,
                     this.arenaMap,
                 )
-                player.x = next.x
-                player.y = next.y
+                if (player.x !== next.x) player.x = next.x
+                if (player.y !== next.y) player.y = next.y
                 continue
             }
 
-            const input = this.inputs.get(id)
-            if (!input) continue
-            if (now - input.receivedAt >= INPUT_TIMEOUT_MS) {
-                this.inputs.delete(id)
-                continue
-            }
+            if (!activeInput) continue
 
-            const length = Math.hypot(input.moveX, input.moveY)
+            const length = Math.hypot(activeInput.moveX, activeInput.moveY)
             if (length === 0) continue
 
             const scale = length > 1 ? 1 / length : 1
-            const distance = SPEED * dt
+            const distance = PLAYER_MOVE_SPEED * dt
             const next = moveInsideArena(
                 player,
-                input.moveX * scale * distance,
-                input.moveY * scale * distance,
+                activeInput.moveX * scale * distance,
+                activeInput.moveY * scale * distance,
                 this.arenaMap,
             )
 
-            player.x = next.x
-            player.y = next.y
+            if (player.x !== next.x) player.x = next.x
+            if (player.y !== next.y) player.y = next.y
         }
 
         if (this.state.phase !== 'playing') return
@@ -1180,20 +1266,26 @@ export class ArenaRoom extends Room {
                     if (accountId) this.dashesByAccount.set(accountId, player.dashes)
                     if (player.dashes >= MAX_DASHES) {
                         player.dashRechargeStartAt = 0
-                        player.dashRechargeProgress = 0
+                        if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
                     } else {
                         player.dashRechargeStartAt += gained * DASH_RECHARGE_MS
-                        player.dashRechargeProgress = Math.max(
-                            0,
-                            Math.min(1, (now - player.dashRechargeStartAt) / DASH_RECHARGE_MS),
+                        const nextProgress = quantizeProgress(
+                            (now - player.dashRechargeStartAt) / DASH_RECHARGE_MS,
+                            50,
                         )
+                        if (player.dashRechargeProgress !== nextProgress) {
+                            player.dashRechargeProgress = nextProgress
+                        }
                     }
                 } else {
-                    player.dashRechargeProgress = Math.max(0, Math.min(1, elapsed / DASH_RECHARGE_MS))
+                    const nextProgress = quantizeProgress(elapsed / DASH_RECHARGE_MS, 50)
+                    if (player.dashRechargeProgress !== nextProgress) {
+                        player.dashRechargeProgress = nextProgress
+                    }
                 }
             } else {
                 player.dashRechargeStartAt = 0
-                player.dashRechargeProgress = 0
+                if (player.dashRechargeProgress !== 0) player.dashRechargeProgress = 0
             }
 
             if (player.isDead) continue
@@ -1207,10 +1299,13 @@ export class ArenaRoom extends Room {
                     this.cancelReload(player)
                 } else {
                     const elapsed = player.reloadDurationMs - (player.reloadCompleteAt - now)
-                    player.reloadProgress = Math.max(
-                        0,
-                        Math.min(1, elapsed / Math.max(1, player.reloadDurationMs)),
+                    const nextReloadProgress = quantizeProgress(
+                        elapsed / Math.max(1, player.reloadDurationMs),
+                        20,
                     )
+                    if (player.reloadProgress !== nextReloadProgress) {
+                        player.reloadProgress = nextReloadProgress
+                    }
                 }
             }
 
@@ -1223,11 +1318,17 @@ export class ArenaRoom extends Room {
                     player.shieldProgress = 0
                 } else {
                     const remainingMs = player.shieldUntil - now
-                    player.shieldRemaining = Math.max(1, Math.ceil(remainingMs / 1000))
-                    player.shieldProgress = Math.max(
-                        0,
-                        Math.min(1, remainingMs / Math.max(1, player.shieldDurationMs)),
+                    const nextShieldRemaining = Math.max(1, Math.ceil(remainingMs / 1000))
+                    if (player.shieldRemaining !== nextShieldRemaining) {
+                        player.shieldRemaining = nextShieldRemaining
+                    }
+                    const nextShieldProgress = quantizeProgress(
+                        remainingMs / Math.max(1, player.shieldDurationMs),
+                        50,
                     )
+                    if (player.shieldProgress !== nextShieldProgress) {
+                        player.shieldProgress = nextShieldProgress
+                    }
                 }
             }
 
@@ -1236,36 +1337,46 @@ export class ArenaRoom extends Room {
                     player.goldenUntil = 0
                     player.goldenRemaining = 0
                 } else {
-                    player.goldenRemaining = Math.max(1, Math.ceil((player.goldenUntil - now) / 1000))
+                    const nextGoldenRemaining = Math.max(1, Math.ceil((player.goldenUntil - now) / 1000))
+                    if (player.goldenRemaining !== nextGoldenRemaining) {
+                        player.goldenRemaining = nextGoldenRemaining
+                    }
                 }
             }
         }
 
-        this.state.timeRemaining = Math.max(0, this.state.timeRemaining - dt)
+        if (Math.ceil(this.remainingSeconds) !== this.state.timeRemaining) {
+            this.remainingSeconds = this.state.timeRemaining
+        }
+        this.remainingSeconds = Math.max(0, this.remainingSeconds - dt)
+        const displaySeconds = Math.ceil(this.remainingSeconds)
+        if (displaySeconds !== this.state.timeRemaining) {
+            this.state.timeRemaining = displaySeconds
+        }
 
         for (const [bulletId, bullet] of this.state.bullets) {
-            const prevX = bullet.x
-            const prevY = bullet.y
-            bullet.x += bullet.vx * dt
-            bullet.y += bullet.vy * dt
+            const prevX = bullet.simX
+            const prevY = bullet.simY
+            bullet.simX += bullet.vx * dt
+            bullet.simY += bullet.vy * dt
 
             const createdAt = this.bulletCreatedAt.get(bulletId) ?? now
             const outOfBounds =
-                bullet.x < 0 ||
-                bullet.x > this.arenaMap.width ||
-                bullet.y < 0 ||
-                bullet.y > this.arenaMap.height
+                bullet.simX < 0 ||
+                bullet.simX > this.arenaMap.width ||
+                bullet.simY < 0 ||
+                bullet.simY > this.arenaMap.height
             const expired = now - createdAt >= BULLET_LIFETIME_MS
             const hitWall =
-                isBulletHittingObstacle(bullet.x, bullet.y, 4, this.arenaMap) ||
-                segmentBlockedByObstacle(prevX, prevY, bullet.x, bullet.y, this.arenaMap)
+                isBulletHittingObstacle(bullet.simX, bullet.simY, 4, this.arenaMap) ||
+                segmentBlockedByObstacle(prevX, prevY, bullet.simX, bullet.simY, this.arenaMap)
 
             if (outOfBounds || expired || hitWall) {
                 this.state.bullets.delete(bulletId)
                 this.bulletCreatedAt.delete(bulletId)
                 if (bullet.explosionRadius > 0) {
-                    const blastX = hitWall || outOfBounds ? prevX : bullet.x
-                    const blastY = hitWall || outOfBounds ? prevY : bullet.y
+                    const blastX = hitWall || outOfBounds ? prevX : bullet.simX
+                    const blastY = hitWall || outOfBounds ? prevY : bullet.simY
                     if (
                         this.detonateExplosion(
                             blastX,
@@ -1292,8 +1403,8 @@ export class ArenaRoom extends Room {
                     segmentIntersectsPlayerHitbox(
                         prevX,
                         prevY,
-                        bullet.x,
-                        bullet.y,
+                        bullet.simX,
+                        bullet.simY,
                         target.x,
                         target.y,
                         PLAYER_HIT_RADIUS,
@@ -1393,7 +1504,8 @@ export class ArenaRoom extends Room {
             player.respawnAt = 0
         }
 
-        if (this.state.timeRemaining <= 0) {
+        if (this.remainingSeconds <= 0 || this.state.timeRemaining <= 0) {
+            this.state.timeRemaining = 0
             this.finishMatchByTime()
         }
     }
@@ -1608,6 +1720,11 @@ export class ArenaRoom extends Room {
         player.y = spawn.y
 
         this.state.players.set(player.id, player)
+        client.view = new StateView()
+        client.view.add(player)
+        if (this.state.phase === 'playing') {
+            this.addExistingBulletsToView(client)
+        }
         this.trackAccount(client, auth)
 
         if (!this.state.hostId) this.state.hostId = client.sessionId

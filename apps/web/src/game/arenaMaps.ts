@@ -3,6 +3,16 @@ import type { GameMode } from '../../../../packages/shared/gameplay.ts'
 export { getArenaMap, buildMapLayers, normalizeEnvironment, ENVIRONMENT_OPTIONS } from '../../../../packages/shared/mapCatalog.ts'
 export type { ArenaMapConfig, ArenaObstacle, ArenaPoint, MapEnvironment, MapSize, RoomCapacity } from '../../../../packages/shared/mapCatalog.ts'
 export {
+  BULLET_LIFETIME_MS,
+  PLAYER_DASH_DURATION_MS,
+  PLAYER_DASH_SPEED,
+  PLAYER_MOVE_SPEED,
+  isBulletHittingObstacle,
+  segmentBlockedByObstacle,
+  stepPlayerMovement,
+} from '../../../../packages/shared/movement.ts'
+export type { CollisionMap } from '../../../../packages/shared/movement.ts'
+export {
   GAME_MODE_OPTIONS,
   GUN_GAME_LADDER,
   MAX_DASHES,

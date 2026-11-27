@@ -1,6 +1,6 @@
 # Estado actual de TAP-WAR
 
-Actualizado el 26 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
+Actualizado el 27 de noviembre de 2026. Este documento resume el alcance implementado y la evidencia disponible; no sustituye la aceptación del equipo ni el estado del Project.
 
 ## Funcionalidad implementada
 
@@ -12,7 +12,8 @@ Actualizado el 26 de noviembre de 2026. Este documento resume el alcance impleme
 | Escenarios | Cantera del desierto y Planta industrial en las tres capacidades, con planos previos y escenario sincronizado por el servidor |
 | Geometría de mapas | Catálogo compartido para arte y colisiones; spawns de jugadores, armas, power-ups y punto dorado verificados y conectados |
 | Controles | Detección automática del modo por defecto según dispositivo (PC/laptops con pantalla táctil o monitor táctil usan teclado y ratón por defecto; teléfonos y tablets usan táctil por defecto, siempre alternable con `Táctil ON/OFF`). Controles de PC personalizables en popup modal (`KeybindingsModal`) con leyenda solo en sala de espera; controles táctiles estilo Brawl Stars (`20 px` arrastre / `14 px` cancelación, `DASH` a la derecha) personalizables y redimensionables por orientación desde `TouchLayoutEditorModal`. Persistencia en Supabase por cuenta y dispositivo (`user_device_controls`, UUID + `desktop`/`mobile`/`tablet`) con respaldo inmediato en `localStorage`; mandos USB/Bluetooth (Gamepad API) |
-| Arena | Movimiento analógico/digital, dash (hasta 5 cargas, recarga automática de 1 cada 10 s con barra inferior de progreso), colisiones (incluyendo raycast continuo de proyectiles), spawns aleatorios escalados por jugadores y combate autoritativo |
+| Arena | Movimiento analógico/digital con predicción local y reconciliación suave (`LocalPlayerPredictor`), dash (hasta 5 cargas, recarga automática de 1 cada 10 s con barra inferior de progreso), colisiones (incluyendo intersección analítica segmento-AABB), spawns aleatorios escalados por jugadores y combate autoritativo |
+| Red y rendimiento | Esquema binario compactado (`float32`/`int16`/`uint16`/`uint8`), proyectiles extrapolados en cliente sin reenviar `(x, y)` por tick, `StateView` con `lastInputSeq` privado y culling espacial de balas/explosiones en mapas mediano y grande, temporizadores cuantizados, desacoplamiento de React (`hudState`) respecto a Phaser, minimapa estático y culling de VFX/SFX fuera de cámara |
 | Combate | Diez armas (`sniper = 100`, `axe = 90`, `launcher` con explosión animada, radio de `128 px` y daño por distancia), melé rápido incluso con arma de fuego equipada, cargador extra + recarga manual, daño, bajas y reaparición |
 | Power-Ups | Apariciones aleatorias libres de obstáculos (más frecuentes con más jugadores): cargadores, botiquines (+50 HP), escudos temporales de 10 s (no se quitan con disparos, solo al expirar), recargas de dash (+1 hasta 5) y Power-Up Dorado único por partida cerca del final (resaltado en minimapa; 100 HP, escudo y munición infinita por 15 s) |
 | Partida | Inicio manual del anfitrión con dos participantes, entrada en curso habilitada, 300 segundos o meta del modo; empate, abandono, resultados y revancha; menú personal sin pausa global |
@@ -33,9 +34,9 @@ La configuración manual de perfiles y Storage se completó. La comprobación fu
 
 | Comprobación | Resultado y alcance |
 | --- | --- |
-| Cliente: npm test | 44 pruebas correctas de perfil/foto, URL, Gamepad, controles PC configurables, layout táctil personalizable, sincronización por dispositivo en Supabase, detección de dispositivo táctil/PC, autoapuntado, modos de juego, mapas y entrada táctil estilo Brawl Stars |
-| Cliente: npm run build | TypeScript y compilación de producción correctos |
-| Servidor: npm test | 56 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, escudo por tiempo, explosiones con radio de lanzagranadas, spawns aleatorios escalados, dash con recarga cada 10 s, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
+| Cliente: npm test | 48 pruebas correctas de perfil/foto, URL, Gamepad, controles PC configurables, layout táctil personalizable, sincronización por dispositivo en Supabase, detección de dispositivo táctil/PC, autoapuntado, modos de juego, mapas, entrada táctil estilo Brawl Stars, predicción local + reconciliación, HUD desacoplado de React y culling de trayectoria |
+| Cliente: npm run build | TypeScript (`tsc -b`) y compilación de producción (`vite build`) correctos |
+| Servidor: npm test | 61 pruebas correctas de autenticación, infraestructura, salas, escenarios, power-ups, escudo por tiempo, explosiones con radio de lanzagranadas, spawns aleatorios escalados, dash con recarga cada 10 s, recarga, melé rápido, entrada en curso, modos FFA/TDM/Juego de armas, correspondencia visual/colisión, colisión analítica segmento-AABB, balas extrapoladas sin parches en vuelo, `StateView` con culling espacial y privacidad de `lastInputSeq`, temporizadores cuantizados, conectividad, entrada analógica, puntuación y recuperación de resultados; servicios simulados |
 | TypeScript del servidor | Sin errores |
 | Colyseus real en desarrollo | /health respondió 200; name/userId inventados sin token fueron rechazados con AUTH_FAILED |
 | Perfiles en Supabase | Tabla, RLS, dos políticas, trigger e índice único comprobados; creación automática de perfil confirmada |
