@@ -1727,7 +1727,7 @@
 
 .touch-editor-arena-hint {
   position: absolute;
-  inset: 14% 12%;
+  inset: 3% 22%;
   border: 2px dashed rgba(245, 226, 203, 0.22);
   border-radius: 8px;
   display: flex;

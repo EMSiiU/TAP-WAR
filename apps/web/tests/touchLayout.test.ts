@@ -73,3 +73,38 @@ test('dash por defecto esta en la derecha y persistencia local aisla cuentas', (
     scale: 1.15,
   })
 })
+
+test('layout horizontal por defecto queda en los márgenes laterales y migra v1 sin tocar ajustes propios', () => {
+  for (const [id, slot] of Object.entries(DEFAULT_TOUCH_LAYOUTS.landscape)) {
+    assert.ok(
+      slot.x <= 0.18 || slot.x >= 0.82,
+      `El control ${id} (${slot.x}) invade la zona central de la arena`,
+    )
+  }
+
+  const migrated = sanitizeTouchLayouts({
+    landscape: {
+      move: { x: 0.11, y: 0.72, scale: 1 },
+      emotes: { x: 0.10, y: 0.16, scale: 1 },
+      menu: { x: 0.90, y: 0.14, scale: 1 },
+      aim: { x: 0.89, y: 0.72, scale: 1 },
+      dash: { x: 0.74, y: 0.80, scale: 1 },
+      melee: { x: 0.76, y: 0.50, scale: 1 },
+      reload: { x: 0.90, y: 0.41, scale: 1 },
+    },
+  })
+  assert.deepEqual(migrated.landscape, DEFAULT_TOUCH_LAYOUTS.landscape)
+
+  const customized = sanitizeTouchLayouts({
+    landscape: {
+      move: { x: 0.11, y: 0.72, scale: 1 },
+      emotes: { x: 0.10, y: 0.16, scale: 1 },
+      menu: { x: 0.90, y: 0.14, scale: 1 },
+      aim: { x: 0.89, y: 0.72, scale: 1 },
+      dash: { x: 0.72, y: 0.80, scale: 1 },
+      melee: { x: 0.76, y: 0.50, scale: 1 },
+      reload: { x: 0.90, y: 0.41, scale: 1 },
+    },
+  })
+  assert.deepEqual(customized.landscape.dash, { x: 0.72, y: 0.80, scale: 1 })
+})

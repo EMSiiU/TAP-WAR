@@ -648,24 +648,39 @@ function ArenaSession({
               <div className="arena-hud-badges-row">
                 {hud.matchMeta.gameMode === 'tdm' && localHud.team && (
                   <span className={`arena-status-pill is-team-${localHud.team}`}>
-                    {localHud.team === 'blue' ? 'Equipo Azul' : 'Equipo Naranja'}
+                    {touchMode
+                      ? localHud.team === 'blue'
+                        ? 'Azul'
+                        : 'Naranja'
+                      : localHud.team === 'blue'
+                        ? 'Equipo Azul'
+                        : 'Equipo Naranja'}
                   </span>
                 )}
                 {hud.matchMeta.gameMode === 'gungame' && (
                   <span className="arena-status-pill is-gungame">
-                    Nivel {Math.min(GUN_GAME_LADDER.length, (localHud.weaponTier ?? 0) + 1)}/{GUN_GAME_LADDER.length}
+                    {touchMode ? 'Nv.' : 'Nivel '}
+                    {Math.min(GUN_GAME_LADDER.length, (localHud.weaponTier ?? 0) + 1)}/{GUN_GAME_LADDER.length}
                   </span>
                 )}
                 {isGolden && (
-                  <span className="arena-status-pill is-golden">
+                  <span
+                    className="arena-status-pill is-golden"
+                    aria-label={`Poder dorado ${localGoldenSec}s, munición infinita`}
+                    title={`Dorado ${localGoldenSec}s · Munición ∞`}
+                  >
                     <img src="/assets/ui/powerup-golden.svg" alt="" />
-                    DORADO {localGoldenSec}s · Munición ∞
+                    <span>{touchMode ? `${localGoldenSec}s` : `DORADO ${localGoldenSec}s · Munición ∞`}</span>
                   </span>
                 )}
                 {localShield > 0 && localShieldSec > 0 && (
-                  <span className="arena-status-pill is-shield">
+                  <span
+                    className="arena-status-pill is-shield"
+                    aria-label={`Escudo ${localShieldSec}s`}
+                    title={`Escudo ${localShieldSec}s`}
+                  >
                     <img src="/assets/ui/powerup-shield.svg" alt="" />
-                    Escudo {localShieldSec}s
+                    <span>{touchMode ? `${localShieldSec}s` : `Escudo ${localShieldSec}s`}</span>
                   </span>
                 )}
               </div>
@@ -716,38 +731,40 @@ function ArenaSession({
                   )}
                 </div>
 
-                <div
-                  className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
-                  title={touchMode ? 'Dashes restantes (recarga 1 cada 10 s)' : `Dash (${dashKeyLabel}) · recarga 1 cada 10 s`}
-                >
-                  <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
-                  <div className="arena-dash-info">
-                    <span className="arena-dash-label">
-                      DASH {localDashes}/{localMaxDashes}
-                      {!touchMode && <kbd className="hud-kbd">{dashKeyLabel}</kbd>}
-                    </span>
-                    <span className="arena-dash-pips" aria-hidden="true">
-                      {Array.from({ length: localMaxDashes }, (_, idx) => (
-                        <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
-                      ))}
-                    </span>
-                    <span
-                      className="arena-dash-recharge-track"
-                      aria-label={
-                        localDashes < localMaxDashes
-                          ? `Recarga de dash ${localDashRechargePct}%`
-                          : 'Dashes completos'
-                      }
-                    >
+                {!touchMode && (
+                  <div
+                    className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
+                    title={`Dash (${dashKeyLabel}) · recarga 1 cada 10 s`}
+                  >
+                    <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
+                    <div className="arena-dash-info">
+                      <span className="arena-dash-label">
+                        DASH {localDashes}/{localMaxDashes}
+                        <kbd className="hud-kbd">{dashKeyLabel}</kbd>
+                      </span>
+                      <span className="arena-dash-pips" aria-hidden="true">
+                        {Array.from({ length: localMaxDashes }, (_, idx) => (
+                          <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
+                        ))}
+                      </span>
                       <span
-                        className={`arena-dash-recharge-fill${localDashes >= localMaxDashes ? ' is-full' : ''}`}
-                        style={{
-                          width: `${localDashes >= localMaxDashes ? 100 : localDashRechargePct}%`,
-                        }}
-                      />
-                    </span>
+                        className="arena-dash-recharge-track"
+                        aria-label={
+                          localDashes < localMaxDashes
+                            ? `Recarga de dash ${localDashRechargePct}%`
+                            : 'Dashes completos'
+                        }
+                      >
+                        <span
+                          className={`arena-dash-recharge-fill${localDashes >= localMaxDashes ? ' is-full' : ''}`}
+                          style={{
+                            width: `${localDashes >= localMaxDashes ? 100 : localDashRechargePct}%`,
+                          }}
+                        />
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
