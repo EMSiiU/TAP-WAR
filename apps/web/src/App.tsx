@@ -3,6 +3,8 @@ import ArenaHeader from './game/ArenaHeader'
 import MapPreview from './game/MapPreview'
 import KeybindingsModal from './game/KeybindingsModal'
 import TouchLayoutEditorModal from './game/TouchLayoutEditorModal'
+import PracticeArsenalModal, { type PracticeUtilityAction } from './game/PracticeArsenalModal'
+import LiveScoreboard from './game/LiveScoreboard'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
@@ -180,6 +182,9 @@ function ArenaSession({
   })
   const worldPushRef = useRef<((snapshot: ArenaWorldSnapshot) => void) | null>(null)
   const [localPaused, setLocalPaused] = useState(false)
+  const [practiceArsenalOpen, setPracticeArsenalOpen] = useState(false)
+  const [scoreboardHeld, setScoreboardHeld] = useState(false)
+  const [scoreboardToggled, setScoreboardToggled] = useState(false)
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [touchEditorOpen, setTouchEditorOpen] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
@@ -190,6 +195,12 @@ function ArenaSession({
   const touchInputRef = useRef<TouchInputState>(neutralTouchInput())
   const actionTriggerRef = useRef<((action: ArenaActionKind) => void) | null>(null)
   const explosionTriggerRef = useRef<((x: number, y: number, radius: number) => void) | null>(null)
+  const damageFeedbackTriggerRef = useRef<
+    ((x: number, y: number, damage: number, blocked: boolean) => void) | null
+  >(null)
+  const practiceActionRef = useRef<
+    ((payload: { action: 'equip_weapon'; weapon: WeaponType } | { action: PracticeUtilityAction }) => void) | null
+  >(null)
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [status, setStatus] = useState('Conectando…')
@@ -291,6 +302,9 @@ function ArenaSession({
         rematchRef.current = () => {
           if (joined.connection.isOpen) joined.send('rematch')
         }
+        practiceActionRef.current = (payload) => {
+          if (joined.connection.isOpen) joined.send('practice_action', payload)
+        }
 
         joined.onMessage<{ x?: unknown; y?: unknown; radius?: unknown }>('explosion', (payload) => {
           if (
@@ -306,6 +320,25 @@ function ArenaSession({
             explosionTriggerRef.current?.(payload.x, payload.y, payload.radius)
           }
         })
+
+        joined.onMessage<{ x?: unknown; y?: unknown; damage?: unknown; blocked?: unknown }>(
+          'damage_feedback',
+          (payload) => {
+            if (
+              active &&
+              payload &&
+              typeof payload.x === 'number' &&
+              typeof payload.y === 'number' &&
+              typeof payload.damage === 'number' &&
+              typeof payload.blocked === 'boolean' &&
+              Number.isFinite(payload.x) &&
+              Number.isFinite(payload.y) &&
+              Number.isFinite(payload.damage)
+            ) {
+              damageFeedbackTriggerRef.current?.(payload.x, payload.y, payload.damage, payload.blocked)
+            }
+          },
+        )
 
         let markedReady = false
 
@@ -356,6 +389,9 @@ function ArenaSession({
           sendPause: (paused) => {
             touchInputRef.current = neutralTouchInput()
             if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
+            setPracticeArsenalOpen(false)
+            setScoreboardHeld(false)
+            setScoreboardToggled(false)
             setLocalPaused(paused)
             if (!paused) {
               setControlsModalOpen(false)
@@ -400,9 +436,82 @@ function ArenaSession({
     return () => {
       active = false
       rematchRef.current = null
+      practiceActionRef.current = null
       disconnect?.()
     }
   }, [playerName, playerSkin, playerWeapon, roomRequest, onEnd])
+
+  const closePracticeArsenal = useCallback(() => {
+    setPracticeArsenalOpen(false)
+    setResumeSignal((n) => n + 1)
+  }, [])
+
+  const togglePracticeArsenal = useCallback(() => {
+    if (hud.matchMeta.gameMode !== 'practice' || hud.matchMeta.phase === 'finished') return
+    setControlsModalOpen(false)
+    setTouchEditorOpen(false)
+    setLocalPaused(false)
+    setScoreboardHeld(false)
+    setScoreboardToggled(false)
+    setPracticeArsenalOpen((prev) => {
+      const next = !prev
+      if (!next) setResumeSignal((n) => n + 1)
+      return next
+    })
+  }, [hud.matchMeta.gameMode, hud.matchMeta.phase])
+
+  const tabBoundInControls = Object.values(pcControls).includes('Tab')
+  useEffect(() => {
+    const canHoldTab = Boolean(
+      controls &&
+      hud.matchMeta.phase !== 'finished' &&
+      !localPaused &&
+      !practiceArsenalOpen &&
+      !tabBoundInControls,
+    )
+    if (!canHoldTab) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Tab') {
+        event.preventDefault()
+        if (!event.repeat) setScoreboardHeld(true)
+      } else if (event.code === 'Escape' && scoreboardToggled && !event.repeat) {
+        event.preventDefault()
+        event.stopPropagation()
+        setScoreboardToggled(false)
+      }
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Tab') {
+        event.preventDefault()
+        setScoreboardHeld(false)
+      }
+    }
+    const clearHeld = () => setScoreboardHeld(false)
+
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
+    window.addEventListener('blur', clearHeld)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      window.removeEventListener('blur', clearHeld)
+    }
+  }, [controls, hud.matchMeta.phase, localPaused, practiceArsenalOpen, tabBoundInControls, scoreboardToggled])
+
+  const toggleScoreboard = useCallback(() => {
+    if (!controls || hud.matchMeta.phase === 'finished') return
+    setScoreboardHeld(false)
+    setScoreboardToggled((prev) => !prev)
+  }, [controls, hud.matchMeta.phase])
+
+  const scoreboardVisible = Boolean(
+    controls &&
+    hud.matchMeta.phase !== 'finished' &&
+    !localPaused &&
+    !practiceArsenalOpen &&
+    (scoreboardHeld || scoreboardToggled),
+  )
 
   const localHud = hud.localPlayer
   const localTeam = localHud?.team
@@ -509,7 +618,7 @@ function ArenaSession({
     } as Record<string, string>
   )[hud.matchMeta.saveStatus]
   const showTouchControls = Boolean(
-    controls && touchMode && !localPaused && hud.matchMeta.phase !== 'finished',
+    controls && touchMode && !localPaused && !practiceArsenalOpen && hud.matchMeta.phase !== 'finished',
   )
   const resultsTitle =
     hud.matchMeta.gameMode === 'tdm'
@@ -538,6 +647,7 @@ function ArenaSession({
         roomCode={hud.matchMeta.roomCode}
         roomName={hud.matchMeta.roomName}
         isPrivate={hud.matchMeta.isPrivate}
+        hideRoomCode={hud.matchMeta.gameMode === 'practice'}
         gameModeLabel={gameModeLabel(hud.matchMeta.gameMode)}
         environmentLabel={ENVIRONMENT_OPTIONS.find(option => option.id === hud.matchMeta.environment)?.label || ''}
         sizeLabel={MAP_LABEL_BY_SIZE[hud.matchMeta.mapSize]}
@@ -553,9 +663,11 @@ function ArenaSession({
         touchMode={touchMode}
         fullscreen={isFullscreen}
         copied={copiedCode}
+        scoreboardOpen={scoreboardVisible}
         onCopy={() => { void copyRoomCode() }}
         onTouchToggle={() => { resetTouchInput(); setTouchMode(value => !value) }}
         onFullscreen={() => { void toggleFullscreen() }}
+        onToggleScoreboard={controls && hud.matchMeta.phase !== 'finished' ? toggleScoreboard : undefined}
         onExit={onExit}
         onSignOut={onSignOut}
       />
@@ -598,24 +710,39 @@ function ArenaSession({
               <div className="arena-hud-badges-row">
                 {hud.matchMeta.gameMode === 'tdm' && localHud.team && (
                   <span className={`arena-status-pill is-team-${localHud.team}`}>
-                    {localHud.team === 'blue' ? 'Equipo Azul' : 'Equipo Naranja'}
+                    {touchMode
+                      ? localHud.team === 'blue'
+                        ? 'Azul'
+                        : 'Naranja'
+                      : localHud.team === 'blue'
+                        ? 'Equipo Azul'
+                        : 'Equipo Naranja'}
                   </span>
                 )}
                 {hud.matchMeta.gameMode === 'gungame' && (
                   <span className="arena-status-pill is-gungame">
-                    Nivel {Math.min(GUN_GAME_LADDER.length, (localHud.weaponTier ?? 0) + 1)}/{GUN_GAME_LADDER.length}
+                    {touchMode ? 'Nv.' : 'Nivel '}
+                    {Math.min(GUN_GAME_LADDER.length, (localHud.weaponTier ?? 0) + 1)}/{GUN_GAME_LADDER.length}
                   </span>
                 )}
                 {isGolden && (
-                  <span className="arena-status-pill is-golden">
+                  <span
+                    className="arena-status-pill is-golden"
+                    aria-label={`Poder dorado ${localGoldenSec}s, munición infinita`}
+                    title={`Dorado ${localGoldenSec}s · Munición ∞`}
+                  >
                     <img src="/assets/ui/powerup-golden.svg" alt="" />
-                    DORADO {localGoldenSec}s · Munición ∞
+                    <span>{touchMode ? `${localGoldenSec}s` : `DORADO ${localGoldenSec}s · Munición ∞`}</span>
                   </span>
                 )}
                 {localShield > 0 && localShieldSec > 0 && (
-                  <span className="arena-status-pill is-shield">
+                  <span
+                    className="arena-status-pill is-shield"
+                    aria-label={`Escudo ${localShieldSec}s`}
+                    title={`Escudo ${localShieldSec}s`}
+                  >
                     <img src="/assets/ui/powerup-shield.svg" alt="" />
-                    Escudo {localShieldSec}s
+                    <span>{touchMode ? `${localShieldSec}s` : `Escudo ${localShieldSec}s`}</span>
                   </span>
                 )}
               </div>
@@ -666,38 +793,40 @@ function ArenaSession({
                   )}
                 </div>
 
-                <div
-                  className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
-                  title={touchMode ? 'Dashes restantes (recarga 1 cada 10 s)' : `Dash (${dashKeyLabel}) · recarga 1 cada 10 s`}
-                >
-                  <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
-                  <div className="arena-dash-info">
-                    <span className="arena-dash-label">
-                      DASH {localDashes}/{localMaxDashes}
-                      {!touchMode && <kbd className="hud-kbd">{dashKeyLabel}</kbd>}
-                    </span>
-                    <span className="arena-dash-pips" aria-hidden="true">
-                      {Array.from({ length: localMaxDashes }, (_, idx) => (
-                        <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
-                      ))}
-                    </span>
-                    <span
-                      className="arena-dash-recharge-track"
-                      aria-label={
-                        localDashes < localMaxDashes
-                          ? `Recarga de dash ${localDashRechargePct}%`
-                          : 'Dashes completos'
-                      }
-                    >
+                {!touchMode && (
+                  <div
+                    className={`arena-dash-badge${localDashes <= 0 ? ' is-empty' : ''}`}
+                    title={`Dash (${dashKeyLabel}) · recarga 1 cada 10 s`}
+                  >
+                    <img src="/assets/ui/powerup-dash.svg" alt="" className="arena-dash-icon" />
+                    <div className="arena-dash-info">
+                      <span className="arena-dash-label">
+                        DASH {localDashes}/{localMaxDashes}
+                        <kbd className="hud-kbd">{dashKeyLabel}</kbd>
+                      </span>
+                      <span className="arena-dash-pips" aria-hidden="true">
+                        {Array.from({ length: localMaxDashes }, (_, idx) => (
+                          <i key={idx} className={idx < localDashes ? 'is-filled' : ''} />
+                        ))}
+                      </span>
                       <span
-                        className={`arena-dash-recharge-fill${localDashes >= localMaxDashes ? ' is-full' : ''}`}
-                        style={{
-                          width: `${localDashes >= localMaxDashes ? 100 : localDashRechargePct}%`,
-                        }}
-                      />
-                    </span>
+                        className="arena-dash-recharge-track"
+                        aria-label={
+                          localDashes < localMaxDashes
+                            ? `Recarga de dash ${localDashRechargePct}%`
+                            : 'Dashes completos'
+                        }
+                      >
+                        <span
+                          className={`arena-dash-recharge-fill${localDashes >= localMaxDashes ? ' is-full' : ''}`}
+                          style={{
+                            width: `${localDashes >= localMaxDashes ? 100 : localDashRechargePct}%`,
+                          }}
+                        />
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -710,8 +839,21 @@ function ArenaSession({
               <span><kbd>{reloadKeyLabel}</kbd> Recargar</span>
               <span><kbd>{dashKeyLabel}</kbd> Dash</span>
               <span><kbd>{emote1KeyLabel}/{emote2KeyLabel}</kbd> Emotes</span>
+              <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>
+          )}
+
+          {controls && hud.matchMeta.gameMode === 'practice' && hud.matchMeta.phase === 'playing' && (
+            <button
+              type="button"
+              className="arena-practice-fab"
+              onClick={togglePracticeArsenal}
+              title="Abrir arsenal de práctica (B)"
+            >
+              <span>Arsenal</span>
+              {!touchMode && <kbd>B</kbd>}
+            </button>
           )}
 
           {controls && stateReady && (
@@ -720,7 +862,7 @@ function ArenaSession({
               worldPushRef={worldPushRef}
               phase={hud.matchMeta.phase}
               gameMode={hud.matchMeta.gameMode}
-              isPaused={localPaused}
+              isPaused={localPaused || practiceArsenalOpen}
               crosshairStyle={crosshairStyle}
               pcControls={pcControls}
               mapSize={hud.matchMeta.mapSize}
@@ -729,7 +871,9 @@ function ArenaSession({
               touchInputRef={touchInputRef}
               actionTriggerRef={actionTriggerRef}
               explosionTriggerRef={explosionTriggerRef}
+              damageFeedbackTriggerRef={damageFeedbackTriggerRef}
               onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
+              onPracticeArsenalToggle={togglePracticeArsenal}
               onGamepadChange={setGamepadConnected}
               resumeSignal={resumeSignal}
               controls={controls}
@@ -752,6 +896,22 @@ function ArenaSession({
             canReload={canReload}
             isReloading={localReloading}
             needsReload={needsReload}
+            scoreboardOpen={scoreboardVisible}
+            onToggleScoreboard={toggleScoreboard}
+          />
+        )}
+
+        {scoreboardVisible && (
+          <LiveScoreboard
+            roomName={hud.matchMeta.roomName || hud.matchMeta.roomCode}
+            gameMode={hud.matchMeta.gameMode}
+            clock={hud.clock}
+            killsToWin={hud.matchMeta.killsToWin}
+            orangeScore={hud.matchMeta.orangeScore}
+            blueScore={hud.matchMeta.blueScore}
+            rows={hud.scoreboard}
+            interactive={scoreboardToggled && !scoreboardHeld}
+            onClose={() => setScoreboardToggled(false)}
           />
         )}
 
@@ -773,6 +933,20 @@ function ArenaSession({
                 >
                   Continuar
                 </button>
+                {hud.matchMeta.gameMode === 'practice' && (
+                  <button
+                    type="button"
+                    className="kenney-btn-secondary"
+                    onClick={() => {
+                      setLocalPaused(false)
+                      setControlsModalOpen(false)
+                      setTouchEditorOpen(false)
+                      setPracticeArsenalOpen(true)
+                    }}
+                  >
+                    Arsenal de práctica
+                  </button>
+                )}
                 <button
                   type="button"
                   className="kenney-btn-secondary"
@@ -826,6 +1000,21 @@ function ArenaSession({
           syncStatus={controlsSyncStatus}
           onSave={onTouchLayoutsChange}
           onClose={() => setTouchEditorOpen(false)}
+        />
+      )}
+
+      {practiceArsenalOpen && hud.matchMeta.gameMode === 'practice' && hud.matchMeta.phase !== 'finished' && (
+        <PracticeArsenalModal
+          weapons={WEAPON_OPTIONS}
+          currentWeapon={localHud?.weaponType}
+          teamColor={localTeamColor}
+          onSelectWeapon={(weapon) => {
+            practiceActionRef.current?.({ action: 'equip_weapon', weapon })
+          }}
+          onAction={(action) => {
+            practiceActionRef.current?.({ action })
+          }}
+          onClose={closePracticeArsenal}
         />
       )}
     </div>
@@ -1195,6 +1384,53 @@ export default function App({
           <section className="rooms-section lobby-rooms-panel" aria-label="Salas de juego">
             <h2 className="lobby-section-heading">Salas de juego</h2>
 
+            <div className="rooms-panel practice-lobby-card">
+              <div className="practice-lobby-head">
+                <div>
+                  <span className="skin-grid-label" style={{ marginBottom: 4 }}>
+                    Campo de tiro
+                  </span>
+                  <p className="practice-lobby-desc">
+                    Entrena movimiento, dashes, las 10 armas, todos los power-ups y daño real sobre 4 NPCs sin afectar estadísticas.
+                  </p>
+                </div>
+                <span className="practice-lobby-badge">1 jugador · Práctica</span>
+              </div>
+              <div className="practice-lobby-controls">
+                <div className="practice-env-pills" role="radiogroup" aria-label="Escenario del campo de tiro">
+                  {ENVIRONMENT_OPTIONS.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={createEnvironment === option.id}
+                      className={`crosshair-option practice-env-pill${createEnvironment === option.id ? ' is-selected' : ''}`}
+                      onClick={() => setCreateEnvironment(option.id)}
+                    >
+                      <span>{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="kenney-btn-primary practice-enter-btn"
+                  disabled={!validUsername(profile.username ?? '') || saving}
+                  onClick={() => {
+                    void saveProfile({
+                      mode: 'create',
+                      maxPlayers: 4,
+                      environment: createEnvironment,
+                      gameMode: 'practice',
+                      isPrivate: true,
+                      roomName: 'Campo de tiro',
+                    })
+                  }}
+                >
+                  Entrar al Campo de tiro
+                </button>
+              </div>
+            </div>
+
             <div className="rooms-panel">
               <span className="skin-grid-label">Unirse con código</span>
               <div className="room-join-row">
@@ -1410,6 +1646,7 @@ export default function App({
               <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
               <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
               <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
+              <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>
             <p className="auth-hint" style={{ marginTop: 8 }}>

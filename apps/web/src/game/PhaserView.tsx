@@ -26,7 +26,11 @@ type PhaserViewProps = {
   touchInputRef: React.RefObject<TouchInputState>
   actionTriggerRef?: React.RefObject<((action: ArenaActionKind) => void) | null>
   explosionTriggerRef?: React.RefObject<((x: number, y: number, radius: number) => void) | null>
+  damageFeedbackTriggerRef?: React.RefObject<
+    ((x: number, y: number, damage: number, blocked: boolean) => void) | null
+  >
   onMenuToggle?: () => void
+  onPracticeArsenalToggle?: () => void
   onGamepadChange?: (connected: boolean) => void
   resumeSignal: number
   controls: ArenaControls
@@ -46,7 +50,9 @@ function PhaserView({
   touchInputRef,
   actionTriggerRef,
   explosionTriggerRef,
+  damageFeedbackTriggerRef,
   onMenuToggle,
+  onPracticeArsenalToggle,
   onGamepadChange,
   resumeSignal,
   controls,
@@ -60,11 +66,16 @@ function PhaserView({
   const latestPcControlsRef = useRef(pcControls)
   const latestTouchModeRef = useRef(touchMode)
   const onMenuToggleRef = useRef(onMenuToggle)
+  const onPracticeArsenalToggleRef = useRef(onPracticeArsenalToggle)
   const onGamepadChangeRef = useRef(onGamepadChange)
 
   useEffect(() => {
     onMenuToggleRef.current = onMenuToggle
   }, [onMenuToggle])
+
+  useEffect(() => {
+    onPracticeArsenalToggleRef.current = onPracticeArsenalToggle
+  }, [onPracticeArsenalToggle])
 
   useEffect(() => {
     onGamepadChangeRef.current = onGamepadChange
@@ -119,6 +130,7 @@ function PhaserView({
     scene.setPaused(latestPausedRef.current)
     scene.setCrosshairStyle(latestCrosshairRef.current)
     scene.setPcControls(latestPcControlsRef.current)
+    scene.setPracticeArsenalToggle(() => onPracticeArsenalToggleRef.current?.())
     sceneRef.current = scene
     worldPushRef.current = (snapshot) => scene.applyWorldSnapshot(snapshot)
 
@@ -127,6 +139,10 @@ function PhaserView({
     }
     if (explosionTriggerRef) {
       explosionTriggerRef.current = (x, y, radius) => scene.triggerExplosion(x, y, radius)
+    }
+    if (damageFeedbackTriggerRef) {
+      damageFeedbackTriggerRef.current = (x, y, damage, blocked) =>
+        scene.triggerDamageFeedback(x, y, damage, blocked)
     }
 
     let game: Phaser.Game | undefined
@@ -163,13 +179,24 @@ function PhaserView({
       worldPushRef.current = null
       if (actionTriggerRef) actionTriggerRef.current = null
       if (explosionTriggerRef) explosionTriggerRef.current = null
+      if (damageFeedbackTriggerRef) damageFeedbackTriggerRef.current = null
       sceneRef.current = null
       active = false
       resizeObserver?.disconnect()
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls, mapSize, environment, touchInputRef, worldStateRef, worldPushRef, actionTriggerRef, explosionTriggerRef])
+  }, [
+    controls,
+    mapSize,
+    environment,
+    touchInputRef,
+    worldStateRef,
+    worldPushRef,
+    actionTriggerRef,
+    explosionTriggerRef,
+    damageFeedbackTriggerRef,
+  ])
 
   useEffect(() => {
     if (resumeSignal > 0) {

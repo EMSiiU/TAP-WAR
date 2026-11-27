@@ -55,12 +55,25 @@ export type LocalHudState = {
   kills: number
 }
 
+export type ScoreboardRow = {
+  id: string
+  name: string
+  kills: number
+  deaths: number
+  team: TeamColor | ''
+  weaponTier: number
+  isDead: boolean
+  isBot: boolean
+  isLocal: boolean
+}
+
 export type ArenaHudSnapshot = {
   matchMeta: MatchMeta
   playerCount: number
   clock: string
   scoreLine: string
   localPlayer: LocalHudState | null
+  scoreboard: ScoreboardRow[]
 }
 
 export type HudSourceState = {
@@ -103,6 +116,11 @@ export function buildScoreLine(
   players: readonly PlayerState[],
   localPlayer: PlayerState | undefined,
 ): string {
+  if (gameMode === 'practice') {
+    const npcCount = players.filter((p) => p.isBot).length
+    return `Bajas práctica: ${localPlayer?.kills ?? 0} · ${npcCount} NPCs`
+  }
+
   if (gameMode === 'tdm') {
     return `Naranja ${orangeScore} — ${blueScore} Azul`
   }
@@ -129,18 +147,58 @@ export function buildScoreLine(
   return `Top: ${leaders.map((p) => `${p.name} ${p.kills}`).join(' · ')} | Tú: ${localPlayer?.kills ?? 0}`
 }
 
+export function buildScoreboardRows(
+  gameMode: GameMode,
+  players: readonly PlayerState[],
+  localPlayerId: string,
+): ScoreboardRow[] {
+  const mapped: ScoreboardRow[] = players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    kills: p.kills ?? 0,
+    deaths: p.deaths ?? 0,
+    team: p.team === 'blue' || p.team === 'orange' ? p.team : '',
+    weaponTier: p.weaponTier ?? 0,
+    isDead: Boolean(p.isDead),
+    isBot: Boolean(p.isBot),
+    isLocal: p.id === localPlayerId,
+  }))
+
+  return mapped.sort((a, b) => {
+    if (gameMode === 'practice' && a.isBot !== b.isBot) {
+      return a.isBot ? 1 : -1
+    }
+    if (gameMode === 'tdm') {
+      const rank = (team: TeamColor | '') => (team === 'orange' ? 0 : team === 'blue' ? 1 : 2)
+      const teamDiff = rank(a.team) - rank(b.team)
+      if (teamDiff !== 0) return teamDiff
+    }
+    if (gameMode === 'gungame' && b.weaponTier !== a.weaponTier) {
+      return b.weaponTier - a.weaponTier
+    }
+    return (
+      b.kills - a.kills ||
+      a.deaths - b.deaths ||
+      a.name.localeCompare(b.name)
+    )
+  })
+}
+
 export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHudSnapshot {
-  const timeRemaining = 300
-  const mapSize: MapSize =
-    roomRequest.mode === 'create'
-      ? roomRequest.maxPlayers === 20
-        ? 'large'
-        : roomRequest.maxPlayers === 10
-          ? 'medium'
-          : 'small'
-      : 'small'
   const gameMode: GameMode =
     roomRequest.mode === 'create' ? normalizeGameMode(roomRequest.gameMode) : 'ffa'
+  const isPractice = gameMode === 'practice'
+  const timeRemaining = isPractice ? 0 : 300
+  const mapSize: MapSize =
+    isPractice
+      ? 'small'
+      : roomRequest.mode === 'create'
+        ? roomRequest.maxPlayers === 20
+          ? 'large'
+          : roomRequest.maxPlayers === 10
+            ? 'medium'
+            : 'small'
+        : 'small'
 
   return {
     matchMeta: {
@@ -150,7 +208,7 @@ export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHud
       environment:
         roomRequest.mode === 'create' ? normalizeEnvironment(roomRequest.environment) : 'desert',
       gameMode,
-      maxPlayers: roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
+      maxPlayers: isPractice ? 1 : roomRequest.mode === 'create' ? roomRequest.maxPlayers : 4,
       isPrivate: roomRequest.mode === 'create' ? roomRequest.isPrivate : false,
       hostId: '',
       notice: '',
@@ -162,16 +220,17 @@ export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHud
       isPaused: false,
       pausedByName: '',
       timeRemaining,
-      killsToWin: 20,
+      killsToWin: isPractice ? 0 : 20,
       orangeScore: 0,
       blueScore: 0,
       winnerId: '',
       winnerName: '',
     },
     playerCount: 0,
-    clock: formatClock(timeRemaining),
+    clock: isPractice ? '∞' : formatClock(timeRemaining),
     scoreLine: buildScoreLine(gameMode, 0, 0, [], undefined),
     localPlayer: null,
+    scoreboard: [],
   }
 }
 
@@ -190,6 +249,9 @@ export function extractArenaHudSnapshot(
 
   const playerList = state.players ? Array.from(state.players.values()) : []
   const local = state.players?.get(localPlayerId) ?? playerList.find((p) => p.id === localPlayerId)
+  const humanCount =
+    gameMode === 'practice' ? playerList.filter((p) => !p.isBot).length : playerList.length
+  const clock = gameMode === 'practice' ? '∞' : formatClock(wholeTime)
 
   const localPlayer: LocalHudState | null = local
     ? {
@@ -244,10 +306,11 @@ export function extractArenaHudSnapshot(
       winnerId: state.winnerId ?? '',
       winnerName: state.winnerName ?? '',
     },
-    playerCount: playerList.length,
-    clock: formatClock(wholeTime),
+    playerCount: humanCount,
+    clock,
     scoreLine: buildScoreLine(gameMode, orangeScore, blueScore, playerList, local),
     localPlayer,
+    scoreboard: buildScoreboardRows(gameMode, playerList, localPlayerId),
   }
 }
 
@@ -275,13 +338,37 @@ function areLocalHudEqual(a: LocalHudState | null, b: LocalHudState | null): boo
   )
 }
 
+function areScoreboardsEqual(a: readonly ScoreboardRow[], b: readonly ScoreboardRow[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const ra = a[i]
+    const rb = b[i]
+    if (
+      ra.id !== rb.id ||
+      ra.name !== rb.name ||
+      ra.kills !== rb.kills ||
+      ra.deaths !== rb.deaths ||
+      ra.team !== rb.team ||
+      ra.weaponTier !== rb.weaponTier ||
+      ra.isDead !== rb.isDead ||
+      ra.isBot !== rb.isBot ||
+      ra.isLocal !== rb.isLocal
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function areHudSnapshotsEqual(a: ArenaHudSnapshot, b: ArenaHudSnapshot): boolean {
   if (a === b) return true
   if (
     a.playerCount !== b.playerCount ||
     a.clock !== b.clock ||
     a.scoreLine !== b.scoreLine ||
-    !areLocalHudEqual(a.localPlayer, b.localPlayer)
+    !areLocalHudEqual(a.localPlayer, b.localPlayer) ||
+    !areScoreboardsEqual(a.scoreboard, b.scoreboard)
   ) {
     return false
   }

@@ -122,10 +122,17 @@ test('extractArenaHudSnapshot y areHudSnapshotsEqual evitan re-renders de React 
   }
 
   const snapA = extractArenaHudSnapshot(stateA, 'p1')
+  assert.deepEqual(
+    snapA.scoreboard.map((r) => ({ id: r.id, kills: r.kills, isLocal: r.isLocal })),
+    [
+      { id: 'p1', kills: 2, isLocal: true },
+      { id: 'p2', kills: 1, isLocal: false },
+    ],
+  )
 
-  // Cambiar x/y/aimAngle/lastInputSeq/hp y décimas dentro del mismo segundo entero: HUD idéntico.
+  // Cambiar x/y/aimAngle/lastInputSeq/hp y décimas dentro del mismo segundo entero: HUD y marcador idénticos.
   const p1Moved = { ...makePlayer('p1', 390, 2, 12), aimAngle: 1.4, hp: 55, lastInputSeq: 99 }
-  const p2Moved = { ...makePlayer('p2', 820, 1, 4), isDead: true }
+  const p2Moved = { ...makePlayer('p2', 820, 1, 4), hp: 40, lastInputSeq: 77 }
   const stateSameHud: HudSourceState = {
     ...stateA,
     timeRemaining: 299.1,
@@ -137,9 +144,28 @@ test('extractArenaHudSnapshot y areHudSnapshotsEqual evitan re-renders de React 
   const snapSameHud = extractArenaHudSnapshot(stateSameHud, 'p1')
   assert.equal(areHudSnapshotsEqual(snapA, snapSameHud), true)
 
-  // Cambiar segundo entero de reloj, munición o kills: sí debe marcar cambio de HUD.
+  // Cambiar segundo entero de reloj, munición o kills/muertes: sí debe marcar cambio de HUD.
   const snapTick = extractArenaHudSnapshot({ ...stateSameHud, timeRemaining: 298.9 }, 'p1')
   assert.equal(areHudSnapshotsEqual(snapA, snapTick), false)
+
+  const snapKillOrder = extractArenaHudSnapshot(
+    {
+      ...stateA,
+      players: new Map([
+        ['p1', { ...makePlayer('p1', 150, 2, 12), deaths: 1 }],
+        ['p2', { ...makePlayer('p2', 400, 4, 10), isDead: true }],
+      ]),
+    },
+    'p1',
+  )
+  assert.equal(areHudSnapshotsEqual(snapA, snapKillOrder), false)
+  assert.deepEqual(
+    snapKillOrder.scoreboard.map((r) => ({ id: r.id, kills: r.kills, deaths: r.deaths, isDead: r.isDead })),
+    [
+      { id: 'p2', kills: 4, deaths: 0, isDead: true },
+      { id: 'p1', kills: 2, deaths: 1, isDead: false },
+    ],
+  )
 
   const snapAmmo = extractArenaHudSnapshot(
     {

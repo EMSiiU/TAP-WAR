@@ -63,6 +63,7 @@ export type PlayerState = {
     kills: number
     deaths: number
     isDead: boolean
+    isBot?: boolean
     emote: string
     meleeAttackSeq?: number
     lastMeleeAngle?: number
@@ -181,6 +182,7 @@ type PlayerView = {
     team: TeamColor | ''
     weaponType: WeaponType
     isDead: boolean
+    isBot: boolean
     lastHp: number
     lastShield: number
     lastGolden: number
@@ -249,6 +251,7 @@ export default class ArenaScene extends Phaser.Scene {
     private sampleLiveControl?: () => { moveX: number; moveY: number; aimAngle: number }
     private getTouchInput?: () => TouchInputState
     private onMenuToggle?: () => void
+    private onPracticeArsenalToggle?: () => void
     private onGamepadChange?: (connected: boolean) => void
     private aimOffsetX = 120
     private aimOffsetY = 0
@@ -365,6 +368,7 @@ export default class ArenaScene extends Phaser.Scene {
                 document.exitPointerLock?.()
             }
             this.stopControls()
+            this.onPracticeArsenalToggle = undefined
             this.aimCrosshair?.destroy()
             this.aimCrosshair = undefined
             this.aimGuideGraphics?.destroy()
@@ -833,6 +837,39 @@ export default class ArenaScene extends Phaser.Scene {
         if (paused && this.isReady && this.game?.canvas && document.pointerLockElement === this.game.canvas) {
             document.exitPointerLock?.()
         }
+    }
+
+    setPracticeArsenalToggle(handler?: () => void) {
+        this.onPracticeArsenalToggle = handler
+    }
+
+    triggerDamageFeedback(x: number, y: number, damage: number, blocked: boolean) {
+        if (!this.isReady || !this.sys.isActive()) return
+        const textValue = blocked ? 'ESCUDO' : `-${Math.max(1, Math.round(damage))}`
+        const isHigh = damage >= 75
+        const color = blocked ? '#7dd3fc' : isHigh ? '#facc15' : '#ffffff'
+        const stroke = blocked ? '#0c4a6e' : isHigh ? '#7c2d12' : '#1e1b2e'
+        const jitterX = Phaser.Math.Between(-10, 10)
+        const label = this.add
+            .text(x + jitterX, y - 56, textValue, {
+                fontFamily: 'monospace',
+                fontSize: isHigh || blocked ? '17px' : '15px',
+                fontStyle: 'bold',
+                color,
+                stroke,
+                strokeThickness: 4,
+            })
+            .setOrigin(0.5)
+            .setDepth(9400)
+
+        this.tweens.add({
+            targets: label,
+            y: y - 90,
+            alpha: 0,
+            duration: 650,
+            ease: 'Cubic.easeOut',
+            onComplete: () => label.destroy(),
+        })
     }
 
     resume() {
@@ -1343,6 +1380,32 @@ export default class ArenaScene extends Phaser.Scene {
                 return
             }
 
+            if (
+                event.code === 'KeyB' &&
+                !event.repeat &&
+                this.gameMode === 'practice' &&
+                !this.isPaused &&
+                this.currentPhase !== 'finished' &&
+                this.onPracticeArsenalToggle &&
+                !Object.values(this.pcControls).includes('KeyB')
+            ) {
+                this.isPaused = true
+                stopMovement()
+                if (document.pointerLockElement === this.game.canvas) {
+                    document.exitPointerLock?.()
+                }
+                this.onPracticeArsenalToggle()
+                return
+            }
+
+            if (
+                event.code === 'Tab' &&
+                !Object.values(this.pcControls).includes('Tab')
+            ) {
+                event.preventDefault()
+                return
+            }
+
             if (!hasFocus() || event.repeat || this.isPaused) return
             if (
                 event.code === 'Space' ||
@@ -1804,6 +1867,8 @@ export default class ArenaScene extends Phaser.Scene {
             const isNewView = !view
             let dashedNow = false
 
+            const isBot = Boolean(player.isBot)
+
             if (!view) {
                 view = this.createPlayerView(
                     player.name,
@@ -1814,6 +1879,7 @@ export default class ArenaScene extends Phaser.Scene {
                     teamColor,
                     team,
                     weaponType,
+                    isBot,
                 )
                 view.lastMeleeSeq = player.meleeAttackSeq ?? 0
                 view.lastDashSeq = player.dashSeq ?? 0
@@ -1837,9 +1903,10 @@ export default class ArenaScene extends Phaser.Scene {
                     view.lastY = player.y
                 }
 
-                if (view.team !== team) {
+                if (view.team !== team || view.isBot !== isBot) {
                     view.team = team
-                    this.updateTeamVisuals(view, team)
+                    view.isBot = isBot
+                    this.updateTeamVisuals(view, team, isBot)
                 }
 
                 const weaponChanged = view.weaponType !== weaponType || view.teamColor !== teamColor
@@ -2044,7 +2111,7 @@ export default class ArenaScene extends Phaser.Scene {
             view.weapon.setVisible(true)
             view.hpBarFrame.setVisible(true)
             view.hpBarFill.setVisible(true)
-            const showTeamRing = this.gameMode === 'tdm' && Boolean(team)
+            const showTeamRing = (this.gameMode === 'tdm' && Boolean(team)) || view.isBot
             if (view.teamRing.visible !== showTeamRing) {
                 view.teamRing.setVisible(showTeamRing)
             }
@@ -2149,8 +2216,12 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
-    private updateTeamVisuals(view: PlayerView, team: TeamColor | '') {
-        if (team === 'blue') {
+    private updateTeamVisuals(view: PlayerView, team: TeamColor | '', isBot = false) {
+        if (isBot) {
+            view.teamRing.setFillStyle(0xf59e0b, 0.22)
+            view.teamRing.setStrokeStyle(2.5, 0xfbbf24, 0.92)
+            view.label.setColor('#fde68a')
+        } else if (team === 'blue') {
             view.teamRing.setFillStyle(0x3b82f6, 0.25)
             view.teamRing.setStrokeStyle(2.5, 0x93c5fd, 0.95)
             view.label.setColor('#bfdbfe')
@@ -2244,6 +2315,7 @@ export default class ArenaScene extends Phaser.Scene {
         teamColor: TeamColor,
         team: TeamColor | '',
         weaponType: WeaponType,
+        isBot = false,
     ): PlayerView {
         const teamRing = this.add
             .ellipse(0, 4, 46, 20, 0xf97316, 0.25)
@@ -2345,6 +2417,7 @@ export default class ArenaScene extends Phaser.Scene {
             team,
             weaponType,
             isDead: false,
+            isBot,
             lastHp: hp,
             lastShield: 0,
             lastGolden: 0,
@@ -2367,7 +2440,7 @@ export default class ArenaScene extends Phaser.Scene {
             renderedReloadProgress: -1,
             renderedReloading: false,
         }
-        this.updateTeamVisuals(view, team)
+        this.updateTeamVisuals(view, team, isBot)
         return view
     }
 }

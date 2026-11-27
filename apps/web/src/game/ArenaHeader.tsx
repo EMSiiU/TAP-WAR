@@ -5,6 +5,7 @@ type ArenaHeaderProps = {
   roomCode: string
   roomName: string
   isPrivate: boolean
+  hideRoomCode?: boolean
   gameModeLabel: string
   environmentLabel: string
   sizeLabel: string
@@ -20,9 +21,11 @@ type ArenaHeaderProps = {
   touchMode: boolean
   fullscreen: boolean
   copied: boolean
+  scoreboardOpen?: boolean
   onCopy: () => void
   onTouchToggle: () => void
   onFullscreen: () => void
+  onToggleScoreboard?: () => void
   onExit: () => void
   onSignOut: () => void
 }
@@ -42,13 +45,24 @@ function ArenaHeader(props: ArenaHeaderProps) {
       <strong className="arena-brand">TAP-WAR</strong>
       <span className="arena-mode-pill">{props.gameModeLabel}</span>
       <span className="arena-room-visibility">{props.isPrivate ? 'Privada' : 'Pública'}</span>
-      {props.roomCode && <button type="button" className="arena-code-button" onClick={props.onCopy}
+      {!props.hideRoomCode && props.roomCode && <button type="button" className="arena-code-button" onClick={props.onCopy}
         title={`Copiar código de ${props.roomName || 'la sala'}`} aria-label={props.copied ? 'Código copiado' : `Copiar código ${props.roomCode}`}>
         <span className="arena-copy-icon" aria-hidden="true">⧉</span><span>{props.copied ? 'Copiado' : props.roomCode}</span>
       </button>}
     </div>
 
     <div className="arena-header-actions">
+      {!props.touchMode && props.onToggleScoreboard && (
+        <button
+          type="button"
+          className={`arena-toolbar-button arena-scoreboard-btn${props.scoreboardOpen ? ' is-active' : ''}`}
+          aria-pressed={Boolean(props.scoreboardOpen)}
+          title="Ver estadísticas de la partida (Tab)"
+          onClick={props.onToggleScoreboard}
+        >
+          Marcador
+        </button>
+      )}
       <button type="button" className="arena-toolbar-button arena-touch-toggle" aria-pressed={props.touchMode} onClick={props.onTouchToggle}>
         Táctil <span className="arena-toggle-state">{props.touchMode ? 'ON' : 'OFF'}</span>
       </button>
@@ -80,7 +94,7 @@ function ArenaHeader(props: ArenaHeaderProps) {
     <div className="arena-scoreboard">
       <span className="arena-clock" role="timer" aria-label={`Tiempo restante ${props.clock}`}>{props.clock}</span>
       <span className="arena-live-score" title={props.scoreLine}>{props.scoreLine || 'Esperando jugadores'}</span>
-      <span className="arena-kill-target">{props.targetLabel ?? 'Meta'} <b>{props.killsToWin}</b></span>
+      {props.killsToWin > 0 && <span className="arena-kill-target">{props.targetLabel ?? 'Meta'} <b>{props.killsToWin}</b></span>}
       <span className={`arena-connection${props.connected ? ' is-connected' : ''}`} role="status" title={props.status}>
         <span aria-hidden="true" className="arena-connection-dot"/><span>{props.connected ? 'Conectado' : props.status}</span>
       </span>

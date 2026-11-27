@@ -51,7 +51,7 @@ const server = defineServer({
         const rooms = listings
           .filter((room) => {
             const meta = (room.metadata ?? {}) as Record<string, unknown>
-            return room.clients < room.maxClients && meta.phase !== 'finished'
+            return room.clients < room.maxClients && meta.phase !== 'finished' && meta.gameMode !== 'practice'
           })
           .map((room) => {
             const meta = (room.metadata ?? {}) as Record<string, unknown>

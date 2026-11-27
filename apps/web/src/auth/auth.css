@@ -3,6 +3,7 @@
 .auth-characters { display: flex; justify-content: center; gap: 12px; margin: 18px 0; }
 .auth-characters img { width: 64px; height: 64px; image-rendering: pixelated; }
 .auth-tabs, .auth-social, .profile-actions { display: flex; gap: 12px; margin: 18px 0; }
+.profile-actions { flex-wrap: wrap; }
 .auth-tabs > button, .auth-social > button, .profile-actions > button { flex: 1; }
 .auth-tabs button, .auth-social button, .profile-actions button, .auth-text-button {
   font: inherit; font-weight: 700; cursor: pointer; border: 2px solid #3d2e4f;

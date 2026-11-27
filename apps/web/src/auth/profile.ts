@@ -3,6 +3,13 @@ import type { CrosshairStyle, PlayerSkin, WeaponType } from '../game/ArenaScene'
 export const validUsername = (value: string) =>
   value.length >= 3 && value.length <= 20 && !/[^A-Za-z0-9_]/.test(value)
 
+export function buildOAuthOptions(provider: 'google' | 'github', origin: string) {
+  return {
+    redirectTo: `${origin}/auth/callback`,
+    ...(provider === 'google' ? { queryParams: { prompt: 'select_account' } } : {}),
+  }
+}
+
 export type Profile = {
   id: string
   username: string | null

@@ -120,6 +120,24 @@ export class TouchInputController {
     this.publish = publish
   }
 
+  getPointerId(control: TouchControl): number | null {
+    return this.pointers[control]
+  }
+
+  hasActivePointers(): boolean {
+    return this.pointers.move !== null || this.pointers.aim !== null || this.pointers.fire !== null
+  }
+
+  releaseByPointerId(pointerId: number, cancelled = false): TouchControl | null {
+    for (const control of ['move', 'aim', 'fire'] as const) {
+      if (this.pointers[control] === pointerId) {
+        this.release(control, pointerId, cancelled)
+        return control
+      }
+    }
+    return null
+  }
+
   private emit() {
     this.publish({ ...this.input, shoot: this.aimFire || this.buttonFire })
   }
@@ -272,5 +290,77 @@ export function bindTouchResetEvents(
     for (const name of events) windowTarget.removeEventListener(name, reset)
     documentTarget.removeEventListener('visibilitychange', visibility)
     reset()
+  }
+}
+
+export type TouchSafetyCallbacks = {
+  onPointerEnd: (pointerId: number, cancelled: boolean) => void
+  onNoTouchesLeft: () => void
+  zeroTouchDelayMs?: number
+}
+
+export function bindGlobalTouchSafetyEvents(
+  windowTarget: {
+    addEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions,
+    ) => void
+    removeEventListener: (
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | EventListenerOptions,
+    ) => void
+  },
+  { onPointerEnd, onNoTouchesLeft, zeroTouchDelayMs = 50 }: TouchSafetyCallbacks,
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const clearTimer = () => {
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const handlePointerUp = (event: Event) => {
+    const pointerId = (event as { pointerId?: unknown }).pointerId
+    if (typeof pointerId === 'number') onPointerEnd(pointerId, false)
+  }
+
+  const handlePointerCancel = (event: Event) => {
+    const pointerId = (event as { pointerId?: unknown }).pointerId
+    if (typeof pointerId === 'number') onPointerEnd(pointerId, true)
+  }
+
+  const handleTouchStartOrPointerDown = () => {
+    clearTimer()
+  }
+
+  const handleTouchEndOrCancel = (event: Event) => {
+    const touches = (event as { touches?: { length: number } }).touches
+    if (touches && touches.length === 0) {
+      clearTimer()
+      timer = setTimeout(() => {
+        timer = null
+        onNoTouchesLeft()
+      }, zeroTouchDelayMs)
+    }
+  }
+
+  windowTarget.addEventListener('pointerup', handlePointerUp, true)
+  windowTarget.addEventListener('pointercancel', handlePointerCancel, true)
+  windowTarget.addEventListener('pointerdown', handleTouchStartOrPointerDown, true)
+  windowTarget.addEventListener('touchstart', handleTouchStartOrPointerDown, { passive: true })
+  windowTarget.addEventListener('touchend', handleTouchEndOrCancel, { passive: true })
+  windowTarget.addEventListener('touchcancel', handleTouchEndOrCancel, { passive: true })
+
+  return () => {
+    clearTimer()
+    windowTarget.removeEventListener('pointerup', handlePointerUp, true)
+    windowTarget.removeEventListener('pointercancel', handlePointerCancel, true)
+    windowTarget.removeEventListener('pointerdown', handleTouchStartOrPointerDown, true)
+    windowTarget.removeEventListener('touchstart', handleTouchStartOrPointerDown)
+    windowTarget.removeEventListener('touchend', handleTouchEndOrCancel)
+    windowTarget.removeEventListener('touchcancel', handleTouchEndOrCancel)
   }
 }

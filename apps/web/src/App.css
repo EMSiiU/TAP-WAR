@@ -1161,7 +1161,6 @@
 }
 
 .arena-stage.has-touch-controls .arena-canvas-wrap {
-  grid-area: arena;
   width: min(calc(100vw - 268px), calc((100dvh - 80px) * 1024 / 768));
   max-height: 100%;
 }
@@ -1728,7 +1727,7 @@
 
 .touch-editor-arena-hint {
   position: absolute;
-  inset: 14% 12%;
+  inset: 3% 22%;
   border: 2px dashed rgba(245, 226, 203, 0.22);
   border-radius: 8px;
   display: flex;
@@ -1917,6 +1916,18 @@
 
 .lobby-card.is-main-menu .profile-actions {
   margin: 14px 0 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lobby-card.is-main-menu .profile-actions > button {
+  flex: 1 1 130px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  font-size: 0.86rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .lobby-card.is-main-menu .pc-controls-summary-head {
@@ -2106,6 +2117,7 @@
   }
 
   .lobby-card.is-main-menu .profile-actions button {
+    flex: 1 1 112px;
     padding: 7px 10px;
     font-size: 0.82rem;
   }
@@ -2118,4 +2130,292 @@
     max-height: 94dvh;
     padding: 14px;
   }
+}
+
+/* Campo de tiro (Firing Range) */
+.practice-lobby-card {
+  background: linear-gradient(135deg, #fff4df 0%, #fde6c4 100%);
+  border-color: #d97706;
+}
+
+.practice-lobby-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.practice-lobby-desc {
+  margin: 0 0 12px;
+  font-size: 0.84rem;
+  line-height: 1.35;
+  color: #4f3a65;
+  font-weight: 600;
+}
+
+.practice-lobby-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #241932;
+  border: 2px solid #241932;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.practice-lobby-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.practice-env-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.practice-env-pill {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.practice-enter-btn {
+  padding: 9px 16px;
+}
+
+.arena-practice-fab {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 16;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 2px solid #241932;
+  background: rgba(245, 158, 11, 0.94);
+  color: #241932;
+  font-weight: 800;
+  font-size: 0.8rem;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #241932;
+}
+
+.arena-practice-fab:hover {
+  background: #fbbf24;
+}
+
+.arena-practice-fab kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #241932;
+  color: #fde68a;
+  font-size: 0.72rem;
+  font-family: inherit;
+}
+
+@media (orientation: portrait) {
+  .arena-shell.is-touch-mode .arena-practice-fab {
+    top: auto;
+    bottom: 10px;
+    left: 10px;
+  }
+}
+
+.practice-arsenal-modal {
+  max-width: 720px;
+}
+
+.practice-weapon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.practice-utility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.practice-utility-grid .kenney-btn-secondary {
+  margin: 0;
+  padding: 9px 12px;
+  font-size: 0.84rem;
+}
+
+/* Live In-Game Scoreboard (Tab on PC, button next to Menu on mobile) */
+.arena-toolbar-button.arena-scoreboard-btn.is-active,
+.touch-pill-btn.touch-scoreboard-btn.is-active {
+  background: #f59e0b;
+  color: #241932;
+  border-color: #fde68a;
+}
+
+.touch-pill-btn.touch-scoreboard-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 4px 8px;
+}
+
+.arena-live-scoreboard-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.arena-live-scoreboard-overlay.is-passive {
+  pointer-events: none;
+  background: rgba(15, 10, 24, 0.28);
+}
+
+.arena-live-scoreboard-overlay.is-interactive {
+  pointer-events: auto;
+  background: rgba(15, 10, 24, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.arena-live-scoreboard-card {
+  width: min(100%, 620px);
+  max-height: min(86%, 460px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 3px solid #f5e2cb;
+  background: rgba(29, 20, 39, 0.94);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  box-sizing: border-box;
+}
+
+.arena-live-scoreboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.arena-live-scoreboard-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.arena-live-scoreboard-title strong {
+  font-size: 1rem;
+  color: #fef08a;
+}
+
+.arena-live-scoreboard-title span {
+  font-size: 0.78rem;
+  color: #d8c5df;
+  font-weight: 700;
+}
+
+.arena-live-scoreboard-teams {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-scoreboard-close {
+  flex: 0 0 auto;
+}
+
+.arena-live-scoreboard-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.arena-live-scoreboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  text-align: left;
+}
+
+.arena-live-scoreboard-table th {
+  padding: 6px 8px;
+  border-bottom: 2px solid rgba(245, 226, 203, 0.25);
+  color: #f2c46d;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.arena-live-scoreboard-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.arena-scoreboard-row.is-local {
+  background: rgba(245, 158, 11, 0.16);
+  font-weight: 800;
+}
+
+.arena-scoreboard-row.is-dead td {
+  opacity: 0.65;
+}
+
+.arena-scoreboard-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-scoreboard-player-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arena-scoreboard-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.arena-scoreboard-tag.is-you {
+  background: #f59e0b;
+  color: #241932;
+}
+
+.arena-scoreboard-tag.is-npc {
+  background: #475569;
+  color: #f8fafc;
+}
+
+.arena-scoreboard-tag.is-ko {
+  background: #991b1b;
+  color: #fecaca;
 }
