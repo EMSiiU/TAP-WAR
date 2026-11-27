@@ -1,4 +1,10 @@
 import arena from '../../../../packages/shared/arena.json' with { type: 'json' }
+import {
+    isBulletHittingObstacle as isBulletHittingObstacleShared,
+    moveInsideArena as moveInsideArenaShared,
+    overlapsObstacleWithRadius as overlapsObstacleWithRadiusShared,
+    segmentBlockedByObstacle as segmentBlockedByObstacleShared,
+} from '../../../../packages/shared/movement.js'
 import type { ArenaMapConfig } from './ArenaMaps.js'
 
 type Position = { x: number; y: number }
@@ -7,43 +13,13 @@ export type CollisionMap = Pick<ArenaMapConfig, 'width' | 'height' | 'playerRadi
 
 const DEFAULT_ARENA_MAP: CollisionMap = arena
 
-function clamp(value: number, min: number, max: number): number {
-    return Math.max(min, Math.min(value, max))
-}
-
-function overlapsObstacle(x: number, y: number, arenaMap: CollisionMap): boolean {
-    const radius = arenaMap.playerRadius
-    return arenaMap.obstacles.some((obstacle) => {
-        const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.width)
-        const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.height)
-        const dx = x - closestX
-        const dy = y - closestY
-
-        return dx * dx + dy * dy < radius * radius
-    })
-}
-
 export function moveInsideArena(
     position: Position,
     dx: number,
     dy: number,
     arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): Position {
-    const radius = arenaMap.playerRadius
-    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / (radius / 2)))
-    const stepX = dx / steps
-    const stepY = dy / steps
-    let { x, y } = position
-
-    for (let i = 0; i < steps; i++) {
-        const nextX = clamp(x + stepX, radius, arenaMap.width - radius)
-        if (!overlapsObstacle(nextX, y, arenaMap)) x = nextX
-
-        const nextY = clamp(y + stepY, radius, arenaMap.height - radius)
-        if (!overlapsObstacle(x, nextY, arenaMap)) y = nextY
-    }
-
-    return { x, y }
+    return moveInsideArenaShared(position, dx, dy, arenaMap)
 }
 
 export function isBulletHittingObstacle(
@@ -52,13 +28,7 @@ export function isBulletHittingObstacle(
     halfSize = 4,
     arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): boolean {
-    return arenaMap.obstacles.some(
-        (obstacle) =>
-            x + halfSize > obstacle.x &&
-            x - halfSize < obstacle.x + obstacle.width &&
-            y + halfSize > obstacle.y &&
-            y - halfSize < obstacle.y + obstacle.height,
-    )
+    return isBulletHittingObstacleShared(x, y, halfSize, arenaMap)
 }
 
 export function intersectsPlayerHitbox(
@@ -103,17 +73,7 @@ export function overlapsObstacleWithRadius(
     radius: number,
     arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): boolean {
-    if (x < radius || x > arenaMap.width - radius || y < radius || y > arenaMap.height - radius) {
-        return true
-    }
-    return arenaMap.obstacles.some((obstacle) => {
-        const closestX = clamp(x, obstacle.x, obstacle.x + obstacle.width)
-        const closestY = clamp(y, obstacle.y, obstacle.y + obstacle.height)
-        const dx = x - closestX
-        const dy = y - closestY
-
-        return dx * dx + dy * dy < radius * radius
-    })
+    return overlapsObstacleWithRadiusShared(x, y, radius, arenaMap)
 }
 
 export function pickRandomFreeArenaPoint(
@@ -173,15 +133,5 @@ export function segmentBlockedByObstacle(
     y2: number,
     arenaMap: CollisionMap = DEFAULT_ARENA_MAP,
 ): boolean {
-    const dist = Math.hypot(x2 - x1, y2 - y1)
-    const steps = Math.max(1, Math.ceil(dist / 4))
-    for (let i = 1; i < steps; i++) {
-        const t = i / steps
-        const px = x1 + (x2 - x1) * t
-        const py = y1 + (y2 - y1) * t
-        if (isBulletHittingObstacle(px, py, 2, arenaMap)) {
-            return true
-        }
-    }
-    return false
+    return segmentBlockedByObstacleShared(x1, y1, x2, y2, arenaMap, 2)
 }

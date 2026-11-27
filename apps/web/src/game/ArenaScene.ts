@@ -3,6 +3,8 @@ import {
     POWERUP_META,
     buildMapLayers,
     getArenaMap,
+    isBulletHittingObstacle,
+    segmentBlockedByObstacle,
     type ArenaMapConfig,
     type GameMode,
     type MapEnvironment,
@@ -12,6 +14,7 @@ import {
 import { findAutoAimAngle } from './autoAim'
 import { createGamepadEdgeDetector, pickActiveGamepad, readGamepadInput } from './gamepad'
 import { DEFAULT_PC_CONTROLS, type PcControlConfig } from './keybindings'
+import { LocalPlayerPredictor } from './prediction'
 import type { TouchInputState } from './touchInput'
 
 export type MatchPhase = 'waiting' | 'playing' | 'finished'
@@ -63,6 +66,7 @@ export type PlayerState = {
     emote: string
     meleeAttackSeq?: number
     lastMeleeAngle?: number
+    lastInputSeq?: number
 }
 
 export type BulletState = {
@@ -92,6 +96,13 @@ export type PowerUpState = {
     y: number
 }
 
+export type ArenaWorldSnapshot = {
+    players: PlayerState[]
+    bullets: BulletState[]
+    pickups: PickupState[]
+    powerUps: PowerUpState[]
+}
+
 export type CrosshairStyle = 'outline' | 'plain'
 export type ArenaActionKind = 'melee' | 'reload' | 'dash' | 'touchSync'
 
@@ -105,12 +116,15 @@ export type ArenaControls = {
         melee?: boolean
         reload?: boolean
         dash?: boolean
+        seq?: number
     }) => void
     sendEmote?: (emote: 'dots' | 'alert') => void
     sendPause?: (paused: boolean) => void
 }
 
 const INPUT_INTERVAL_MS = 50
+const MINIMAP_INTERVAL_MS = 66
+const SFX_MIN_INTERVAL_MS = 35
 const WALK_ANIM_TIMEOUT_MS = 120
 const PLAYER_DISPLAY_SIZE = 80
 const WEAPON_DISPLAY_SIZE = 68
@@ -182,6 +196,23 @@ type PlayerView = {
     lastX: number
     lastY: number
     lastMovedAt: number
+    renderedHpRatio: number
+    renderedShieldProgress: number
+    renderedShieldBarMode: 'none' | 'shield' | 'golden'
+    renderedAuraMode: 'none' | 'shield' | 'golden'
+    renderedReloadProgress: number
+    renderedReloading: boolean
+}
+
+type BulletView = {
+    sprite: Phaser.GameObjects.Image
+    x: number
+    y: number
+    vx: number
+    vy: number
+    weaponType: WeaponType
+    lastTrailAt: number
+    stopped: boolean
 }
 
 type PickupView = {
@@ -197,6 +228,7 @@ type PowerUpView = {
 
 export default class ArenaScene extends Phaser.Scene {
     private players: PlayerState[] = []
+    private playerById = new Map<string, PlayerState>()
     private bullets: BulletState[] = []
     private pickups: PickupState[] = []
     private powerUps: PowerUpState[] = []
@@ -207,20 +239,35 @@ export default class ArenaScene extends Phaser.Scene {
     private isPaused = false
     private touchMode = false
     private arenaMap: ArenaMapConfig
+    private localPredictor: LocalPlayerPredictor
+    private localDashGraceUntil = 0
+    private liveControl = {
+        sentSeq: 0,
+        sentMoveX: 0,
+        sentMoveY: 0,
+    }
+    private sampleLiveControl?: () => { moveX: number; moveY: number; aimAngle: number }
     private getTouchInput?: () => TouchInputState
     private onMenuToggle?: () => void
     private onGamepadChange?: (connected: boolean) => void
     private aimOffsetX = 120
     private aimOffsetY = 0
     private playerViews = new Map<string, PlayerView>()
-    private bulletViews = new Map<string, Phaser.GameObjects.Image>()
+    private bulletViews = new Map<string, BulletView>()
     private pickupViews = new Map<string, PickupView>()
     private powerUpViews = new Map<string, PowerUpView>()
+    private activePlayerIds = new Set<string>()
+    private activeBulletIds = new Set<string>()
+    private activePickupIds = new Set<string>()
+    private activePowerUpIds = new Set<string>()
     private lastShellAtByOwner = new Map<string, number>()
+    private lastSoundAtByKey = new Map<string, number>()
     private lastEmptyClickAt = 0
     private aimCrosshair?: Phaser.GameObjects.Image
     private aimGuideGraphics?: Phaser.GameObjects.Graphics
+    private minimapStaticGraphics?: Phaser.GameObjects.Graphics
     private minimapGraphics?: Phaser.GameObjects.Graphics
+    private lastMinimapDrawAt = -1000
     private isReady = false
 
     private controls: ArenaControls
@@ -239,6 +286,7 @@ export default class ArenaScene extends Phaser.Scene {
         super('arena')
         this.controls = controls
         this.arenaMap = getArenaMap(mapSize, environment)
+        this.localPredictor = new LocalPlayerPredictor(this.arenaMap)
         this.touchMode = touchMode
         this.getTouchInput = getTouchInput
         this.onMenuToggle = onMenuToggle
@@ -321,19 +369,26 @@ export default class ArenaScene extends Phaser.Scene {
             this.aimCrosshair = undefined
             this.aimGuideGraphics?.destroy()
             this.aimGuideGraphics = undefined
+            this.minimapStaticGraphics?.destroy()
+            this.minimapStaticGraphics = undefined
             this.minimapGraphics?.destroy()
             this.minimapGraphics = undefined
             this.playerViews.clear()
+            this.playerById.clear()
             this.bulletViews.clear()
             this.pickupViews.clear()
             this.powerUpViews.clear()
             this.lastShellAtByOwner.clear()
+            this.lastSoundAtByKey.clear()
         })
 
         this.renderArenaMap()
 
         this.aimGuideGraphics = this.add.graphics().setDepth(9200)
+        this.minimapStaticGraphics = this.add.graphics().setScrollFactor(0).setDepth(9499)
         this.minimapGraphics = this.add.graphics().setScrollFactor(0).setDepth(9500)
+        this.renderMinimapBackground()
+        this.lastMinimapDrawAt = -1000
 
         for (const skin of SKINS) {
             const animKey = `walk-${skin}`
@@ -420,9 +475,63 @@ export default class ArenaScene extends Phaser.Scene {
 
     update(time: number, delta: number) {
         const interpFactor = 1 - Math.pow(1 - 0.25, delta / 16.667)
+        const dtSec = Math.min(delta / 1000, 0.1)
 
         for (const [id, view] of this.playerViews) {
-            if (id !== this.controls.playerId) {
+            if (id === this.controls.playerId) {
+                if (!view.isDead && !this.isPaused && this.currentPhase !== 'finished') {
+                    if (time < this.localDashGraceUntil) {
+                        const dashFactor = 1 - Math.pow(1 - 0.45, delta / 16.667)
+                        const nextX = Phaser.Math.Linear(view.root.x, view.targetX, dashFactor)
+                        const nextY = Phaser.Math.Linear(view.root.y, view.targetY, dashFactor)
+                        view.root.setPosition(nextX, nextY)
+                        view.root.setDepth(nextY)
+                        view.body.setDepth(nextY)
+                        view.weapon.setDepth(nextY + 1)
+                        this.localPredictor.reset(nextX, nextY)
+                        view.lastMovedAt = time
+                    } else if (this.sampleLiveControl) {
+                        const live = this.sampleLiveControl()
+                        if (live.moveX !== 0 || live.moveY !== 0) {
+                            view.lastMovedAt = time
+                        }
+                        const tagSeq =
+                            live.moveX === this.liveControl.sentMoveX &&
+                            live.moveY === this.liveControl.sentMoveY
+                                ? this.liveControl.sentSeq
+                                : this.liveControl.sentSeq + 1
+                        const pos = this.localPredictor.stepFrame(
+                            live.moveX,
+                            live.moveY,
+                            dtSec,
+                            tagSeq,
+                            true,
+                        )
+                        view.root.setPosition(pos.x, pos.y)
+                        view.root.setDepth(pos.y)
+                        view.body.setDepth(pos.y)
+                        view.weapon.setDepth(pos.y + 1)
+
+                        const facingLeft = live.aimAngle > Math.PI / 2 || live.aimAngle < -Math.PI / 2
+                        view.body.setFlipX(facingLeft)
+                        const weaponX = Math.cos(live.aimAngle) * WEAPON_RADIAL_OFFSET
+                        const weaponY = WEAPON_BASE_Y + Math.sin(live.aimAngle) * WEAPON_RADIAL_OFFSET
+                        view.weapon.setPosition(weaponX, weaponY)
+                        if (MELEE_WEAPONS.has(view.weaponType)) {
+                            view.weapon.setFlipX(facingLeft)
+                            view.weapon.setFlipY(false)
+                            if (!view.isSwinging) {
+                                const guardTilt = facingLeft ? 0.35 : -0.35
+                                view.weapon.setRotation(live.aimAngle + Math.PI / 2 + guardTilt)
+                            }
+                        } else {
+                            view.weapon.setFlipX(false)
+                            view.weapon.setRotation(live.aimAngle)
+                            view.weapon.setFlipY(facingLeft)
+                        }
+                    }
+                }
+            } else {
                 const nextX = Phaser.Math.Linear(view.root.x, view.targetX, interpFactor)
                 const nextY = Phaser.Math.Linear(view.root.y, view.targetY, interpFactor)
                 view.root.setPosition(nextX, nextY)
@@ -464,9 +573,131 @@ export default class ArenaScene extends Phaser.Scene {
             }
         }
 
+        if (this.currentPhase !== 'finished') {
+            for (const bv of this.bulletViews.values()) {
+                if (bv.stopped) continue
+                const prevX = bv.x
+                const prevY = bv.y
+                const nextX = prevX + bv.vx * dtSec
+                const nextY = prevY + bv.vy * dtSec
+
+                if (
+                    nextX < 0 ||
+                    nextX > this.arenaMap.width ||
+                    nextY < 0 ||
+                    nextY > this.arenaMap.height ||
+                    isBulletHittingObstacle(nextX, nextY, 4, this.arenaMap) ||
+                    segmentBlockedByObstacle(prevX, prevY, nextX, nextY, this.arenaMap)
+                ) {
+                    bv.stopped = true
+                    bv.sprite.setVisible(false)
+                    continue
+                }
+
+                bv.x = nextX
+                bv.y = nextY
+                bv.sprite.setPosition(nextX, nextY)
+                bv.sprite.setDepth(nextY + 2)
+
+                if (
+                    bv.weaponType === 'launcher' &&
+                    time - bv.lastTrailAt >= 55 &&
+                    this.isNearViewport(nextX, nextY, 80)
+                ) {
+                    bv.lastTrailAt = time
+                    const trail = this.add.circle(nextX, nextY, 4, 0xfb923c, 0.55).setDepth(nextY + 1)
+                    this.tweens.add({
+                        targets: trail,
+                        scale: 1.9,
+                        alpha: 0,
+                        duration: 140,
+                        onComplete: () => trail.destroy(),
+                    })
+                }
+            }
+        }
+
         this.renderMinimap(time)
         this.renderTouchAimGuide(time)
         this.updateCrosshair()
+    }
+
+    private isNearViewport(x: number, y: number, margin = 140): boolean {
+        if (this.arenaMap.id === 'small') return true
+        const cam = this.cameras?.main
+        if (!cam) return true
+        const view = cam.worldView
+        if (!view || view.width === 0 || view.height === 0) return true
+        return (
+            x >= view.left - margin &&
+            x <= view.right + margin &&
+            y >= view.top - margin &&
+            y <= view.bottom + margin
+        )
+    }
+
+    private playSpatialSound(
+        key: string,
+        baseVolume: number,
+        x: number,
+        y: number,
+        maxDist = 900,
+        isLocal = false,
+    ) {
+        if (!this.isReady || this.sound.locked || !this.cache.audio.exists(key)) return
+        if (isLocal || this.arenaMap.id === 'small') {
+            this.playSound(key, baseVolume)
+            return
+        }
+
+        const now = this.time.now
+        const lastAt = this.lastSoundAtByKey.get(key) ?? -1000
+        if (now - lastAt < SFX_MIN_INTERVAL_MS) return
+
+        const localView = this.playerViews.get(this.controls.playerId)
+        const localPlayer = this.playerById.get(this.controls.playerId)
+        const lx = localView ? localView.root.x : localPlayer?.x
+        const ly = localView ? localView.root.y : localPlayer?.y
+        let volume = baseVolume
+        if (lx !== undefined && ly !== undefined) {
+            const dist = Math.hypot(x - lx, y - ly)
+            if (dist > maxDist) return
+            volume = baseVolume * Math.max(0.18, 1 - dist / maxDist)
+        }
+        this.lastSoundAtByKey.set(key, now)
+        this.sound.play(key, { volume })
+    }
+
+    private getMinimapBounds() {
+        const mmW = this.arenaMap.id === 'small' ? 132 : 156
+        const mmH = Math.round((mmW * this.arenaMap.height) / this.arenaMap.width)
+        const mmX = 1024 - mmW - 12
+        const mmY = 12
+        const scaleX = mmW / this.arenaMap.width
+        const scaleY = mmH / this.arenaMap.height
+        return { mmW, mmH, mmX, mmY, scaleX, scaleY }
+    }
+
+    private renderMinimapBackground() {
+        const g = this.minimapStaticGraphics
+        if (!g) return
+        const { mmW, mmH, mmX, mmY, scaleX, scaleY } = this.getMinimapBounds()
+
+        g.clear()
+        g.fillStyle(0x1e1629, 0.76)
+        g.fillRoundedRect(mmX, mmY, mmW, mmH, 6)
+        g.lineStyle(2, 0xf5e2cb, 0.72)
+        g.strokeRoundedRect(mmX, mmY, mmW, mmH, 6)
+
+        g.fillStyle(0x8d6e63, 0.9)
+        for (const obs of this.arenaMap.obstacles) {
+            g.fillRect(
+                mmX + obs.x * scaleX,
+                mmY + obs.y * scaleY,
+                Math.max(2, obs.width * scaleX),
+                Math.max(2, obs.height * scaleY),
+            )
+        }
     }
 
     private renderTouchAimGuide(time: number) {
@@ -478,11 +709,14 @@ export default class ArenaScene extends Phaser.Scene {
         const touch = this.getTouchInput?.()
         if (!touch?.aimActive) return
 
-        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
+        const localPlayer = this.playerById.get(this.controls.playerId)
         if (!localPlayer || localPlayer.isDead) return
+        const localView = this.playerViews.get(this.controls.playerId)
+        const baseX = localView ? localView.root.x : localPlayer.x
+        const baseY = localView ? localView.root.y : localPlayer.y
 
-        const startX = localPlayer.x
-        const startY = localPlayer.y + WEAPON_BASE_Y
+        const startX = baseX
+        const startY = baseY + WEAPON_BASE_Y
 
         if (touch.aimMode === 'manual') {
             const cancelling = touch.aimCancelling
@@ -498,7 +732,11 @@ export default class ArenaScene extends Phaser.Scene {
             g.fillStyle(color, cancelling ? 0.5 : 0.92)
             g.fillCircle(endX, endY, cancelling ? 4 : 6)
         } else if (touch.aimMode === 'auto') {
-            const { angle, target } = findAutoAimAngle(localPlayer, this.players, this.gameMode, localPlayer.aimAngle, WEAPON_BASE_Y)
+            const aimSource =
+                baseX === localPlayer.x && baseY === localPlayer.y
+                    ? localPlayer
+                    : { ...localPlayer, x: baseX, y: baseY }
+            const { angle, target } = findAutoAimAngle(aimSource, this.players, this.gameMode, localPlayer.aimAngle, WEAPON_BASE_Y)
             if (target) {
                 const pulse = 1 + Math.sin(time / 90) * 0.12
                 g.lineStyle(2.5, 0xfacc15, 0.55)
@@ -517,30 +755,12 @@ export default class ArenaScene extends Phaser.Scene {
     private renderMinimap(time: number) {
         const g = this.minimapGraphics
         if (!g) return
+        if (time - this.lastMinimapDrawAt < MINIMAP_INTERVAL_MS) return
+        this.lastMinimapDrawAt = time
 
-        const mmW = this.arenaMap.id === 'small' ? 132 : 156
-        const mmH = Math.round((mmW * this.arenaMap.height) / this.arenaMap.width)
-        const mmX = 1024 - mmW - 12
-        const mmY = 12
-        const scaleX = mmW / this.arenaMap.width
-        const scaleY = mmH / this.arenaMap.height
+        const { mmX, mmY, scaleX, scaleY } = this.getMinimapBounds()
 
         g.clear()
-        g.fillStyle(0x1e1629, 0.76)
-        g.fillRoundedRect(mmX, mmY, mmW, mmH, 6)
-        g.lineStyle(2, 0xf5e2cb, 0.72)
-        g.strokeRoundedRect(mmX, mmY, mmW, mmH, 6)
-
-        g.fillStyle(0x8d6e63, 0.9)
-        for (const obs of this.arenaMap.obstacles) {
-            g.fillRect(
-                mmX + obs.x * scaleX,
-                mmY + obs.y * scaleY,
-                Math.max(2, obs.width * scaleX),
-                Math.max(2, obs.height * scaleY),
-            )
-        }
-
         g.fillStyle(0xfbbf24, 0.8)
         for (const pickup of this.pickups) {
             g.fillCircle(mmX + pickup.x * scaleX, mmY + pickup.y * scaleY, 2.2)
@@ -564,7 +784,8 @@ export default class ArenaScene extends Phaser.Scene {
             }
         }
 
-        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
+        const localPlayer = this.playerById.get(this.controls.playerId)
+        const localView = this.playerViews.get(this.controls.playerId)
         for (const player of this.players) {
             if (player.isDead) continue
             const isLocal = player.id === this.controls.playerId
@@ -573,12 +794,14 @@ export default class ArenaScene extends Phaser.Scene {
                 this.gameMode === 'tdm' &&
                 Boolean(localPlayer?.team) &&
                 player.team === localPlayer?.team
+            const px = isLocal && localView ? localView.root.x : player.x
+            const py = isLocal && localView ? localView.root.y : player.y
             const color = isLocal ? 0x38bdf8 : isTeammate ? 0x4ade80 : 0xf87171
             g.fillStyle(color, 1)
-            g.fillCircle(mmX + player.x * scaleX, mmY + player.y * scaleY, isLocal ? 3.5 : 2.5)
+            g.fillCircle(mmX + px * scaleX, mmY + py * scaleY, isLocal ? 3.5 : 2.5)
             if (isLocal) {
                 g.lineStyle(1.2, 0xffffff, 0.95)
-                g.strokeCircle(mmX + player.x * scaleX, mmY + player.y * scaleY, 3.8)
+                g.strokeCircle(mmX + px * scaleX, mmY + py * scaleY, 3.8)
             }
         }
     }
@@ -626,70 +849,75 @@ export default class ArenaScene extends Phaser.Scene {
 
     triggerExplosion(x: number, y: number, radius: number) {
         if (!this.isReady || !this.sys.isActive()) return
-        this.playSound('explosion-a', 0.55)
+        this.playSpatialSound('explosion-a', 0.55, x, y, 1050)
 
-        // Blast radius zone fill (shows true AoE radius cleanly).
-        const zone = this.add.circle(x, y, radius, 0xf97316, 0.32).setDepth(y + 10)
-        zone.setStrokeStyle(4, 0xfef08a, 0.95)
-        zone.setScale(0.25)
-        this.tweens.add({
-            targets: zone,
-            scale: 1,
-            alpha: 0,
-            duration: 280,
-            ease: 'Cubic.easeOut',
-            onComplete: () => zone.destroy(),
-        })
-
-        // Expanding shockwave ring.
-        const ring = this.add.circle(x, y, radius * 0.95, 0xfef08a, 0).setDepth(y + 11)
-        ring.setStrokeStyle(6, 0xffffff, 0.9)
-        ring.setScale(0.15)
-        this.tweens.add({
-            targets: ring,
-            scale: 1.08,
-            alpha: 0,
-            duration: 240,
-            ease: 'Quad.easeOut',
-            onComplete: () => ring.destroy(),
-        })
-
-        // Bright fiery core flash.
-        const core = this.add.circle(x, y, Math.max(24, radius * 0.36), 0xffffff, 0.95).setDepth(y + 12)
-        this.tweens.add({
-            targets: core,
-            scale: 1.65,
-            alpha: 0,
-            duration: 180,
-            ease: 'Quad.easeOut',
-            onComplete: () => core.destroy(),
-        })
-
-        // Radial fiery sparks and smoke puffs.
-        const sparkCount = 12
-        const colors = [0xfef08a, 0xfb923c, 0xef4444, 0x78716c]
-        for (let i = 0; i < sparkCount; i++) {
-            const angle = (i / sparkCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18)
-            const dist = radius * Phaser.Math.FloatBetween(0.55, 0.98)
-            const spark = this.add
-                .circle(x, y, Phaser.Math.Between(5, 10), colors[i % colors.length], 0.95)
-                .setDepth(y + 13)
+        if (this.isNearViewport(x, y, radius + 120)) {
+            // Blast radius zone fill (shows true AoE radius cleanly).
+            const zone = this.add.circle(x, y, radius, 0xf97316, 0.32).setDepth(y + 10)
+            zone.setStrokeStyle(4, 0xfef08a, 0.95)
+            zone.setScale(0.25)
             this.tweens.add({
-                targets: spark,
-                x: x + Math.cos(angle) * dist,
-                y: y + Math.sin(angle) * dist,
-                scale: 0.2,
+                targets: zone,
+                scale: 1,
                 alpha: 0,
-                duration: Phaser.Math.Between(220, 360),
+                duration: 280,
                 ease: 'Cubic.easeOut',
-                onComplete: () => spark.destroy(),
+                onComplete: () => zone.destroy(),
             })
+
+            // Expanding shockwave ring.
+            const ring = this.add.circle(x, y, radius * 0.95, 0xfef08a, 0).setDepth(y + 11)
+            ring.setStrokeStyle(6, 0xffffff, 0.9)
+            ring.setScale(0.15)
+            this.tweens.add({
+                targets: ring,
+                scale: 1.08,
+                alpha: 0,
+                duration: 240,
+                ease: 'Quad.easeOut',
+                onComplete: () => ring.destroy(),
+            })
+
+            // Bright fiery core flash.
+            const core = this.add.circle(x, y, Math.max(24, radius * 0.36), 0xffffff, 0.95).setDepth(y + 12)
+            this.tweens.add({
+                targets: core,
+                scale: 1.65,
+                alpha: 0,
+                duration: 180,
+                ease: 'Quad.easeOut',
+                onComplete: () => core.destroy(),
+            })
+
+            // Radial fiery sparks and smoke puffs.
+            const sparkCount = 12
+            const colors = [0xfef08a, 0xfb923c, 0xef4444, 0x78716c]
+            for (let i = 0; i < sparkCount; i++) {
+                const angle = (i / sparkCount) * Math.PI * 2 + Phaser.Math.FloatBetween(-0.18, 0.18)
+                const dist = radius * Phaser.Math.FloatBetween(0.55, 0.98)
+                const spark = this.add
+                    .circle(x, y, Phaser.Math.Between(5, 10), colors[i % colors.length], 0.95)
+                    .setDepth(y + 13)
+                this.tweens.add({
+                    targets: spark,
+                    x: x + Math.cos(angle) * dist,
+                    y: y + Math.sin(angle) * dist,
+                    scale: 0.2,
+                    alpha: 0,
+                    duration: Phaser.Math.Between(220, 360),
+                    ease: 'Cubic.easeOut',
+                    onComplete: () => spark.destroy(),
+                })
+            }
         }
 
         // Distance-scaled screen shake for impact punch.
-        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
-        if (localPlayer) {
-            const distToLocal = Math.hypot(localPlayer.x - x, localPlayer.y - y)
+        const localPlayer = this.playerById.get(this.controls.playerId)
+        const localView = this.playerViews.get(this.controls.playerId)
+        if (localPlayer || localView) {
+            const lx = localView ? localView.root.x : localPlayer!.x
+            const ly = localView ? localView.root.y : localPlayer!.y
+            const distToLocal = Math.hypot(lx - x, ly - y)
             if (distToLocal < radius * 4) {
                 const intensity = Math.max(0.002, 0.008 * (1 - distToLocal / (radius * 4)))
                 this.cameras.main.shake(150, intensity)
@@ -700,7 +928,7 @@ export default class ArenaScene extends Phaser.Scene {
     private updateCrosshair() {
         if (!this.aimCrosshair) return
 
-        const localPlayer = this.players.find((p) => p.id === this.controls.playerId)
+        const localPlayer = this.playerById.get(this.controls.playerId)
         if (!localPlayer || localPlayer.isDead || this.currentPhase === 'finished' || this.isPaused) {
             this.aimCrosshair.setVisible(false)
             return
@@ -719,9 +947,11 @@ export default class ArenaScene extends Phaser.Scene {
             this.aimCrosshair.setTexture(crosshairKey)
         }
 
+        const baseX = localView ? localView.root.x : localPlayer.x
+        const baseY = localView ? localView.root.y : localPlayer.y
         this.aimCrosshair.setPosition(
-            localPlayer.x + this.aimOffsetX,
-            localPlayer.y + this.aimOffsetY,
+            baseX + this.aimOffsetX,
+            baseY + this.aimOffsetY,
         )
         this.aimCrosshair.setVisible(true)
     }
@@ -745,6 +975,7 @@ export default class ArenaScene extends Phaser.Scene {
 
     stopControls() {
         this.dispatchAction = undefined
+        this.sampleLiveControl = undefined
         this.cleanupControls?.()
         this.cleanupControls = undefined
     }
@@ -762,7 +993,7 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private playEmptyClickIfNeeded() {
-        const local = this.players.find((p) => p.id === this.controls.playerId)
+        const local = this.playerById.get(this.controls.playerId)
         if (
             local &&
             this.currentPhase === 'playing' &&
@@ -787,6 +1018,11 @@ export default class ArenaScene extends Phaser.Scene {
         let lastAutoShotSeq = this.getTouchInput?.()?.autoAimShotSeq ?? 0
         let lastManualShotSeq = this.getTouchInput?.()?.manualShotSeq ?? 0
         let aimAngle = 0
+        let lastSentSeq = 0
+        let lastSentMoveX = 0
+        let lastSentMoveY = 0
+        let lastSentAim = 0
+        let lastSentShoot = false
         const detectGamepadEdges = createGamepadEdgeDetector()
         let lastReportedGamepad = false
 
@@ -804,48 +1040,17 @@ export default class ArenaScene extends Phaser.Scene {
 
         const hasFocus = () => !document.hidden && (this.touchMode || document.hasFocus())
 
-        const sendInput = () => {
-            const pad = pickActiveGamepad(navigator.getGamepads?.())
-            reportGamepadState(Boolean(pad))
-            const padSample = pad ? readGamepadInput(pad) : null
-            const edges = detectGamepadEdges(padSample)
-
-            if (edges.pausePressed && this.currentPhase !== 'finished') {
-                this.onMenuToggle?.()
-                return
-            }
-
-            if (this.isPaused || this.currentPhase === 'finished') return
-
-            if (edges.emoteDotsPressed) {
-                this.controls.sendEmote?.('dots')
-            }
-            if (edges.emoteAlertPressed) {
-                this.controls.sendEmote?.('alert')
-            }
-
-            const player = this.players.find(({ id }) => id === this.controls.playerId)
-            if (!player) return
-
+        const sampleAxesAndAim = (padSample: ReturnType<typeof readGamepadInput> | null) => {
+            const player = this.playerById.get(this.controls.playerId)
+            const localView = this.playerViews.get(this.controls.playerId)
             const touch = this.touchMode ? this.getTouchInput?.() : undefined
-            let touchBurstShot = false
 
             if (touch) {
-                if (touch.autoAimShotSeq > lastAutoShotSeq) {
-                    lastAutoShotSeq = touch.autoAimShotSeq
-                    const auto = findAutoAimAngle(player, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
-                    aimAngle = auto.angle
-                    this.aimOffsetX = Math.cos(aimAngle) * 140
-                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
-                    touchBurstShot = true
-                } else if (touch.manualShotSeq > lastManualShotSeq) {
-                    lastManualShotSeq = touch.manualShotSeq
-                    aimAngle = touch.aimAngle
-                    this.aimOffsetX = Math.cos(aimAngle) * 180
-                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 180
-                    touchBurstShot = true
-                } else if (touch.aimActive && touch.aimMode === 'auto') {
-                    const auto = findAutoAimAngle(player, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                if (touch.aimActive && touch.aimMode === 'auto' && player) {
+                    const aimSource = localView
+                        ? { ...player, x: localView.root.x, y: localView.root.y }
+                        : player
+                    const auto = findAutoAimAngle(aimSource, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
                     aimAngle = auto.angle
                     this.aimOffsetX = Math.cos(aimAngle) * 140
                     this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
@@ -887,6 +1092,65 @@ export default class ArenaScene extends Phaser.Scene {
                 moveY = padSample.moveY
             }
 
+            return { moveX, moveY, aimAngle, touch, player, localView }
+        }
+
+        this.sampleLiveControl = () => {
+            if (!hasFocus() || this.isPaused || this.currentPhase === 'finished') {
+                return { moveX: 0, moveY: 0, aimAngle }
+            }
+            const pad = pickActiveGamepad(navigator.getGamepads?.())
+            const padSample = pad ? readGamepadInput(pad) : null
+            const sampled = sampleAxesAndAim(padSample)
+            return { moveX: sampled.moveX, moveY: sampled.moveY, aimAngle: sampled.aimAngle }
+        }
+
+        const sendInput = (force = false) => {
+            const pad = pickActiveGamepad(navigator.getGamepads?.())
+            reportGamepadState(Boolean(pad))
+            const padSample = pad ? readGamepadInput(pad) : null
+            const edges = detectGamepadEdges(padSample)
+
+            if (edges.pausePressed && this.currentPhase !== 'finished') {
+                this.onMenuToggle?.()
+                return
+            }
+
+            if (this.isPaused || this.currentPhase === 'finished') return
+
+            if (edges.emoteDotsPressed) {
+                this.controls.sendEmote?.('dots')
+            }
+            if (edges.emoteAlertPressed) {
+                this.controls.sendEmote?.('alert')
+            }
+
+            const sampled = sampleAxesAndAim(padSample)
+            if (!sampled.player) return
+
+            let touchBurstShot = false
+            const { touch, player, localView } = sampled
+            if (touch) {
+                if (touch.autoAimShotSeq > lastAutoShotSeq) {
+                    lastAutoShotSeq = touch.autoAimShotSeq
+                    const aimSource = localView
+                        ? { ...player, x: localView.root.x, y: localView.root.y }
+                        : player
+                    const auto = findAutoAimAngle(aimSource, this.players, this.gameMode, aimAngle, WEAPON_BASE_Y)
+                    aimAngle = auto.angle
+                    this.aimOffsetX = Math.cos(aimAngle) * 140
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 140
+                    touchBurstShot = true
+                } else if (touch.manualShotSeq > lastManualShotSeq) {
+                    lastManualShotSeq = touch.manualShotSeq
+                    aimAngle = touch.aimAngle
+                    this.aimOffsetX = Math.cos(aimAngle) * 180
+                    this.aimOffsetY = WEAPON_BASE_Y + Math.sin(aimAngle) * 180
+                    touchBurstShot = true
+                }
+            }
+
+            const binds = this.pcControls
             const shootHeld = isHeld(binds.shoot)
             const shoot =
                 shootHeld || pendingShot || touchBurstShot || Boolean(touch?.shoot) || Boolean(padSample?.shoot)
@@ -899,6 +1163,30 @@ export default class ArenaScene extends Phaser.Scene {
             pendingReload = false
             pendingDash = false
 
+            const hasDiscreteAction = melee || reload || dash || touchBurstShot
+            const isActive = sampled.moveX !== 0 || sampled.moveY !== 0 || shoot
+            const aimDiff = Math.abs(
+                Math.atan2(Math.sin(aimAngle - lastSentAim), Math.cos(aimAngle - lastSentAim)),
+            )
+            const stateChanged =
+                sampled.moveX !== lastSentMoveX ||
+                sampled.moveY !== lastSentMoveY ||
+                shoot !== lastSentShoot ||
+                aimDiff > 0.015
+
+            if (!force && !hasDiscreteAction && !stateChanged && !isActive) {
+                return
+            }
+
+            const seq = ++lastSentSeq
+            lastSentMoveX = sampled.moveX
+            lastSentMoveY = sampled.moveY
+            lastSentAim = aimAngle
+            lastSentShoot = shoot
+            this.liveControl.sentSeq = seq
+            this.liveControl.sentMoveX = sampled.moveX
+            this.liveControl.sentMoveY = sampled.moveY
+
             const payload: {
                 moveX: number
                 moveY: number
@@ -907,11 +1195,13 @@ export default class ArenaScene extends Phaser.Scene {
                 melee?: boolean
                 reload?: boolean
                 dash?: boolean
+                seq?: number
             } = {
-                moveX,
-                moveY,
+                moveX: sampled.moveX,
+                moveY: sampled.moveY,
                 aimAngle,
                 shoot,
+                seq,
             }
             if (melee) payload.melee = true
             if (reload) payload.reload = true
@@ -920,26 +1210,33 @@ export default class ArenaScene extends Phaser.Scene {
             this.controls.send(payload)
         }
 
-        const handleBindingPress = (code: string) => {
+        const handleBindingPress = (code: string): boolean => {
             const binds = this.pcControls
             if (code === binds.shoot) {
                 this.playEmptyClickIfNeeded()
                 pendingShot = true
                 sendInput()
+                return true
             } else if (code === binds.melee) {
                 pendingMelee = true
                 sendInput()
+                return true
             } else if (code === binds.reload) {
                 pendingReload = true
                 sendInput()
+                return true
             } else if (code === binds.dash) {
                 pendingDash = true
                 sendInput()
+                return true
             } else if (code === binds.emote1) {
                 this.controls.sendEmote?.('dots')
+                return true
             } else if (code === binds.emote2) {
                 this.controls.sendEmote?.('alert')
+                return true
             }
+            return false
         }
 
         this.dispatchAction = (action: ArenaActionKind) => {
@@ -953,11 +1250,14 @@ export default class ArenaScene extends Phaser.Scene {
         const onPointerMove = (next: Phaser.Input.Pointer) => {
             if (this.touchMode || this.isPaused || this.currentPhase === 'finished') return
             if (document.pointerLockElement === this.game.canvas) return
-            const player = this.players.find(({ id }) => id === this.controls.playerId)
+            const player = this.playerById.get(this.controls.playerId)
             if (!player) return
 
+            const localView = this.playerViews.get(this.controls.playerId)
+            const baseX = localView ? localView.root.x : player.x
+            const baseY = localView ? localView.root.y : player.y
             const world = this.cameras.main.getWorldPoint(next.x, next.y)
-            this.clampAimOffset(world.x - player.x, world.y - player.y)
+            this.clampAimOffset(world.x - baseX, world.y - baseY)
         }
 
         const onLockedMouseMove = (event: MouseEvent) => {
@@ -1002,7 +1302,15 @@ export default class ArenaScene extends Phaser.Scene {
             pendingMelee = false
             pendingReload = false
             pendingDash = false
-            this.controls.send({ moveX: 0, moveY: 0, aimAngle, shoot: false })
+            const seq = ++lastSentSeq
+            lastSentMoveX = 0
+            lastSentMoveY = 0
+            lastSentShoot = false
+            lastSentAim = aimAngle
+            this.liveControl.sentSeq = seq
+            this.liveControl.sentMoveX = 0
+            this.liveControl.sentMoveY = 0
+            this.controls.send({ moveX: 0, moveY: 0, aimAngle, shoot: false, seq })
         }
 
         const onPointerLockChange = () => {
@@ -1044,7 +1352,16 @@ export default class ArenaScene extends Phaser.Scene {
                 event.preventDefault()
             }
             pressedCodes.add(event.code)
-            handleBindingPress(event.code)
+            const handledAction = handleBindingPress(event.code)
+            if (
+                !handledAction &&
+                (event.code === this.pcControls.moveUp ||
+                    event.code === this.pcControls.moveDown ||
+                    event.code === this.pcControls.moveLeft ||
+                    event.code === this.pcControls.moveRight)
+            ) {
+                sendInput()
+            }
         }
 
         const onKeyUp = (event: KeyboardEvent) => {
@@ -1079,6 +1396,7 @@ export default class ArenaScene extends Phaser.Scene {
 
         this.cleanupControls = () => {
             window.clearInterval(timer)
+            this.sampleLiveControl = undefined
             this.input.off('pointermove', onPointerMove)
             this.input.off('pointerdown', onPointerDown)
             this.input.off('pointerup', onPointerUp)
@@ -1095,8 +1413,29 @@ export default class ArenaScene extends Phaser.Scene {
         }
     }
 
+    applyWorldSnapshot(snapshot: ArenaWorldSnapshot) {
+        this.players = snapshot.players
+        this.playerById.clear()
+        for (const player of snapshot.players) {
+            this.playerById.set(player.id, player)
+        }
+        this.bullets = snapshot.bullets
+        this.pickups = snapshot.pickups
+        this.powerUps = snapshot.powerUps
+        if (this.isReady && this.sys.isActive()) {
+            this.applyPlayers(snapshot.players)
+            this.applyBullets(snapshot.bullets)
+            this.applyPickups(snapshot.pickups)
+            this.applyPowerUps(snapshot.powerUps)
+        }
+    }
+
     setPlayers(players: PlayerState[]) {
         this.players = players
+        this.playerById.clear()
+        for (const player of players) {
+            this.playerById.set(player.id, player)
+        }
         if (this.isReady && this.sys.isActive()) this.applyPlayers(players)
     }
 
@@ -1116,10 +1455,24 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private applyPickups(pickups: PickupState[]) {
-        const activeIds = new Set(pickups.map((pickup) => pickup.id))
+        if (pickups.length === this.pickupViews.size) {
+            let allMatch = true
+            for (const pickup of pickups) {
+                if (!this.pickupViews.has(pickup.id)) {
+                    allMatch = false
+                    break
+                }
+            }
+            if (allMatch) return
+        }
+
+        this.activePickupIds.clear()
+        for (const pickup of pickups) {
+            this.activePickupIds.add(pickup.id)
+        }
 
         for (const [id, view] of this.pickupViews) {
-            if (!activeIds.has(id)) {
+            if (!this.activePickupIds.has(id)) {
                 view.root.destroy()
                 this.pickupViews.delete(id)
             }
@@ -1149,10 +1502,24 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private applyPowerUps(powerUps: PowerUpState[]) {
-        const activeIds = new Set(powerUps.map((p) => p.id))
+        if (powerUps.length === this.powerUpViews.size) {
+            let allMatch = true
+            for (const powerUp of powerUps) {
+                if (!this.powerUpViews.has(powerUp.id)) {
+                    allMatch = false
+                    break
+                }
+            }
+            if (allMatch) return
+        }
+
+        this.activePowerUpIds.clear()
+        for (const p of powerUps) {
+            this.activePowerUpIds.add(p.id)
+        }
 
         for (const [id, view] of this.powerUpViews) {
-            if (!activeIds.has(id)) {
+            if (!this.activePowerUpIds.has(id)) {
                 view.root.destroy()
                 this.powerUpViews.delete(id)
             }
@@ -1213,23 +1580,41 @@ export default class ArenaScene extends Phaser.Scene {
                 document.exitPointerLock?.()
             }
         }
-        if (this.isReady && phase === 'playing' && previous !== 'playing') {
-            this.playSound('select-a', 0.4)
+        if (phase === 'playing' && previous !== 'playing') {
+            this.localDashGraceUntil = 0
+            const local = this.playerById.get(this.controls.playerId)
+            if (local) {
+                this.localPredictor.reset(local.x, local.y)
+                const localView = this.playerViews.get(this.controls.playerId)
+                if (localView) {
+                    localView.root.setPosition(local.x, local.y)
+                    localView.root.setDepth(local.y)
+                    localView.body.setDepth(local.y)
+                    localView.weapon.setDepth(local.y + 1)
+                }
+            }
+            if (this.isReady) {
+                this.playSound('select-a', 0.4)
+            }
         }
     }
 
     private applyBullets(bullets: BulletState[]) {
-        const activeIds = new Set(bullets.map((bullet) => bullet.id))
+        this.activeBulletIds.clear()
+        for (const bullet of bullets) {
+            this.activeBulletIds.add(bullet.id)
+        }
 
-        for (const [id, sprite] of this.bulletViews) {
-            if (!activeIds.has(id)) {
-                sprite.destroy()
+        for (const [id, bv] of this.bulletViews) {
+            if (!this.activeBulletIds.has(id)) {
+                bv.sprite.destroy()
                 this.bulletViews.delete(id)
             }
         }
 
         for (const bullet of bullets) {
-            let sprite = this.bulletViews.get(bullet.id)
+            if (this.bulletViews.has(bullet.id)) continue
+
             const weaponType: WeaponType = bullet.weaponType ?? 'rifle'
             const isHeavy = HEAVY_WEAPONS.has(weaponType)
             const textureKey =
@@ -1238,14 +1623,28 @@ export default class ArenaScene extends Phaser.Scene {
             const bulletScale = typeof bullet.scale === 'number' && bullet.scale > 0 ? bullet.scale : 1
             const displaySize = baseSize * bulletScale
 
-            if (!sprite) {
-                sprite = this.add
-                    .image(bullet.x, bullet.y, textureKey)
-                    .setDisplaySize(displaySize, displaySize)
-                if (weaponType === 'launcher') {
-                    sprite.setTint(0xff6b35)
-                }
-                this.bulletViews.set(bullet.id, sprite)
+            const sprite = this.add
+                .image(bullet.x, bullet.y, textureKey)
+                .setDisplaySize(displaySize, displaySize)
+                .setRotation(weaponType === 'plasma' ? bullet.angle + Math.PI / 2 : bullet.angle)
+                .setDepth(bullet.y + 2)
+            if (weaponType === 'launcher') {
+                sprite.setTint(0xff6b35)
+            }
+
+            this.bulletViews.set(bullet.id, {
+                sprite,
+                x: bullet.x,
+                y: bullet.y,
+                vx: bullet.vx,
+                vy: bullet.vy,
+                weaponType,
+                lastTrailAt: this.time.now,
+                stopped: false,
+            })
+
+            const isOwn = bullet.ownerId === this.controls.playerId
+            if (isOwn || this.isNearViewport(bullet.x, bullet.y, 120)) {
                 this.spawnMuzzleFlash(bullet.x, bullet.y)
                 const shootSfx =
                     weaponType === 'plasma'
@@ -1253,29 +1652,21 @@ export default class ArenaScene extends Phaser.Scene {
                         : weaponType === 'launcher'
                           ? 'shoot-a'
                           : 'shoot-g'
-                this.playSound(shootSfx, weaponType === 'launcher' ? 0.42 : 0.35)
+                this.playSpatialSound(
+                    shootSfx,
+                    weaponType === 'launcher' ? 0.42 : 0.35,
+                    bullet.x,
+                    bullet.y,
+                    900,
+                    isOwn,
+                )
                 this.maybeEjectShell(bullet, weaponType, isHeavy)
-
-                if (bullet.ownerId === this.controls.playerId) {
-                    this.cameras.main.shake(60, 0.002)
-                    this.pulseCrosshair()
-                }
             }
 
-            if (weaponType === 'launcher') {
-                const trail = this.add.circle(bullet.x, bullet.y, 4, 0xfb923c, 0.55).setDepth(bullet.y + 1)
-                this.tweens.add({
-                    targets: trail,
-                    scale: 1.9,
-                    alpha: 0,
-                    duration: 140,
-                    onComplete: () => trail.destroy(),
-                })
+            if (isOwn) {
+                this.cameras.main.shake(60, 0.002)
+                this.pulseCrosshair()
             }
-
-            sprite.setPosition(bullet.x, bullet.y)
-            sprite.setRotation(weaponType === 'plasma' ? bullet.angle + Math.PI / 2 : bullet.angle)
-            sprite.setDepth(bullet.y + 2)
         }
     }
 
@@ -1349,8 +1740,9 @@ export default class ArenaScene extends Phaser.Scene {
         })
     }
 
-    private playDashEffect(view: PlayerView, dashAngle: number) {
-        this.playSound('jump-a', 0.42)
+    private playDashEffect(view: PlayerView, dashAngle: number, isLocal = false) {
+        this.playSpatialSound('jump-a', 0.42, view.root.x, view.root.y, 850, isLocal)
+        if (!isLocal && !this.isNearViewport(view.root.x, view.root.y, 120)) return
         const startX = view.root.x
         const startY = view.root.y
         const facingLeft = view.body.flipX
@@ -1382,10 +1774,13 @@ export default class ArenaScene extends Phaser.Scene {
     }
 
     private applyPlayers(players: PlayerState[]) {
-        const activeIds = new Set(players.map((player) => player.id))
+        this.activePlayerIds.clear()
+        for (const player of players) {
+            this.activePlayerIds.add(player.id)
+        }
 
         for (const [id, view] of this.playerViews) {
-            if (!activeIds.has(id)) {
+            if (!this.activePlayerIds.has(id)) {
                 view.root.destroy()
                 this.playerViews.delete(id)
             }
@@ -1406,6 +1801,8 @@ export default class ArenaScene extends Phaser.Scene {
 
             let view = this.playerViews.get(player.id)
             const isLocal = player.id === this.controls.playerId
+            const isNewView = !view
+            let dashedNow = false
 
             if (!view) {
                 view = this.createPlayerView(
@@ -1427,11 +1824,17 @@ export default class ArenaScene extends Phaser.Scene {
                 view.lastReloading = Boolean(player.isReloading)
                 view.lastAmmo = player.ammo ?? 0
                 this.playerViews.set(player.id, view)
+                if (isLocal) {
+                    this.localPredictor.reset(player.x, player.y)
+                }
             } else {
-                if (player.x !== view.lastX || player.y !== view.lastY) {
+                if (!isLocal && (player.x !== view.lastX || player.y !== view.lastY)) {
                     view.lastX = player.x
                     view.lastY = player.y
                     view.lastMovedAt = this.time.now
+                } else {
+                    view.lastX = player.x
+                    view.lastY = player.y
                 }
 
                 if (view.team !== team) {
@@ -1464,20 +1867,23 @@ export default class ArenaScene extends Phaser.Scene {
                     const meleeKind: MeleeWeaponType = MELEE_WEAPONS.has(weaponType)
                         ? (weaponType as MeleeWeaponType)
                         : (player.lastMeleeWeapon ?? 'knife')
-                    this.playSound('shoot-f', 0.42)
-                    this.playMeleeSlash(
-                        view,
-                        player.lastMeleeAngle ?? player.aimAngle,
-                        meleeKind,
-                        teamColor,
-                        !MELEE_WEAPONS.has(weaponType),
-                    )
+                    this.playSpatialSound('shoot-f', 0.42, view.root.x, view.root.y, 850, isLocal)
+                    if (isLocal || this.isNearViewport(view.root.x, view.root.y, 140)) {
+                        this.playMeleeSlash(
+                            view,
+                            player.lastMeleeAngle ?? player.aimAngle,
+                            meleeKind,
+                            teamColor,
+                            !MELEE_WEAPONS.has(weaponType),
+                        )
+                    }
                 }
 
                 const dashSeq = player.dashSeq ?? 0
-                if (dashSeq > view.lastDashSeq) {
+                dashedNow = dashSeq > view.lastDashSeq
+                if (dashedNow) {
                     view.lastDashSeq = dashSeq
-                    this.playDashEffect(view, player.dashAngle ?? player.aimAngle)
+                    this.playDashEffect(view, player.dashAngle ?? player.aimAngle, isLocal)
                 }
 
                 const currentHp = player.hp ?? 100
@@ -1489,11 +1895,13 @@ export default class ArenaScene extends Phaser.Scene {
                 const currentAmmo = player.ammo ?? 0
 
                 if (currentHp < view.lastHp) {
-                    this.playSound('hurt-a', 0.45)
-                    view.body.setTint(0xff4d4d)
-                    this.time.delayedCall(120, () => {
-                        if (view && view.body.scene) view.body.clearTint()
-                    })
+                    this.playSpatialSound('hurt-a', 0.45, view.root.x, view.root.y, 850, isLocal)
+                    if (isLocal || this.isNearViewport(view.root.x, view.root.y, 140)) {
+                        view.body.setTint(0xff4d4d)
+                        this.time.delayedCall(120, () => {
+                            if (view && view.body.scene) view.body.clearTint()
+                        })
+                    }
                     if (isLocal) {
                         this.cameras.main.shake(60, 0.002)
                     }
@@ -1528,16 +1936,44 @@ export default class ArenaScene extends Phaser.Scene {
 
             const wasDead = view.isDead
             const isDeadNow = Boolean(player.isDead)
-            if (isDeadNow && !wasDead) {
-                this.playSound(isLocal ? 'lose-c' : 'hurt-d', 0.5)
+            if (!isNewView && isDeadNow && !wasDead) {
+                this.playSpatialSound(
+                    isLocal ? 'lose-c' : 'hurt-d',
+                    0.5,
+                    view.root.x,
+                    view.root.y,
+                    900,
+                    isLocal,
+                )
             }
 
             const respawnTeleport =
-                (!isDeadNow && wasDead) || Math.hypot(player.x - view.root.x, player.y - view.root.y) > 160
+                (!isDeadNow && wasDead) ||
+                Math.hypot(player.x - view.root.x, player.y - view.root.y) > 200
 
             view.targetX = player.x
             view.targetY = player.y
-            if (isLocal || respawnTeleport) {
+            if (isLocal) {
+                if (dashedNow) {
+                    this.localDashGraceUntil = this.time.now + 240
+                    this.localPredictor.reset(view.root.x, view.root.y)
+                } else if (isNewView || isDeadNow || respawnTeleport) {
+                    this.localDashGraceUntil = 0
+                    this.localPredictor.reset(player.x, player.y)
+                    view.root.setPosition(player.x, player.y)
+                    view.root.setDepth(player.y)
+                    view.body.setDepth(player.y)
+                } else if (this.time.now >= this.localDashGraceUntil) {
+                    const reconciled = this.localPredictor.reconcile(
+                        player.x,
+                        player.y,
+                        player.lastInputSeq ?? 0,
+                    )
+                    view.root.setPosition(reconciled.x, reconciled.y)
+                    view.root.setDepth(reconciled.y)
+                    view.body.setDepth(reconciled.y)
+                }
+            } else if (isNewView || respawnTeleport) {
                 view.root.setPosition(player.x, player.y)
                 view.root.setDepth(player.y)
                 view.body.setDepth(player.y)
@@ -1545,14 +1981,16 @@ export default class ArenaScene extends Phaser.Scene {
 
             const facingLeft = player.aimAngle > Math.PI / 2 || player.aimAngle < -Math.PI / 2
             view.isDead = isDeadNow
-            view.body.setFlipX(facingLeft)
+            if (!isLocal || isDeadNow || this.isPaused || this.currentPhase === 'finished' || !this.sampleLiveControl) {
+                view.body.setFlipX(facingLeft)
+            }
 
             if (view.isDead) {
                 if (view.emoteSprite.texture.key !== 'emote-skull') {
                     view.emoteSprite.setTexture('emote-skull')
                 }
                 view.emoteSprite.setVisible(true)
-                if (!wasDead) {
+                if (isNewView || !wasDead) {
                     this.tweens.killTweensOf(view.emoteSprite)
                     view.emoteSprite.setY(-44)
                     this.tweens.add({
@@ -1595,68 +2033,119 @@ export default class ArenaScene extends Phaser.Scene {
                 view.reloadBarFill.setVisible(false)
                 view.auraRing.setVisible(false)
                 view.teamRing.setVisible(false)
+                view.renderedShieldBarMode = 'none'
+                view.renderedAuraMode = 'none'
+                view.renderedShieldProgress = -1
+                view.renderedReloading = false
+                view.renderedReloadProgress = -1
                 continue
             }
 
             view.weapon.setVisible(true)
             view.hpBarFrame.setVisible(true)
             view.hpBarFill.setVisible(true)
-            view.teamRing.setVisible(this.gameMode === 'tdm' && Boolean(team))
-
-            const hpRatio = Math.max(0, Math.min(1, (player.hp ?? 100) / 100))
-            view.hpBarFill.setCrop(0, 0, Math.round(192 * hpRatio), 64)
-
-            const shieldVal = player.shield ?? 0
-            const shieldProgress = Math.max(0, Math.min(1, player.shieldProgress ?? (shieldVal > 0 ? 1 : 0)))
-            const goldenSec = player.goldenRemaining ?? 0
-            if (shieldVal > 0 && shieldProgress > 0) {
-                view.shieldBarBg.setVisible(true)
-                view.shieldBarFill.setVisible(true)
-                view.shieldBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * shieldProgress), 5)
-                view.shieldBarFill.setFillStyle(goldenSec > 0 ? 0xfacc15 : 0x38bdf8, 1)
-            } else {
-                view.shieldBarBg.setVisible(false)
-                view.shieldBarFill.setVisible(false)
+            const showTeamRing = this.gameMode === 'tdm' && Boolean(team)
+            if (view.teamRing.visible !== showTeamRing) {
+                view.teamRing.setVisible(showTeamRing)
             }
 
-            if (goldenSec > 0) {
-                view.auraRing.setVisible(true)
-                view.auraRing.setFillStyle(0xfacc15, 0.16)
-                view.auraRing.setStrokeStyle(3, 0xfef08a, 0.95)
-            } else if (shieldVal > 0) {
-                view.auraRing.setVisible(true)
-                view.auraRing.setFillStyle(0x38bdf8, 0.14)
-                view.auraRing.setStrokeStyle(2.5, 0x7dd3fc, 0.9)
-            } else {
-                view.auraRing.setVisible(false)
+            const hpRatio = Math.max(0, Math.min(1, (player.hp ?? 100) / 100))
+            if (Math.abs(hpRatio - view.renderedHpRatio) > 0.004) {
+                view.renderedHpRatio = hpRatio
+                view.hpBarFill.setCrop(0, 0, Math.round(192 * hpRatio), 64)
+            }
+
+            const shieldVal = player.shield ?? 0
+            const shieldProgress = Math.max(
+                0,
+                Math.min(1, player.shieldProgress ?? (shieldVal > 0 ? 1 : 0)),
+            )
+            const goldenSec = player.goldenRemaining ?? 0
+            const shieldBarMode: 'none' | 'shield' | 'golden' =
+                shieldVal > 0 && shieldProgress > 0
+                    ? goldenSec > 0
+                        ? 'golden'
+                        : 'shield'
+                    : 'none'
+
+            if (shieldBarMode !== 'none') {
+                if (view.renderedShieldBarMode === 'none') {
+                    view.shieldBarBg.setVisible(true)
+                    view.shieldBarFill.setVisible(true)
+                }
+                if (Math.abs(shieldProgress - view.renderedShieldProgress) > 0.004) {
+                    view.renderedShieldProgress = shieldProgress
+                    view.shieldBarFill.setDisplaySize(
+                        Math.max(2, (HP_BAR_WIDTH - 4) * shieldProgress),
+                        5,
+                    )
+                }
+                if (view.renderedShieldBarMode !== shieldBarMode) {
+                    view.shieldBarFill.setFillStyle(
+                        shieldBarMode === 'golden' ? 0xfacc15 : 0x38bdf8,
+                        1,
+                    )
+                }
+            } else if (view.renderedShieldBarMode !== 'none') {
+                view.shieldBarBg.setVisible(false)
+                view.shieldBarFill.setVisible(false)
+                view.renderedShieldProgress = -1
+            }
+            view.renderedShieldBarMode = shieldBarMode
+
+            const auraMode: 'none' | 'shield' | 'golden' =
+                goldenSec > 0 ? 'golden' : shieldVal > 0 ? 'shield' : 'none'
+            if (view.renderedAuraMode !== auraMode) {
+                view.renderedAuraMode = auraMode
+                if (auraMode === 'golden') {
+                    view.auraRing.setVisible(true)
+                    view.auraRing.setFillStyle(0xfacc15, 0.16)
+                    view.auraRing.setStrokeStyle(3, 0xfef08a, 0.95)
+                } else if (auraMode === 'shield') {
+                    view.auraRing.setVisible(true)
+                    view.auraRing.setFillStyle(0x38bdf8, 0.14)
+                    view.auraRing.setStrokeStyle(2.5, 0x7dd3fc, 0.9)
+                } else {
+                    view.auraRing.setVisible(false)
+                }
             }
 
             if (player.isReloading) {
                 const progress = Math.max(0, Math.min(1, player.reloadProgress ?? 0))
-                view.reloadBarBg.setVisible(true)
-                view.reloadBarFill.setVisible(true)
-                view.reloadBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * progress), 4)
-            } else {
+                if (!view.renderedReloading) {
+                    view.renderedReloading = true
+                    view.reloadBarBg.setVisible(true)
+                    view.reloadBarFill.setVisible(true)
+                }
+                if (Math.abs(progress - view.renderedReloadProgress) > 0.004) {
+                    view.renderedReloadProgress = progress
+                    view.reloadBarFill.setDisplaySize(Math.max(2, (HP_BAR_WIDTH - 4) * progress), 4)
+                }
+            } else if (view.renderedReloading) {
+                view.renderedReloading = false
+                view.renderedReloadProgress = -1
                 view.reloadBarBg.setVisible(false)
                 view.reloadBarFill.setVisible(false)
             }
 
-            const weaponX = Math.cos(player.aimAngle) * WEAPON_RADIAL_OFFSET
-            const weaponY = WEAPON_BASE_Y + Math.sin(player.aimAngle) * WEAPON_RADIAL_OFFSET
-            view.weapon.setPosition(weaponX, weaponY)
-            if (MELEE_WEAPONS.has(weaponType)) {
-                view.weapon.setFlipX(facingLeft)
-                view.weapon.setFlipY(false)
-                if (!view.isSwinging) {
-                    const guardTilt = facingLeft ? 0.35 : -0.35
-                    view.weapon.setRotation(player.aimAngle + Math.PI / 2 + guardTilt)
+            if (!isLocal || this.isPaused || this.currentPhase === 'finished' || !this.sampleLiveControl) {
+                const weaponX = Math.cos(player.aimAngle) * WEAPON_RADIAL_OFFSET
+                const weaponY = WEAPON_BASE_Y + Math.sin(player.aimAngle) * WEAPON_RADIAL_OFFSET
+                view.weapon.setPosition(weaponX, weaponY)
+                if (MELEE_WEAPONS.has(weaponType)) {
+                    view.weapon.setFlipX(facingLeft)
+                    view.weapon.setFlipY(false)
+                    if (!view.isSwinging) {
+                        const guardTilt = facingLeft ? 0.35 : -0.35
+                        view.weapon.setRotation(player.aimAngle + Math.PI / 2 + guardTilt)
+                    }
+                } else {
+                    view.weapon.setFlipX(false)
+                    view.weapon.setRotation(player.aimAngle)
+                    view.weapon.setFlipY(facingLeft)
                 }
-            } else {
-                view.weapon.setFlipX(false)
-                view.weapon.setRotation(player.aimAngle)
-                view.weapon.setFlipY(facingLeft)
             }
-            view.weapon.setDepth((isLocal ? player.y : view.root.y) + 1)
+            view.weapon.setDepth(view.root.y + 1)
         }
     }
 
@@ -1781,6 +2270,10 @@ export default class ArenaScene extends Phaser.Scene {
         const hpBarFill = this.add
             .image(0, HP_BAR_Y, hpBarFillKey)
             .setDisplaySize(HP_BAR_WIDTH, HP_BAR_HEIGHT)
+        const initialHpRatio = Math.max(0, Math.min(1, hp / 100))
+        if (initialHpRatio < 1) {
+            hpBarFill.setCrop(0, 0, Math.round(192 * initialHpRatio), 64)
+        }
 
         const hpBarFrame = this.add
             .image(0, HP_BAR_Y, 'hp-bar-frame')
@@ -1867,6 +2360,12 @@ export default class ArenaScene extends Phaser.Scene {
             lastX: x,
             lastY: y,
             lastMovedAt: -WALK_ANIM_TIMEOUT_MS,
+            renderedHpRatio: initialHpRatio,
+            renderedShieldProgress: -1,
+            renderedShieldBarMode: 'none',
+            renderedAuraMode: 'none',
+            renderedReloadProgress: -1,
+            renderedReloading: false,
         }
         this.updateTeamVisuals(view, team)
         return view

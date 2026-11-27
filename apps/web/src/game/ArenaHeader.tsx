@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import './arena-header.css'
 
 type ArenaHeaderProps = {
@@ -27,7 +27,7 @@ type ArenaHeaderProps = {
   onSignOut: () => void
 }
 
-export default function ArenaHeader(props: ArenaHeaderProps) {
+function ArenaHeader(props: ArenaHeaderProps) {
   const menu = useRef<HTMLDetailsElement>(null)
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
@@ -88,3 +88,5 @@ export default function ArenaHeader(props: ArenaHeaderProps) {
     </div>
   </header>
 }
+
+export default memo(ArenaHeader)

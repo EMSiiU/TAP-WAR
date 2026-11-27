@@ -1,14 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import Phaser from 'phaser'
 import ArenaScene, {
   type ArenaActionKind,
   type ArenaControls,
-  type BulletState,
+  type ArenaWorldSnapshot,
   type CrosshairStyle,
   type MatchPhase,
-  type PickupState,
-  type PlayerState,
-  type PowerUpState,
 } from './ArenaScene'
 import type { GameMode, MapEnvironment, MapSize } from './arenaMaps'
 import type { PcControlConfig } from './keybindings'
@@ -16,10 +13,8 @@ import type { TouchInputState } from './TouchControls'
 import arena from '../../../../packages/shared/arena.json'
 
 type PhaserViewProps = {
-  players: PlayerState[]
-  bullets: BulletState[]
-  pickups: PickupState[]
-  powerUps: PowerUpState[]
+  worldStateRef: React.RefObject<ArenaWorldSnapshot>
+  worldPushRef: React.RefObject<((snapshot: ArenaWorldSnapshot) => void) | null>
   phase: MatchPhase
   gameMode: GameMode
   isPaused: boolean
@@ -37,11 +32,9 @@ type PhaserViewProps = {
   controls: ArenaControls
 }
 
-export default function PhaserView({
-  players,
-  bullets,
-  pickups,
-  powerUps,
+function PhaserView({
+  worldStateRef,
+  worldPushRef,
   phase,
   gameMode,
   isPaused,
@@ -60,10 +53,6 @@ export default function PhaserView({
 }: PhaserViewProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<ArenaScene | null>(null)
-  const latestPlayersRef = useRef(players)
-  const latestBulletsRef = useRef(bullets)
-  const latestPickupsRef = useRef(pickups)
-  const latestPowerUpsRef = useRef(powerUps)
   const latestPhaseRef = useRef(phase)
   const latestGameModeRef = useRef(gameMode)
   const latestPausedRef = useRef(isPaused)
@@ -80,26 +69,6 @@ export default function PhaserView({
   useEffect(() => {
     onGamepadChangeRef.current = onGamepadChange
   }, [onGamepadChange])
-
-  useEffect(() => {
-    latestPlayersRef.current = players
-    sceneRef.current?.setPlayers(players)
-  }, [players])
-
-  useEffect(() => {
-    latestBulletsRef.current = bullets
-    sceneRef.current?.setBullets(bullets)
-  }, [bullets])
-
-  useEffect(() => {
-    latestPickupsRef.current = pickups
-    sceneRef.current?.setPickups(pickups)
-  }, [pickups])
-
-  useEffect(() => {
-    latestPowerUpsRef.current = powerUps
-    sceneRef.current?.setPowerUps(powerUps)
-  }, [powerUps])
 
   useEffect(() => {
     latestPhaseRef.current = phase
@@ -144,16 +113,15 @@ export default function PhaserView({
       (connected) => onGamepadChangeRef.current?.(connected),
       environment,
     )
-    scene.setPlayers(latestPlayersRef.current)
-    scene.setBullets(latestBulletsRef.current)
-    scene.setPickups(latestPickupsRef.current)
-    scene.setPowerUps(latestPowerUpsRef.current)
+    scene.applyWorldSnapshot(worldStateRef.current)
     scene.setPhase(latestPhaseRef.current)
     scene.setGameMode(latestGameModeRef.current)
     scene.setPaused(latestPausedRef.current)
     scene.setCrosshairStyle(latestCrosshairRef.current)
     scene.setPcControls(latestPcControlsRef.current)
     sceneRef.current = scene
+    worldPushRef.current = (snapshot) => scene.applyWorldSnapshot(snapshot)
+
     if (actionTriggerRef) {
       actionTriggerRef.current = (action) => scene.triggerAction(action)
     }
@@ -192,6 +160,7 @@ export default function PhaserView({
     })
 
     return () => {
+      worldPushRef.current = null
       if (actionTriggerRef) actionTriggerRef.current = null
       if (explosionTriggerRef) explosionTriggerRef.current = null
       sceneRef.current = null
@@ -200,7 +169,7 @@ export default function PhaserView({
       scene.stopControls()
       game?.destroy(true)
     }
-  }, [controls, mapSize, environment, touchInputRef, actionTriggerRef, explosionTriggerRef])
+  }, [controls, mapSize, environment, touchInputRef, worldStateRef, worldPushRef, actionTriggerRef, explosionTriggerRef])
 
   useEffect(() => {
     if (resumeSignal > 0) {
@@ -210,3 +179,5 @@ export default function PhaserView({
 
   return <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
 }
+
+export default memo(PhaserView)

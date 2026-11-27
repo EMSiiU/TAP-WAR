@@ -6,6 +6,7 @@ export type ArenaInput = {
     melee?: boolean
     reload?: boolean
     dash?: boolean
+    seq?: number
 }
 
 function isMoveAxis(value: unknown): value is number {
@@ -14,6 +15,13 @@ function isMoveAxis(value: unknown): value is number {
 
 function isOptionalBoolean(value: unknown): value is boolean | undefined {
     return value === undefined || typeof value === 'boolean'
+}
+
+function isOptionalSeq(value: unknown): value is number | undefined {
+    return (
+        value === undefined ||
+        (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 0xffffffff)
+    )
 }
 
 export function parseArenaInput(value: unknown): ArenaInput | null {
@@ -30,6 +38,7 @@ export function parseArenaInput(value: unknown): ArenaInput | null {
     const melee = 'melee' in value ? value.melee : undefined
     const reload = 'reload' in value ? value.reload : undefined
     const dash = 'dash' in value ? value.dash : undefined
+    const seq = 'seq' in value ? value.seq : undefined
 
     if (
         !isMoveAxis(moveX) ||
@@ -41,7 +50,8 @@ export function parseArenaInput(value: unknown): ArenaInput | null {
         !isOptionalBoolean(shoot) ||
         !isOptionalBoolean(melee) ||
         !isOptionalBoolean(reload) ||
-        !isOptionalBoolean(dash)
+        !isOptionalBoolean(dash) ||
+        !isOptionalSeq(seq)
     ) {
         return null
     }
@@ -51,5 +61,6 @@ export function parseArenaInput(value: unknown): ArenaInput | null {
     if (melee !== undefined) parsed.melee = melee
     if (reload !== undefined) parsed.reload = reload
     if (dash !== undefined) parsed.dash = dash
+    if (seq !== undefined) parsed.seq = seq
     return parsed
 }
