@@ -209,7 +209,7 @@ test('dash consume hasta 5 por partida, respeta paredes, no reinicia al morir y 
   }
 })
 
-test('power-ups: cargador, botiquin +50, escudo 10s y power-up dorado 1 vez por partida (15s)', async () => {
+test('power-ups: cargador, botiquin +50, escudo 5s y power-up dorado 1 vez por partida (15s)', async () => {
   const { room, cleanup } = await createStartedRoom({}, [
     { id: 'a', auth: makeAccount('Uno', 'rifle') },
     { id: 'b', auth: makeAccount('Dos', 'rifle') },
@@ -234,7 +234,8 @@ test('power-ups: cargador, botiquin +50, escudo 10s y power-up dorado 1 vez por 
     assert.equal(room['applyPowerUp']('a', a, 'ammo', now), true)
     assert.equal(a.reserveAmmo, 15)
 
-    // Timed shield blocks shots WITHOUT breaking or losing shield until timer expires (10s).
+    // Timed shield blocks shots WITHOUT breaking or losing shield until timer expires (5s).
+    assert.equal(SHIELD_DURATION_MS, 5_000)
     assert.equal(room['applyPowerUp']('a', a, 'shield', now), true)
     assert.equal(a.shield, 100)
     assert.ok(a.shieldUntil >= now + SHIELD_DURATION_MS)

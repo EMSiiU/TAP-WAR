@@ -4,6 +4,7 @@ import MapPreview from './game/MapPreview'
 import KeybindingsModal from './game/KeybindingsModal'
 import TouchLayoutEditorModal from './game/TouchLayoutEditorModal'
 import PracticeArsenalModal, { type PracticeUtilityAction } from './game/PracticeArsenalModal'
+import LiveScoreboard from './game/LiveScoreboard'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
@@ -182,6 +183,8 @@ function ArenaSession({
   const worldPushRef = useRef<((snapshot: ArenaWorldSnapshot) => void) | null>(null)
   const [localPaused, setLocalPaused] = useState(false)
   const [practiceArsenalOpen, setPracticeArsenalOpen] = useState(false)
+  const [scoreboardHeld, setScoreboardHeld] = useState(false)
+  const [scoreboardToggled, setScoreboardToggled] = useState(false)
   const [controlsModalOpen, setControlsModalOpen] = useState(false)
   const [touchEditorOpen, setTouchEditorOpen] = useState(false)
   const [touchMode, setTouchMode] = useState<boolean>(() => detectDefaultTouchMode())
@@ -387,6 +390,8 @@ function ArenaSession({
             touchInputRef.current = neutralTouchInput()
             if (joined.connection.isOpen) joined.send('input', { moveX: 0, moveY: 0, aimAngle: 0, shoot: false })
             setPracticeArsenalOpen(false)
+            setScoreboardHeld(false)
+            setScoreboardToggled(false)
             setLocalPaused(paused)
             if (!paused) {
               setControlsModalOpen(false)
@@ -446,12 +451,67 @@ function ArenaSession({
     setControlsModalOpen(false)
     setTouchEditorOpen(false)
     setLocalPaused(false)
+    setScoreboardHeld(false)
+    setScoreboardToggled(false)
     setPracticeArsenalOpen((prev) => {
       const next = !prev
       if (!next) setResumeSignal((n) => n + 1)
       return next
     })
   }, [hud.matchMeta.gameMode, hud.matchMeta.phase])
+
+  const tabBoundInControls = Object.values(pcControls).includes('Tab')
+  useEffect(() => {
+    const canHoldTab = Boolean(
+      controls &&
+      hud.matchMeta.phase !== 'finished' &&
+      !localPaused &&
+      !practiceArsenalOpen &&
+      !tabBoundInControls,
+    )
+    if (!canHoldTab) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Tab') {
+        event.preventDefault()
+        if (!event.repeat) setScoreboardHeld(true)
+      } else if (event.code === 'Escape' && scoreboardToggled && !event.repeat) {
+        event.preventDefault()
+        event.stopPropagation()
+        setScoreboardToggled(false)
+      }
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Tab') {
+        event.preventDefault()
+        setScoreboardHeld(false)
+      }
+    }
+    const clearHeld = () => setScoreboardHeld(false)
+
+    window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
+    window.addEventListener('blur', clearHeld)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      window.removeEventListener('blur', clearHeld)
+    }
+  }, [controls, hud.matchMeta.phase, localPaused, practiceArsenalOpen, tabBoundInControls, scoreboardToggled])
+
+  const toggleScoreboard = useCallback(() => {
+    if (!controls || hud.matchMeta.phase === 'finished') return
+    setScoreboardHeld(false)
+    setScoreboardToggled((prev) => !prev)
+  }, [controls, hud.matchMeta.phase])
+
+  const scoreboardVisible = Boolean(
+    controls &&
+    hud.matchMeta.phase !== 'finished' &&
+    !localPaused &&
+    !practiceArsenalOpen &&
+    (scoreboardHeld || scoreboardToggled),
+  )
 
   const localHud = hud.localPlayer
   const localTeam = localHud?.team
@@ -603,9 +663,11 @@ function ArenaSession({
         touchMode={touchMode}
         fullscreen={isFullscreen}
         copied={copiedCode}
+        scoreboardOpen={scoreboardVisible}
         onCopy={() => { void copyRoomCode() }}
         onTouchToggle={() => { resetTouchInput(); setTouchMode(value => !value) }}
         onFullscreen={() => { void toggleFullscreen() }}
+        onToggleScoreboard={controls && hud.matchMeta.phase !== 'finished' ? toggleScoreboard : undefined}
         onExit={onExit}
         onSignOut={onSignOut}
       />
@@ -777,6 +839,7 @@ function ArenaSession({
               <span><kbd>{reloadKeyLabel}</kbd> Recargar</span>
               <span><kbd>{dashKeyLabel}</kbd> Dash</span>
               <span><kbd>{emote1KeyLabel}/{emote2KeyLabel}</kbd> Emotes</span>
+              <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>
           )}
@@ -833,6 +896,22 @@ function ArenaSession({
             canReload={canReload}
             isReloading={localReloading}
             needsReload={needsReload}
+            scoreboardOpen={scoreboardVisible}
+            onToggleScoreboard={toggleScoreboard}
+          />
+        )}
+
+        {scoreboardVisible && (
+          <LiveScoreboard
+            roomName={hud.matchMeta.roomName || hud.matchMeta.roomCode}
+            gameMode={hud.matchMeta.gameMode}
+            clock={hud.clock}
+            killsToWin={hud.matchMeta.killsToWin}
+            orangeScore={hud.matchMeta.orangeScore}
+            blueScore={hud.matchMeta.blueScore}
+            rows={hud.scoreboard}
+            interactive={scoreboardToggled && !scoreboardHeld}
+            onClose={() => setScoreboardToggled(false)}
           />
         )}
 
@@ -1567,6 +1646,7 @@ export default function App({
               <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
               <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
               <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
+              <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>
             <p className="auth-hint" style={{ marginTop: 8 }}>

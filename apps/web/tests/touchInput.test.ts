@@ -4,6 +4,7 @@ import {
   AIM_CANCEL_EXIT_PX,
   AIM_DRAG_ENTER_PX,
   aimDragOffset,
+  bindGlobalTouchSafetyEvents,
   bindTouchResetEvents,
   neutralTouchInput,
   stickOffset,
@@ -220,4 +221,54 @@ test('desmontar limpia la entrada y retira listeners; recuperar visibilidad no r
   documentTarget.hidden = true
   documentTarget.dispatchEvent(new Event('visibilitychange'))
   assert.equal(messages.length, count)
+})
+
+test('releaseByPointerId y bindGlobalTouchSafetyEvents liberan un joystick trabado sin afectar al otro dedo', async () => {
+  const { controller, current } = setup()
+  controller.press('move', 11, offset(40, 80))
+  controller.press('aim', 22)
+  assert.equal(controller.getPointerId('move'), 11)
+  assert.equal(controller.hasActivePointers(), true)
+  assert.equal(current().moveY, 1)
+
+  const ended: Array<{ pointerId: number; cancelled: boolean }> = []
+  let zeroTouchCount = 0
+  const windowTarget = new EventTarget()
+  const detach = bindGlobalTouchSafetyEvents(windowTarget, {
+    zeroTouchDelayMs: 15,
+    onPointerEnd: (pointerId, cancelled) => {
+      ended.push({ pointerId, cancelled })
+      controller.releaseByPointerId(pointerId, cancelled)
+    },
+    onNoTouchesLeft: () => {
+      zeroTouchCount += 1
+      if (controller.hasActivePointers()) controller.reset()
+    },
+  })
+
+  try {
+    // Un pointercancel global suelta únicamente el stick afectado.
+    windowTarget.dispatchEvent(Object.assign(new Event('pointercancel'), { pointerId: 11 }))
+    assert.deepEqual(ended, [{ pointerId: 11, cancelled: true }])
+    assert.equal(current().moveY, 0)
+    assert.equal(controller.getPointerId('move'), null)
+    assert.equal(controller.getPointerId('aim'), 22)
+
+    // Si WebKit deja touches=0 sin emitir pointerup al salir de bordes (p. ej. iPhone esquina inferior), el watchdog reinicia.
+    controller.press('move', 33, offset(40, 80))
+    assert.equal(current().moveY, 1)
+    windowTarget.dispatchEvent(Object.assign(new Event('touchend'), { touches: [] }))
+    windowTarget.dispatchEvent(new Event('touchstart'))
+    await new Promise((r) => setTimeout(r, 25))
+    assert.equal(zeroTouchCount, 0)
+    assert.equal(current().moveY, 1)
+
+    windowTarget.dispatchEvent(Object.assign(new Event('touchend'), { touches: [] }))
+    await new Promise((r) => setTimeout(r, 30))
+    assert.equal(zeroTouchCount, 1)
+    assert.equal(current().moveY, 0)
+    assert.equal(controller.hasActivePointers(), false)
+  } finally {
+    detach()
+  }
 })

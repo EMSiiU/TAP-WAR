@@ -1398,6 +1398,14 @@ export default class ArenaScene extends Phaser.Scene {
                 return
             }
 
+            if (
+                event.code === 'Tab' &&
+                !Object.values(this.pcControls).includes('Tab')
+            ) {
+                event.preventDefault()
+                return
+            }
+
             if (!hasFocus() || event.repeat || this.isPaused) return
             if (
                 event.code === 'Space' ||

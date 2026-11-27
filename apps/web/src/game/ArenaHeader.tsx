@@ -21,9 +21,11 @@ type ArenaHeaderProps = {
   touchMode: boolean
   fullscreen: boolean
   copied: boolean
+  scoreboardOpen?: boolean
   onCopy: () => void
   onTouchToggle: () => void
   onFullscreen: () => void
+  onToggleScoreboard?: () => void
   onExit: () => void
   onSignOut: () => void
 }
@@ -50,6 +52,17 @@ function ArenaHeader(props: ArenaHeaderProps) {
     </div>
 
     <div className="arena-header-actions">
+      {!props.touchMode && props.onToggleScoreboard && (
+        <button
+          type="button"
+          className={`arena-toolbar-button arena-scoreboard-btn${props.scoreboardOpen ? ' is-active' : ''}`}
+          aria-pressed={Boolean(props.scoreboardOpen)}
+          title="Ver estadísticas de la partida (Tab)"
+          onClick={props.onToggleScoreboard}
+        >
+          Marcador
+        </button>
+      )}
       <button type="button" className="arena-toolbar-button arena-touch-toggle" aria-pressed={props.touchMode} onClick={props.onTouchToggle}>
         Táctil <span className="arena-toggle-state">{props.touchMode ? 'ON' : 'OFF'}</span>
       </button>

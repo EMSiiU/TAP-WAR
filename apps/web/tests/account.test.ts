@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { AccountSaveError, MAX_AVATAR_BYTES, saveAccountProfile, type ProfileGateway } from '../src/auth/account.ts'
-import { validUsername, type Profile } from '../src/auth/profile.ts'
+import { buildOAuthOptions, validUsername, type Profile } from '../src/auth/profile.ts'
 
 const profile: Profile = {
   id: '11111111-1111-4111-8111-111111111111', username: 'Jugador',
@@ -111,4 +111,14 @@ test('solo se suben imagenes WebP normalizadas y de hasta 2 MB', async () => {
     await assert.rejects(saveAccountProfile(mock.gateway, profile, 'Jugador', blob), /preparar la foto/)
     assert.deepEqual(mock.operations, [])
   }
+})
+
+test('buildOAuthOptions solicita selector de cuenta en Google y mantiene callback en otros proveedores', () => {
+  assert.deepEqual(buildOAuthOptions('google', 'https://example.com'), {
+    redirectTo: 'https://example.com/auth/callback',
+    queryParams: { prompt: 'select_account' },
+  })
+  assert.deepEqual(buildOAuthOptions('github', 'https://example.com'), {
+    redirectTo: 'https://example.com/auth/callback',
+  })
 })

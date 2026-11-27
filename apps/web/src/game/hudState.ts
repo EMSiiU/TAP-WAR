@@ -55,12 +55,25 @@ export type LocalHudState = {
   kills: number
 }
 
+export type ScoreboardRow = {
+  id: string
+  name: string
+  kills: number
+  deaths: number
+  team: TeamColor | ''
+  weaponTier: number
+  isDead: boolean
+  isBot: boolean
+  isLocal: boolean
+}
+
 export type ArenaHudSnapshot = {
   matchMeta: MatchMeta
   playerCount: number
   clock: string
   scoreLine: string
   localPlayer: LocalHudState | null
+  scoreboard: ScoreboardRow[]
 }
 
 export type HudSourceState = {
@@ -134,6 +147,43 @@ export function buildScoreLine(
   return `Top: ${leaders.map((p) => `${p.name} ${p.kills}`).join(' · ')} | Tú: ${localPlayer?.kills ?? 0}`
 }
 
+export function buildScoreboardRows(
+  gameMode: GameMode,
+  players: readonly PlayerState[],
+  localPlayerId: string,
+): ScoreboardRow[] {
+  const mapped: ScoreboardRow[] = players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    kills: p.kills ?? 0,
+    deaths: p.deaths ?? 0,
+    team: p.team === 'blue' || p.team === 'orange' ? p.team : '',
+    weaponTier: p.weaponTier ?? 0,
+    isDead: Boolean(p.isDead),
+    isBot: Boolean(p.isBot),
+    isLocal: p.id === localPlayerId,
+  }))
+
+  return mapped.sort((a, b) => {
+    if (gameMode === 'practice' && a.isBot !== b.isBot) {
+      return a.isBot ? 1 : -1
+    }
+    if (gameMode === 'tdm') {
+      const rank = (team: TeamColor | '') => (team === 'orange' ? 0 : team === 'blue' ? 1 : 2)
+      const teamDiff = rank(a.team) - rank(b.team)
+      if (teamDiff !== 0) return teamDiff
+    }
+    if (gameMode === 'gungame' && b.weaponTier !== a.weaponTier) {
+      return b.weaponTier - a.weaponTier
+    }
+    return (
+      b.kills - a.kills ||
+      a.deaths - b.deaths ||
+      a.name.localeCompare(b.name)
+    )
+  })
+}
+
 export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHudSnapshot {
   const gameMode: GameMode =
     roomRequest.mode === 'create' ? normalizeGameMode(roomRequest.gameMode) : 'ffa'
@@ -180,6 +230,7 @@ export function createInitialHudSnapshot(roomRequest: RoomJoinRequest): ArenaHud
     clock: isPractice ? '∞' : formatClock(timeRemaining),
     scoreLine: buildScoreLine(gameMode, 0, 0, [], undefined),
     localPlayer: null,
+    scoreboard: [],
   }
 }
 
@@ -259,6 +310,7 @@ export function extractArenaHudSnapshot(
     clock,
     scoreLine: buildScoreLine(gameMode, orangeScore, blueScore, playerList, local),
     localPlayer,
+    scoreboard: buildScoreboardRows(gameMode, playerList, localPlayerId),
   }
 }
 
@@ -286,13 +338,37 @@ function areLocalHudEqual(a: LocalHudState | null, b: LocalHudState | null): boo
   )
 }
 
+function areScoreboardsEqual(a: readonly ScoreboardRow[], b: readonly ScoreboardRow[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i += 1) {
+    const ra = a[i]
+    const rb = b[i]
+    if (
+      ra.id !== rb.id ||
+      ra.name !== rb.name ||
+      ra.kills !== rb.kills ||
+      ra.deaths !== rb.deaths ||
+      ra.team !== rb.team ||
+      ra.weaponTier !== rb.weaponTier ||
+      ra.isDead !== rb.isDead ||
+      ra.isBot !== rb.isBot ||
+      ra.isLocal !== rb.isLocal
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
 export function areHudSnapshotsEqual(a: ArenaHudSnapshot, b: ArenaHudSnapshot): boolean {
   if (a === b) return true
   if (
     a.playerCount !== b.playerCount ||
     a.clock !== b.clock ||
     a.scoreLine !== b.scoreLine ||
-    !areLocalHudEqual(a.localPlayer, b.localPlayer)
+    !areLocalHudEqual(a.localPlayer, b.localPlayer) ||
+    !areScoreboardsEqual(a.scoreboard, b.scoreboard)
   ) {
     return false
   }

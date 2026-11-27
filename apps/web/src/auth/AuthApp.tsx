@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import App from '../App'
-import { githubEnabled, supabase, validUsername, type Profile } from './supabase'
+import { buildOAuthOptions, githubEnabled, supabase, validUsername, type Profile } from './supabase'
 import ProfileEditor from './ProfileEditor'
 import './auth.css'
 
@@ -68,7 +68,8 @@ function Login() {
     setBusy(true); setError(''); setNotice('')
     try {
       const { error: failure } = await supabase.auth.signInWithOAuth({
-        provider, options: { redirectTo: `${window.location.origin}/auth/callback` },
+        provider,
+        options: buildOAuthOptions(provider, window.location.origin),
       })
       if (failure) { setError('No se pudo abrir el proveedor. Inténtalo de nuevo.'); setBusy(false) }
     } catch { setError('No se pudo conectar con el proveedor.'); setBusy(false) }

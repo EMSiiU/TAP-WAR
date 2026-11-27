@@ -29,7 +29,7 @@ export const POWERUP_META: Record<
 > = {
   ammo: { label: 'Cargador', color: 0xf59e0b, hex: '#f59e0b' },
   medkit: { label: 'Botiquín (+50)', color: 0x22c55e, hex: '#22c55e' },
-  shield: { label: 'Escudo (10s)', color: 0x38bdf8, hex: '#38bdf8' },
+  shield: { label: 'Escudo (5s)', color: 0x38bdf8, hex: '#38bdf8' },
   dash: { label: 'Recarga de Dash', color: 0x06b6d4, hex: '#06b6d4' },
   golden: { label: 'Power-Up Dorado', color: 0xfacc15, hex: '#facc15' },
 }
@@ -49,7 +49,7 @@ export const GUN_GAME_LADDER = [
 
 export const MAX_DASHES = 5
 export const DASH_RECHARGE_MS = 10_000
-export const SHIELD_DURATION_MS = 10_000
+export const SHIELD_DURATION_MS = 5_000
 export const GOLDEN_DURATION_MS = 15_000
 export const MEDKIT_HEAL_AMOUNT = 50
 export const MAX_RESERVE_MAGAZINES = 3

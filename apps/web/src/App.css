@@ -2257,3 +2257,165 @@
   padding: 9px 12px;
   font-size: 0.84rem;
 }
+
+/* Live In-Game Scoreboard (Tab on PC, button next to Menu on mobile) */
+.arena-toolbar-button.arena-scoreboard-btn.is-active,
+.touch-pill-btn.touch-scoreboard-btn.is-active {
+  background: #f59e0b;
+  color: #241932;
+  border-color: #fde68a;
+}
+
+.touch-pill-btn.touch-scoreboard-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 4px 8px;
+}
+
+.arena-live-scoreboard-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.arena-live-scoreboard-overlay.is-passive {
+  pointer-events: none;
+  background: rgba(15, 10, 24, 0.28);
+}
+
+.arena-live-scoreboard-overlay.is-interactive {
+  pointer-events: auto;
+  background: rgba(15, 10, 24, 0.62);
+  backdrop-filter: blur(3px);
+}
+
+.arena-live-scoreboard-card {
+  width: min(100%, 620px);
+  max-height: min(86%, 460px);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 3px solid #f5e2cb;
+  background: rgba(29, 20, 39, 0.94);
+  color: #f8fafc;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6);
+  box-sizing: border-box;
+}
+
+.arena-live-scoreboard-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.arena-live-scoreboard-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.arena-live-scoreboard-title strong {
+  font-size: 1rem;
+  color: #fef08a;
+}
+
+.arena-live-scoreboard-title span {
+  font-size: 0.78rem;
+  color: #d8c5df;
+  font-weight: 700;
+}
+
+.arena-live-scoreboard-teams {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-scoreboard-close {
+  flex: 0 0 auto;
+}
+
+.arena-live-scoreboard-scroll {
+  overflow: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+}
+
+.arena-live-scoreboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+  text-align: left;
+}
+
+.arena-live-scoreboard-table th {
+  padding: 6px 8px;
+  border-bottom: 2px solid rgba(245, 226, 203, 0.25);
+  color: #f2c46d;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+
+.arena-live-scoreboard-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.arena-scoreboard-row.is-local {
+  background: rgba(245, 158, 11, 0.16);
+  font-weight: 800;
+}
+
+.arena-scoreboard-row.is-dead td {
+  opacity: 0.65;
+}
+
+.arena-scoreboard-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arena-scoreboard-player-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arena-scoreboard-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.arena-scoreboard-tag.is-you {
+  background: #f59e0b;
+  color: #241932;
+}
+
+.arena-scoreboard-tag.is-npc {
+  background: #475569;
+  color: #f8fafc;
+}
+
+.arena-scoreboard-tag.is-ko {
+  background: #991b1b;
+  color: #fecaca;
+}
