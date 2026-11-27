@@ -52,6 +52,8 @@ test('rebindPcControl intercambia teclas en conflicto y conserva persistencia', 
   assert.equal(formatBindingLabel('Space'), 'Espacio')
   assert.equal(formatBindingLabel('KeyR'), 'R')
   assert.equal(formatMoveGroupLabel(DEFAULT_PC_CONTROLS), 'WASD')
+  assert.equal(DEFAULT_PC_CONTROLS.emote3, 'Digit3')
+  assert.equal(sanitizePcControls({ emote3: 'KeyE' }).emote3, 'KeyE')
 })
 
 test('findAutoAimAngle apunta al enemigo vivo mas cercano e ignora aliados en tdm', () => {
@@ -76,4 +78,16 @@ test('findAutoAimAngle apunta al enemigo vivo mas cercano e ignora aliados en td
   const none = findAutoAimAngle(local, [local], 'ffa', 1.25, 0)
   assert.equal(none.target, null)
   assert.equal(none.angle, 1.25)
+
+  // Apunta al centro del hitbox vertical cuando se especifica targetOffsetY
+  const targetOffsetAim = findAutoAimAngle(
+    { id: 'me', x: 100, y: 200, isDead: false },
+    [{ id: 'enemy', x: 200, y: 200, isDead: false }],
+    'ffa',
+    0,
+    -10,
+    500,
+    -20,
+  )
+  assert.ok(targetOffsetAim.angle < 0, 'Debe compensar verticalmente hacia el torso del objetivo')
 })

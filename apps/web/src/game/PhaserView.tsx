@@ -29,6 +29,8 @@ type PhaserViewProps = {
   damageFeedbackTriggerRef?: React.RefObject<
     ((x: number, y: number, damage: number, blocked: boolean) => void) | null
   >
+  customEmotesRef?: React.RefObject<Map<string, string>>
+  customEmoteTriggerRef?: React.RefObject<((sessionId: string, dataUrl: string) => void) | null>
   onMenuToggle?: () => void
   onPracticeArsenalToggle?: () => void
   onGamepadChange?: (connected: boolean) => void
@@ -51,6 +53,8 @@ function PhaserView({
   actionTriggerRef,
   explosionTriggerRef,
   damageFeedbackTriggerRef,
+  customEmotesRef,
+  customEmoteTriggerRef,
   onMenuToggle,
   onPracticeArsenalToggle,
   onGamepadChange,
@@ -131,6 +135,11 @@ function PhaserView({
     scene.setCrosshairStyle(latestCrosshairRef.current)
     scene.setPcControls(latestPcControlsRef.current)
     scene.setPracticeArsenalToggle(() => onPracticeArsenalToggleRef.current?.())
+    if (customEmotesRef) {
+      for (const [sessionId, dataUrl] of customEmotesRef.current) {
+        scene.setPlayerCustomEmote(sessionId, dataUrl)
+      }
+    }
     sceneRef.current = scene
     worldPushRef.current = (snapshot) => scene.applyWorldSnapshot(snapshot)
 
@@ -143,6 +152,10 @@ function PhaserView({
     if (damageFeedbackTriggerRef) {
       damageFeedbackTriggerRef.current = (x, y, damage, blocked) =>
         scene.triggerDamageFeedback(x, y, damage, blocked)
+    }
+    if (customEmoteTriggerRef) {
+      customEmoteTriggerRef.current = (sessionId, dataUrl) =>
+        scene.setPlayerCustomEmote(sessionId, dataUrl)
     }
 
     let game: Phaser.Game | undefined
@@ -180,6 +193,7 @@ function PhaserView({
       if (actionTriggerRef) actionTriggerRef.current = null
       if (explosionTriggerRef) explosionTriggerRef.current = null
       if (damageFeedbackTriggerRef) damageFeedbackTriggerRef.current = null
+      if (customEmoteTriggerRef) customEmoteTriggerRef.current = null
       sceneRef.current = null
       active = false
       resizeObserver?.disconnect()
@@ -196,6 +210,8 @@ function PhaserView({
     actionTriggerRef,
     explosionTriggerRef,
     damageFeedbackTriggerRef,
+    customEmotesRef,
+    customEmoteTriggerRef,
   ])
 
   useEffect(() => {

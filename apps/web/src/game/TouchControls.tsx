@@ -29,7 +29,8 @@ const AUTO_HOLD_DELAY_MS = 210
 type TouchControlsProps = {
   layout?: TouchLayoutByOrientation
   onTouchInput: (input: TouchInputState) => void
-  onEmote: (emote: 'dots' | 'alert') => void
+  onEmote: (emote: 'dots' | 'alert' | 'custom') => void
+  customEmoteUrl?: string | null
   onMenu: () => void
   onMelee: () => void
   onReload: () => void
@@ -54,6 +55,7 @@ export default function TouchControls({
   layout = DEFAULT_TOUCH_LAYOUTS,
   onTouchInput,
   onEmote,
+  customEmoteUrl,
   onMenu,
   onMelee,
   onReload,
@@ -351,6 +353,17 @@ export default function TouchControls({
         >
           <img className="touch-emote-icon" src="/assets/ui/emote-heart.svg" alt="" draggable={false} />
         </button>
+        {customEmoteUrl && (
+          <button
+            type="button"
+            className="touch-pill-btn"
+            aria-label="Enviar emote personalizado"
+            title="Emote personalizado (3)"
+            onClick={() => onEmote('custom')}
+          >
+            <img className="touch-emote-icon is-custom-emote" src={customEmoteUrl} alt="" draggable={false} />
+          </button>
+        )}
       </div>
 
       <div className="touch-draggable-slot touch-rail-actions" style={slotStyle('menu')}>

@@ -24,6 +24,7 @@ import {
   normalizeGameMode,
   scaledSpawnIntervalMs,
 } from '../../../packages/shared/gameplay.js'
+import { PLAYER_HIT_RADIUS, PLAYER_HITBOX_OFFSET_Y } from '../../../packages/shared/movement.js'
 
 function makeAccount(
   name: string,
@@ -516,4 +517,93 @@ test('spawns aleatorios respetan obstaculos y escalan con mas jugadores', () => 
   assert.ok(scaledSpawnIntervalMs(12000, 20) < scaledSpawnIntervalMs(12000, 6))
   assert.ok(maxActiveItemsForPlayers(10, 'medium', 'powerup') > maxActiveItemsForPlayers(2, 'medium', 'powerup'))
   assert.ok(maxActiveItemsForPlayers(20, 'large', 'weapon') > maxActiveItemsForPlayers(2, 'large', 'weapon'))
+})
+
+test('escopeta dispara 4 perdigones con dispersion reducida (-9, -3, +3, +9 grados)', async () => {
+  assert.equal(weaponsConfig.weapons.shotgun.pellets, 4)
+  assert.equal(weaponsConfig.weapons.shotgun.spreadDeg, 6)
+
+  const { room, cleanup } = await createStartedRoom({}, [
+    { id: 'sg', auth: makeAccount('Escopetero', 'shotgun') },
+    { id: 'b', auth: makeAccount('Rival', 'rifle') },
+  ])
+  try {
+    const sg = room.state.players.get('sg')!
+    const b = room.state.players.get('b')!
+    sg.x = 280
+    sg.y = 300
+    b.x = 680
+    b.y = 300
+
+    room['fireWeapon']('sg', sg, 0, performance.now())
+
+    const anglesDeg = Array.from(room.state.bullets.values())
+      .map((bullet) => (bullet.angle * 180) / Math.PI)
+      .sort((a, z) => a - z)
+    assert.equal(anglesDeg.length, 4)
+    const expectedDeg = [-9, -3, 3, 9]
+    anglesDeg.forEach((deg, idx) => {
+      assert.ok(Math.abs(deg - expectedDeg[idx]!) < 0.001, `expected ${expectedDeg[idx]} deg, got ${deg}`)
+    })
+  } finally {
+    await cleanup()
+  }
+})
+
+test('hitbox centrado en el torso acierta en cabeza/torso y no por debajo de los pies ni fuera de radio', async () => {
+  assert.equal(PLAYER_HIT_RADIUS, 23)
+  assert.equal(PLAYER_HITBOX_OFFSET_Y, -20)
+
+  const { room, cleanup } = await createStartedRoom({}, [
+    { id: 'sniper', auth: makeAccount('Franco', 'sniper') },
+    { id: 'target', auth: makeAccount('Blanco', 'rifle') },
+  ])
+  try {
+    const sniper = room.state.players.get('sniper')!
+    const target = room.state.players.get('target')!
+    sniper.x = 290
+    sniper.y = 300 // bullet travels horizontally along y = 288 (muzzle offset -12)
+
+    const shootHorizontalAtTargetY = (targetY: number) => {
+      room.state.bullets.clear()
+      target.hp = 100
+      target.isDead = false
+      target.x = 340
+      target.y = targetY
+      sniper.ammo = sniper.maxAmmo
+      room['fireWeapon']('sniper', sniper, 0, performance.now())
+      for (let i = 0; i < 6; i++) {
+        room['simulate'](16)
+      }
+      return target.hp < 100
+    }
+
+    // Horizontal shot passing through upper head (target.y - 36 -> 16 px from torso center) hits.
+    assert.equal(shootHorizontalAtTargetY(324), true)
+    // Horizontal shot passing below feet (target.y + 16 -> 36 px from torso center) misses.
+    assert.equal(shootHorizontalAtTargetY(272), false)
+    // Horizontal shot 26 px away from torso center (target.y - 46 -> |288 - 314| = 26 > 23) misses.
+    assert.equal(shootHorizontalAtTargetY(334), false)
+  } finally {
+    await cleanup()
+  }
+})
+
+test('handleEmote permite emote custom solo cuando el jugador tiene emote personalizado verificado', async () => {
+  const { room, cleanup } = await createStartedRoom()
+  try {
+    const playerA = room.state.players.get('a')!
+    const clientA = { sessionId: 'a' } as Client
+
+    playerA.hasCustomEmote = false
+    room['handleEmote'](clientA, 'custom')
+    assert.equal(playerA.emote, '')
+
+    playerA.hasCustomEmote = true
+    room['handleEmote'](clientA, 'custom')
+    assert.equal(playerA.emote, 'custom')
+    assert.ok(playerA.emoteUntil > Date.now())
+  } finally {
+    await cleanup()
+  }
 })

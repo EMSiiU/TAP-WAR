@@ -5,6 +5,8 @@ import KeybindingsModal from './game/KeybindingsModal'
 import TouchLayoutEditorModal from './game/TouchLayoutEditorModal'
 import PracticeArsenalModal, { type PracticeUtilityAction } from './game/PracticeArsenalModal'
 import LiveScoreboard from './game/LiveScoreboard'
+import CustomEmotePicker from './auth/CustomEmotePicker'
+import { isSafeCustomEmoteDataUrl } from './auth/customEmote'
 import Rankings from './rankings/Rankings'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Client, ErrorCode, MatchMakeError, ServerError } from '@colyseus/sdk'
@@ -201,6 +203,9 @@ function ArenaSession({
   const practiceActionRef = useRef<
     ((payload: { action: 'equip_weapon'; weapon: WeaponType } | { action: PracticeUtilityAction }) => void) | null
   >(null)
+  const customEmotesRef = useRef(new Map<string, string>())
+  const customEmoteTriggerRef = useRef<((sessionId: string, dataUrl: string) => void) | null>(null)
+  const [localCustomEmoteUrl, setLocalCustomEmoteUrl] = useState<string | null>(null)
   const startRef = useRef<(() => void) | null>(null)
   const [resumeSignal, setResumeSignal] = useState(0)
   const [status, setStatus] = useState('Conectando…')
@@ -246,9 +251,12 @@ function ArenaSession({
   useEffect(() => {
     let active = true
     let disconnect: (() => void) | undefined
+    const customEmotes = customEmotesRef.current
 
     async function connect() {
       try {
+        customEmotes.clear()
+        setLocalCustomEmoteUrl(null)
         if (!supabase) throw new Error('Supabase no está configurado')
         const {
           data: { session },
@@ -336,6 +344,26 @@ function ArenaSession({
               Number.isFinite(payload.damage)
             ) {
               damageFeedbackTriggerRef.current?.(payload.x, payload.y, payload.damage, payload.blocked)
+            }
+          },
+        )
+
+        joined.onMessage<{ sessionId?: unknown; dataUrl?: unknown }>(
+          'custom_emote_asset',
+          (payload) => {
+            if (
+              active &&
+              payload &&
+              typeof payload.sessionId === 'string' &&
+              payload.sessionId.length > 0 &&
+              payload.sessionId.length <= 64 &&
+              isSafeCustomEmoteDataUrl(payload.dataUrl)
+            ) {
+              customEmotesRef.current.set(payload.sessionId, payload.dataUrl)
+              customEmoteTriggerRef.current?.(payload.sessionId, payload.dataUrl)
+              if (payload.sessionId === joined.sessionId) {
+                setLocalCustomEmoteUrl(payload.dataUrl)
+              }
             }
           },
         )
@@ -437,6 +465,8 @@ function ArenaSession({
       active = false
       rematchRef.current = null
       practiceActionRef.current = null
+      customEmotes.clear()
+      customEmoteTriggerRef.current = null
       disconnect?.()
     }
   }, [playerName, playerSkin, playerWeapon, roomRequest, onEnd])
@@ -640,6 +670,7 @@ function ArenaSession({
   const moveKeysLabel = formatMoveGroupLabel(pcControls)
   const emote1KeyLabel = formatBindingLabel(pcControls.emote1)
   const emote2KeyLabel = formatBindingLabel(pcControls.emote2)
+  const emote3KeyLabel = formatBindingLabel(pcControls.emote3)
 
   return (
     <div ref={shellRef} className={`arena-shell${touchMode ? ' is-touch-mode' : ''}`}>
@@ -838,7 +869,7 @@ function ArenaSession({
               <span><kbd>{meleeKeyLabel}</kbd> Melé</span>
               <span><kbd>{reloadKeyLabel}</kbd> Recargar</span>
               <span><kbd>{dashKeyLabel}</kbd> Dash</span>
-              <span><kbd>{emote1KeyLabel}/{emote2KeyLabel}</kbd> Emotes</span>
+              <span><kbd>{emote1KeyLabel}/{emote2KeyLabel}/{emote3KeyLabel}</kbd> Emotes</span>
               <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>
@@ -872,6 +903,8 @@ function ArenaSession({
               actionTriggerRef={actionTriggerRef}
               explosionTriggerRef={explosionTriggerRef}
               damageFeedbackTriggerRef={damageFeedbackTriggerRef}
+              customEmotesRef={customEmotesRef}
+              customEmoteTriggerRef={customEmoteTriggerRef}
               onMenuToggle={() => { resetTouchInput(); setLocalPaused(prev => !prev) }}
               onPracticeArsenalToggle={togglePracticeArsenal}
               onGamepadChange={setGamepadConnected}
@@ -886,6 +919,7 @@ function ArenaSession({
             layout={touchLayouts}
             onTouchInput={receiveTouchInput}
             onEmote={(emote) => controls.sendEmote?.(emote)}
+            customEmoteUrl={localCustomEmoteUrl}
             onMenu={() => { resetTouchInput(); setLocalPaused(true) }}
             onMelee={() => actionTriggerRef.current?.('melee')}
             onReload={() => actionTriggerRef.current?.('reload')}
@@ -1366,6 +1400,12 @@ export default function App({
                   </button>
                 </div>
 
+                <CustomEmotePicker
+                  profile={profile}
+                  onProfileSaved={onProfileSaved}
+                  disabled={saving}
+                />
+
                 <div className="profile-actions">
                   <button type="submit" disabled={!validUsername(profile.username ?? '') || saving}>
                     {saving ? 'Guardando…' : 'Guardar preferencias'}
@@ -1645,7 +1685,7 @@ export default function App({
               <span><kbd>{formatBindingLabel(pcControls.melee)}</kbd> Melé</span>
               <span><kbd>{formatBindingLabel(pcControls.reload)}</kbd> Recargar</span>
               <span><kbd>{formatBindingLabel(pcControls.dash)}</kbd> Dash (1 cada 10s)</span>
-              <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> Emotes</span>
+              <span><kbd>{formatBindingLabel(pcControls.emote1)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote2)}</kbd> / <kbd>{formatBindingLabel(pcControls.emote3)}</kbd> Emotes</span>
               <span><kbd>Tab</kbd> Marcador</span>
               <span><kbd>Esc</kbd> Menú</span>
             </div>

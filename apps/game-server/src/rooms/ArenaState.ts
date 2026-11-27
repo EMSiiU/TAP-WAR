@@ -50,6 +50,7 @@ export class Player extends Schema {
     @type('uint16') deaths = 0
     @type('boolean') isDead = false
     @type('boolean') isBot = false
+    @type('boolean') hasCustomEmote = false
     @type('string') emote = ''
     @type('uint16') meleeAttackSeq = 0
     @type('float32') lastMeleeAngle = 0

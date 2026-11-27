@@ -1,6 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { AccountSaveError, MAX_AVATAR_BYTES, saveAccountProfile, type ProfileGateway } from '../src/auth/account.ts'
+import {
+  CustomEmoteError,
+  MAX_CUSTOM_EMOTE_BYTES,
+  isSafeCustomEmoteDataUrl,
+  saveCustomEmote,
+  type CustomEmoteGateway,
+} from '../src/auth/customEmote.ts'
 import { buildOAuthOptions, validUsername, type Profile } from '../src/auth/profile.ts'
 
 const profile: Profile = {
@@ -121,4 +128,70 @@ test('buildOAuthOptions solicita selector de cuenta en Google y mantiene callbac
   assert.deepEqual(buildOAuthOptions('github', 'https://example.com'), {
     redirectTo: 'https://example.com/auth/callback',
   })
+})
+
+function setupEmoteGateway(options: { updateCode?: string; cleanupFailure?: boolean } = {}) {
+  const operations: string[] = []
+  let uploaded: string | undefined
+  let updatedField: string | null | undefined
+  const gateway: CustomEmoteGateway = {
+    upload: async (path) => {
+      operations.push('upload')
+      uploaded = path
+      return { error: null }
+    },
+    update: async (id, updatedAt, fields) => {
+      operations.push('update')
+      assert.equal(id, profile.id)
+      assert.equal(updatedAt, profile.updated_at)
+      updatedField = fields.custom_emote_path
+      return {
+        data: options.updateCode ? null : { ...profile, custom_emote_path: fields.custom_emote_path },
+        error: options.updateCode ? { code: options.updateCode, message: 'failed' } : null,
+      }
+    },
+    remove: async (path) => {
+      operations.push(`remove:${path}`)
+      return { error: options.cleanupFailure ? { message: 'offline' } : null }
+    },
+  }
+  return { gateway, operations, uploaded: () => uploaded, updatedField: () => updatedField }
+}
+
+const emoteBlob = () => new Blob(['webp-sticker'], { type: 'image/webp' })
+
+test('saveCustomEmote reemplaza conservando un solo archivo y valida data URLs', async () => {
+  const oldPath = `${profile.id}/old-emote.webp`
+  const withOld: Profile = { ...profile, custom_emote_path: oldPath }
+  const mock = setupEmoteGateway()
+
+  const saved = await saveCustomEmote(mock.gateway, withOld, emoteBlob())
+  assert.match(mock.uploaded()!, new RegExp(`^${profile.id}/[a-f0-9-]{36}\\.webp$`))
+  assert.deepEqual(mock.operations, ['upload', 'update', `remove:${oldPath}`])
+  assert.equal(saved.profile.custom_emote_path, mock.uploaded())
+
+  // Quitar emote deja custom_emote_path = null y borra archivo anterior.
+  const removeMock = setupEmoteGateway()
+  const removed = await saveCustomEmote(removeMock.gateway, saved.profile, null)
+  assert.equal(removeMock.updatedField(), null)
+  assert.deepEqual(removeMock.operations, ['update', `remove:${saved.profile.custom_emote_path}`])
+  assert.equal(removed.profile.custom_emote_path, null)
+
+  // Rollback si Postgres rechaza actualización definitiva.
+  const rollbackMock = setupEmoteGateway({ updateCode: '23514' })
+  await assert.rejects(saveCustomEmote(rollbackMock.gateway, profile, emoteBlob()), CustomEmoteError)
+  assert.deepEqual(rollbackMock.operations, ['upload', 'update', `remove:${rollbackMock.uploaded()}`])
+
+  // Validación estricta de tamaño, tipo y data URL.
+  await assert.rejects(
+    saveCustomEmote(mock.gateway, profile, new Blob([new Uint8Array(MAX_CUSTOM_EMOTE_BYTES + 1)], { type: 'image/webp' })),
+    CustomEmoteError,
+  )
+  await assert.rejects(
+    saveCustomEmote(mock.gateway, profile, new Blob(['png'], { type: 'image/png' })),
+    CustomEmoteError,
+  )
+  assert.equal(isSafeCustomEmoteDataUrl('data:image/webp;base64,UklGRh4AAABXRUJQ'), true)
+  assert.equal(isSafeCustomEmoteDataUrl('data:image/svg+xml;base64,PHN2Zz4='), false)
+  assert.equal(isSafeCustomEmoteDataUrl('javascript:alert(1)'), false)
 })
