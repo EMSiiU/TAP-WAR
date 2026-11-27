@@ -1161,7 +1161,6 @@
 }
 
 .arena-stage.has-touch-controls .arena-canvas-wrap {
-  grid-area: arena;
   width: min(calc(100vw - 268px), calc((100dvh - 80px) * 1024 / 768));
   max-height: 100%;
 }
@@ -1917,6 +1916,18 @@
 
 .lobby-card.is-main-menu .profile-actions {
   margin: 14px 0 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lobby-card.is-main-menu .profile-actions > button {
+  flex: 1 1 130px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  font-size: 0.86rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .lobby-card.is-main-menu .pc-controls-summary-head {
@@ -2106,6 +2117,7 @@
   }
 
   .lobby-card.is-main-menu .profile-actions button {
+    flex: 1 1 112px;
     padding: 7px 10px;
     font-size: 0.82rem;
   }
